@@ -1158,96 +1158,40 @@ def main():
             emit_progress(stage=stage)
             _checkpoint()
 
-        if search_mode == "combo":
-            # Coarse pass: explore indicator combinations
-            for (
-                regime,
-                combo_keys,
-                combo_params,
-                vol_lookback,
-                vol_z,
-                mom_lookback,
-                trade_mom_lookback,
-                tp_stop,
-                sl_stop,
-                max_hold,
-            ) in autowfo_engine._iter_coarse_plan(
-                regime_variants=regime_variants,
-                mom_lookbacks=mom_lookbacks,
-                vol_lookbacks=vol_lookbacks,
-                vol_zs=vol_zs,
-                trade_mom_lookbacks=trade_mom_lookbacks,
-                tp_stops=tp_stops,
-                sl_stops=sl_stops,
-                max_holds=max_holds,
-                combo_keys_all=combo_keys_all,
-                iter_indicator_param_combos_fn=_iter_indicator_param_combos,
-                indicator_param_options=indicator_param_options,
-            ):
-                eval_combo(
-                    regime,
-                    combo_keys,
-                    combo_params,
-                    vol_lookback,
-                    vol_z,
-                    mom_lookback,
-                    trade_mom_lookback,
-                    tp_stop,
-                    sl_stop,
-                    max_hold,
-                    stage=f"{stage_prefix} combo",
-                )
+        def _on_refine_plan(fine_total, stage):
+            nonlocal total_combos
+            total_combos += fine_total
+            emit_progress(stage=stage, force=True)
 
-        if search_mode == "refine":
-            tf_existing = existing_combo_df[existing_combo_df["timeframe"] == timeframe] if not existing_combo_df.empty else pd.DataFrame()
-            tf_combo_df = tf_existing.copy()
-            tf_filtered = apply_quality_filters(tf_combo_df)
-            tf_sorted, _ = _sort_by_score(tf_filtered, tie_break_avg_hold=True)
-            group_fields = [field for field in combo_group_fields if field in tf_sorted.columns]
-            if group_fields:
-                tf_sorted = tf_sorted.drop_duplicates(subset=group_fields)
-            top_candidates = tf_sorted.head(top_n_fine)
-
-            refine_steps = autowfo_engine._default_refine_steps()
-            fine_total, fine_targets = autowfo_engine._build_refine_targets(
-                top_candidates=top_candidates,
-                tp_stops=tp_stops,
-                sl_stops=sl_stops,
-                indicator_defaults=indicator_defaults,
-                refine_steps=refine_steps,
-                expand_float_fn=_expand_float,
-                safe_float_fn=_safe_float,
-                refine_indicator_params_fn=_refine_indicator_params,
-            )
-
-            if fine_total:
-                total_combos += fine_total
-                emit_progress(stage=f"{stage_prefix} refine", force=True)
-
-            for row, indicator_combo, tp_candidates, sl_candidates, param_options in fine_targets:
-                regime = regime_lookup.get(row.get("regime_name"), regime_variants[0])
-                vol_lookback = _safe_int(row.get("vol_lookback"), vol_lookbacks[0])
-                vol_z = _safe_float(row.get("vol_z"), vol_zs[0])
-                mom_lookback = _safe_int(row.get("mom_lookback"), mom_lookbacks[0])
-                trade_mom_lookback = _safe_int(row.get("trade_mom_lookback"), trade_mom_lookbacks[0])
-                max_hold = _safe_int(row.get("max_hold"), max_holds[0])
-
-                for tp_stop in tp_candidates:
-                    for sl_stop in sl_candidates:
-                        for combo_params in _iter_indicator_param_combos(indicator_combo, param_options):
-                            eval_combo(
-                                regime,
-                                indicator_combo,
-                                combo_params,
-                                vol_lookback,
-                                vol_z,
-                                mom_lookback,
-                                trade_mom_lookback,
-                                tp_stop,
-                                sl_stop,
-                                max_hold,
-                                stage=f"{stage_prefix} refine",
-                            )
+        autowfo_engine._run_search_for_timeframe(
+            search_mode=search_mode,
+            stage_prefix=stage_prefix,
+            timeframe=timeframe,
+            regime_variants=regime_variants,
+            regime_lookup=regime_lookup,
+            mom_lookbacks=mom_lookbacks,
+            vol_lookbacks=vol_lookbacks,
+            vol_zs=vol_zs,
+            trade_mom_lookbacks=trade_mom_lookbacks,
+            tp_stops=tp_stops,
+            sl_stops=sl_stops,
+            max_holds=max_holds,
+            combo_keys_all=combo_keys_all,
+            iter_indicator_param_combos_fn=_iter_indicator_param_combos,
+            indicator_param_options=indicator_param_options,
+            eval_combo_fn=eval_combo,
+            existing_combo_df=existing_combo_df,
+            apply_quality_filters_fn=apply_quality_filters,
+            sort_by_score_fn=_sort_by_score,
+            combo_group_fields=combo_group_fields,
+            top_n_fine=top_n_fine,
+            indicator_defaults=indicator_defaults,
+            expand_float_fn=_expand_float,
+            safe_float_fn=_safe_float,
+            refine_indicator_params_fn=_refine_indicator_params,
+            safe_int_fn=_safe_int,
+            on_refine_plan_fn=_on_refine_plan,
+        )
 
     _checkpoint(force=True)
 

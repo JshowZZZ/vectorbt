@@ -345,6 +345,133 @@ def _build_refine_targets(
     return fine_total, fine_targets
 
 
+def _run_search_for_timeframe(
+    search_mode,
+    stage_prefix,
+    timeframe,
+    regime_variants,
+    regime_lookup,
+    mom_lookbacks,
+    vol_lookbacks,
+    vol_zs,
+    trade_mom_lookbacks,
+    tp_stops,
+    sl_stops,
+    max_holds,
+    combo_keys_all,
+    iter_indicator_param_combos_fn,
+    indicator_param_options,
+    eval_combo_fn,
+    existing_combo_df,
+    apply_quality_filters_fn,
+    sort_by_score_fn,
+    combo_group_fields,
+    top_n_fine,
+    indicator_defaults,
+    expand_float_fn,
+    safe_float_fn,
+    refine_indicator_params_fn,
+    safe_int_fn,
+    on_refine_plan_fn=None,
+):
+    if search_mode == "combo":
+        for (
+            regime,
+            combo_keys,
+            combo_params,
+            vol_lookback,
+            vol_z,
+            mom_lookback,
+            trade_mom_lookback,
+            tp_stop,
+            sl_stop,
+            max_hold,
+        ) in _iter_coarse_plan(
+            regime_variants=regime_variants,
+            mom_lookbacks=mom_lookbacks,
+            vol_lookbacks=vol_lookbacks,
+            vol_zs=vol_zs,
+            trade_mom_lookbacks=trade_mom_lookbacks,
+            tp_stops=tp_stops,
+            sl_stops=sl_stops,
+            max_holds=max_holds,
+            combo_keys_all=combo_keys_all,
+            iter_indicator_param_combos_fn=iter_indicator_param_combos_fn,
+            indicator_param_options=indicator_param_options,
+        ):
+            eval_combo_fn(
+                regime,
+                combo_keys,
+                combo_params,
+                vol_lookback,
+                vol_z,
+                mom_lookback,
+                trade_mom_lookback,
+                tp_stop,
+                sl_stop,
+                max_hold,
+                stage=f"{stage_prefix} combo",
+            )
+        return 0
+
+    if search_mode != "refine":
+        return 0
+
+    tf_existing = (
+        existing_combo_df[existing_combo_df["timeframe"] == timeframe]
+        if not existing_combo_df.empty
+        else pd.DataFrame()
+    )
+    tf_combo_df = tf_existing.copy()
+    tf_filtered = apply_quality_filters_fn(tf_combo_df)
+    tf_sorted, _ = sort_by_score_fn(tf_filtered, tie_break_avg_hold=True)
+    group_fields = [field for field in combo_group_fields if field in tf_sorted.columns]
+    if group_fields:
+        tf_sorted = tf_sorted.drop_duplicates(subset=group_fields)
+    top_candidates = tf_sorted.head(top_n_fine)
+
+    refine_steps = _default_refine_steps()
+    fine_total, fine_targets = _build_refine_targets(
+        top_candidates=top_candidates,
+        tp_stops=tp_stops,
+        sl_stops=sl_stops,
+        indicator_defaults=indicator_defaults,
+        refine_steps=refine_steps,
+        expand_float_fn=expand_float_fn,
+        safe_float_fn=safe_float_fn,
+        refine_indicator_params_fn=refine_indicator_params_fn,
+    )
+    if fine_total and on_refine_plan_fn is not None:
+        on_refine_plan_fn(fine_total, f"{stage_prefix} refine")
+
+    for row, indicator_combo, tp_candidates, sl_candidates, param_options in fine_targets:
+        regime = regime_lookup.get(row.get("regime_name"), regime_variants[0])
+        vol_lookback = safe_int_fn(row.get("vol_lookback"), vol_lookbacks[0])
+        vol_z = safe_float_fn(row.get("vol_z"), vol_zs[0])
+        mom_lookback = safe_int_fn(row.get("mom_lookback"), mom_lookbacks[0])
+        trade_mom_lookback = safe_int_fn(row.get("trade_mom_lookback"), trade_mom_lookbacks[0])
+        max_hold = safe_int_fn(row.get("max_hold"), max_holds[0])
+
+        for tp_stop in tp_candidates:
+            for sl_stop in sl_candidates:
+                for combo_params in iter_indicator_param_combos_fn(indicator_combo, param_options):
+                    eval_combo_fn(
+                        regime,
+                        indicator_combo,
+                        combo_params,
+                        vol_lookback,
+                        vol_z,
+                        mom_lookback,
+                        trade_mom_lookback,
+                        tp_stop,
+                        sl_stop,
+                        max_hold,
+                        stage=f"{stage_prefix} refine",
+                    )
+
+    return fine_total
+
+
 def _build_combo_key_values(
     timeframe,
     data_days,

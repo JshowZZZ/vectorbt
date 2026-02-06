@@ -457,3 +457,100 @@ def test_compute_effective_costs_and_trade_mom_filters():
     long_filter, short_filter = e._build_trade_mom_filters(trade_mom)
     assert list(long_filter.astype(int)) == [1, 0, 0]
     assert list(short_filter.astype(int)) == [0, 1, 0]
+
+
+def test_run_search_for_timeframe_combo():
+    calls = []
+
+    def _eval(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    e._run_search_for_timeframe(
+        search_mode="combo",
+        stage_prefix="3m",
+        timeframe="3m",
+        regime_variants=[{"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}],
+        regime_lookup={"trend_high": {"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}},
+        mom_lookbacks=[6],
+        vol_lookbacks=[24],
+        vol_zs=[0.8],
+        trade_mom_lookbacks=[3],
+        tp_stops=[0.003],
+        sl_stops=[0.006],
+        max_holds=[2],
+        combo_keys_all=[("rsi",)],
+        iter_indicator_param_combos_fn=lambda combo, opts: [{}],
+        indicator_param_options={"rsi": [{}]},
+        eval_combo_fn=_eval,
+        existing_combo_df=pd.DataFrame(),
+        apply_quality_filters_fn=lambda df: df,
+        sort_by_score_fn=lambda df, tie_break_avg_hold=True: (df, "x"),
+        combo_group_fields=[],
+        top_n_fine=10,
+        indicator_defaults={},
+        expand_float_fn=lambda base, step, min_value=None: [base],
+        safe_float_fn=lambda v, d: d if v is None else float(v),
+        refine_indicator_params_fn=lambda key, row, steps, defaults: [{}],
+        safe_int_fn=lambda v, d: d if v is None else int(v),
+        on_refine_plan_fn=None,
+    )
+    assert len(calls) == 1
+
+
+def test_run_search_for_timeframe_refine():
+    calls = []
+    refine_notice = {}
+
+    def _eval(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    existing = pd.DataFrame(
+        [
+            {
+                "timeframe": "3m",
+                "indicator_list": "rsi",
+                "regime_name": "trend_high",
+                "tp_stop": 0.003,
+                "sl_stop": 0.006,
+                "vol_lookback": 24,
+                "vol_z": 0.8,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "max_hold": 2,
+            }
+        ]
+    )
+
+    e._run_search_for_timeframe(
+        search_mode="refine",
+        stage_prefix="3m",
+        timeframe="3m",
+        regime_variants=[{"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}],
+        regime_lookup={"trend_high": {"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}},
+        mom_lookbacks=[6],
+        vol_lookbacks=[24],
+        vol_zs=[0.8],
+        trade_mom_lookbacks=[3],
+        tp_stops=[0.003],
+        sl_stops=[0.006],
+        max_holds=[2],
+        combo_keys_all=[("rsi",)],
+        iter_indicator_param_combos_fn=lambda combo, opts: [{}],
+        indicator_param_options={"rsi": [{}]},
+        eval_combo_fn=_eval,
+        existing_combo_df=existing,
+        apply_quality_filters_fn=lambda df: df,
+        sort_by_score_fn=lambda df, tie_break_avg_hold=True: (df, "x"),
+        combo_group_fields=[],
+        top_n_fine=10,
+        indicator_defaults={"rsi": {}},
+        expand_float_fn=lambda base, step, min_value=None: [base],
+        safe_float_fn=lambda v, d: d if v is None else float(v),
+        refine_indicator_params_fn=lambda key, row, steps, defaults: [defaults.get(key, {})],
+        safe_int_fn=lambda v, d: d if v is None else int(v),
+        on_refine_plan_fn=lambda fine_total, stage: refine_notice.update(
+            {"fine_total": fine_total, "stage": stage}
+        ),
+    )
+    assert len(calls) == 1
+    assert refine_notice["fine_total"] == 1

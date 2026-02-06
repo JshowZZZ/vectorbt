@@ -109,3 +109,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 16 (engine extraction for combo-key payload builder and regime-signal resolver + tests) | Continue AWF-000 step 17: extract row-assembly helpers and finalize thin orchestrator | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 17 (engine extraction for symbol/combo row assembly helpers + tests) | Continue AWF-000 step 18: isolate eval runner orchestration into engine callable | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 18 (engine extraction for effective-cost and trade-momentum filter helpers + tests) | Continue AWF-000 step 19: package eval loop into engine callable runner | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 19 (engine callable runner for timeframe search orchestration + tests) | Continue AWF-000 step 20: extract final report/leaderboard finalize pipeline | pending |
