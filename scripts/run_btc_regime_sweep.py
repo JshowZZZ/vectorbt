@@ -14,6 +14,7 @@ from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
 from scripts.autowfo import metrics as autowfo_metrics
 from scripts.autowfo import ranking as autowfo_ranking
+from scripts.autowfo import report as autowfo_report
 from scripts.autowfo import search as autowfo_search
 from scripts.autowfo import split as autowfo_split
 from scripts.autowfo import strategy as autowfo_strategy
@@ -32,38 +33,23 @@ from scripts.autowfo.constants import (
 
 
 def _indicator_combo_label(combo_keys):
-    labels = []
-    for key in combo_keys:
-        labels.append(INDICATOR_META.get(key, {}).get("label", key))
-    return "+".join(labels)
+    return autowfo_report._indicator_combo_label(combo_keys, INDICATOR_META)
 
 
 def _format_indicator_list(value):
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return ""
-    keys = [k for k in str(value).split(",") if k]
-    if not keys:
-        return str(value)
-    return _indicator_combo_label(keys)
+    return autowfo_report._format_indicator_list(value, INDICATOR_META)
 
 
 def _df_to_html(df, columns, label_map):
-    view = df[columns].copy()
-    if "filter_name" in view.columns:
-        view["filter_name"] = view["filter_name"].map(lambda x: FILTER_NAME_MAP.get(x, x))
-    if "indicator_list" in view.columns:
-        view["indicator_list"] = view["indicator_list"].map(_format_indicator_list)
-    if "regime_name" in view.columns:
-        view["regime_name"] = view["regime_name"].map(lambda x: REGIME_NAME_MAP.get(x, x))
-    if "regime_type" in view.columns:
-        view["regime_type"] = view["regime_type"].map(lambda x: REGIME_TYPE_MAP.get(x, x))
-    for col in view.columns:
-        if pd.api.types.is_numeric_dtype(view[col]):
-            view[col] = view[col].round(4)
-    view = view.fillna("")
-    rename = {col: label_map.get(col, col) for col in columns}
-    view.rename(columns=rename, inplace=True)
-    return view.to_html(index=False, escape=False)
+    return autowfo_report._df_to_html(
+        df,
+        columns,
+        label_map,
+        FILTER_NAME_MAP,
+        REGIME_NAME_MAP,
+        REGIME_TYPE_MAP,
+        format_indicator_list_fn=_format_indicator_list,
+    )
 
 
 def _normalize_index(df):
@@ -71,13 +57,7 @@ def _normalize_index(df):
 
 
 def _format_duration(seconds):
-    if seconds is None or np.isnan(seconds):
-        return ""
-    seconds = int(max(0, seconds))
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return autowfo_report._format_duration(seconds)
 
 
 def _timeframe_to_hours(timeframe):
@@ -445,18 +425,7 @@ def _calc_pf_combo_metrics(pf, bar_hours):
 
 
 def _plot_portfolio(pf, plot_symbol):
-    try:
-        return pf.plot(column=plot_symbol, group_by=False, silence_warnings=True)
-    except Exception as exc:
-        print(f"[warn] plot failed, fallback to value plot: {exc}")
-        try:
-            value = pf.value()
-            if isinstance(value, pd.DataFrame) and plot_symbol in value.columns:
-                return value[plot_symbol].vbt.plot()
-            return value.vbt.plot()
-        except Exception as exc2:
-            print(f"[warn] value plot failed, fallback to total return: {exc2}")
-            return pf.total_return().vbt.plot()
+    return autowfo_report._plot_portfolio(pf, plot_symbol)
 
 
 def _aggregate_metrics(series_metrics):
