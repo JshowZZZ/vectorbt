@@ -9,6 +9,7 @@
 - `apps/` - app-like examples.
 - `docs/` - MkDocs source content and generation scripts.
 - `examples/` - notebooks and demo assets.
+- `plans/` - long-term scope, milestones, and execution backlog for AUTOWFO.
 - `scripts/` - utility scripts.
 - `tests/` - pytest suite.
 - `vectorbt/` - main package.
@@ -52,6 +53,7 @@
 - Keep long-horizon strategy work anchored to:
   - `plans/AUTOWFO_MASTER_PLAN.md` (vision, milestones, gates, risks)
   - `plans/AUTOWFO_TODO.md` (execution backlog and status)
+  - `plans/AGENTSMD_INTEGRATION.md` (overlay workflow and command usage)
 - Before implementing any new strategy-search feature:
   - Confirm the requested task maps to an item in `AUTOWFO_TODO.md`.
   - If not mapped, add/update plan items first, then implement.
