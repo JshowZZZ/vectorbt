@@ -1,5 +1,4 @@
 import datetime as dt
-import itertools
 import os
 import time
 import json
@@ -695,28 +694,20 @@ def main():
         existing_combo_df = pd.read_csv(combo_path, low_memory=False)
     if os.path.exists(per_symbol_path):
         existing_symbol_df = pd.read_csv(per_symbol_path, low_memory=False)
-    if "timeframe" not in existing_combo_df.columns and not existing_combo_df.empty:
-        existing_combo_df["timeframe"] = "1h"
-    if "data_days" not in existing_combo_df.columns and not existing_combo_df.empty:
-        existing_combo_df["data_days"] = np.nan
-    if "timeframe" not in existing_symbol_df.columns and not existing_symbol_df.empty:
-        existing_symbol_df["timeframe"] = "1h"
-    if "data_days" not in existing_symbol_df.columns and not existing_symbol_df.empty:
-        existing_symbol_df["data_days"] = np.nan
-    if not existing_combo_df.empty:
-        for field in COMBO_KEY_FIELDS:
-            if field not in existing_combo_df.columns:
-                existing_combo_df[field] = np.nan
+    existing_combo_df, existing_symbol_df = autowfo_engine._normalize_existing_results(
+        existing_combo_df,
+        existing_symbol_df,
+        COMBO_KEY_FIELDS,
+    )
     indicator_param_options = _build_indicator_param_options_coarse()
     indicator_defaults = _indicator_defaults(indicator_param_options)
-    indicator_keys = list(INDICATOR_META.keys())
-    combo_keys_all = []
-    for size in combo_sizes:
-        combo_keys_all.extend(list(itertools.combinations(indicator_keys, size)))
-    rng = np.random.default_rng(combo_seed)
-    rng.shuffle(combo_keys_all)
-    if combo_segment_size:
-        combo_keys_all = combo_keys_all[combo_segment_start: combo_segment_start + int(combo_segment_size)]
+    combo_keys_all = autowfo_engine._build_combo_keys(
+        indicator_keys=list(INDICATOR_META.keys()),
+        combo_sizes=combo_sizes,
+        combo_seed=combo_seed,
+        combo_segment_start=combo_segment_start,
+        combo_segment_size=combo_segment_size,
+    )
 
     regime_variants = autowfo_engine._build_regime_variants(rsi_revert_pairs)
 
@@ -820,13 +811,11 @@ def main():
 
     emit_progress(stage="running", force=True)
 
-    seen_keys = set()
-    if not existing_combo_df.empty:
-        for _, row in existing_combo_df.iterrows():
-            row_dict = row.to_dict()
-            if not _has_all_config_fields(row_dict):
-                continue
-            seen_keys.add(_combo_key_from_dict(row_dict))
+    seen_keys = autowfo_engine._build_seen_keys(
+        existing_combo_df,
+        has_all_config_fields_fn=_has_all_config_fields,
+        combo_key_from_dict_fn=_combo_key_from_dict,
+    )
 
     pending_combo_rows = []
     pending_symbol_rows = []

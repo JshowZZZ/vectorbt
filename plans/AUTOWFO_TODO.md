@@ -103,3 +103,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 10 (portfolio module extraction with compatibility wrapper + characterization tests) | Re-evaluate AWF-000 exit criteria and remaining thin-orchestrator gaps | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 11 (engine helper extraction for config/regime/count/filter logic + tests) | Continue AWF-000 step 12: migrate more main-flow orchestration into engine | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 12 (engine extraction for progress/checkpoint gating + payload helpers + tests) | Continue AWF-000 step 13: migrate main loop blocks into engine runner | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 13 (engine extraction for combo keyspace, existing-result normalization, seen-key build + tests) | Continue AWF-000 step 14: migrate timeframe evaluation runner blocks into engine | pending |

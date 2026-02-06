@@ -147,3 +147,36 @@ def test_should_checkpoint():
         checkpoint_every=200,
         checkpoint_min_seconds=30,
     )
+
+
+def test_build_combo_keys_segment_and_seed():
+    keys = e._build_combo_keys(
+        indicator_keys=["a", "b", "c"],
+        combo_sizes=[1, 2],
+        combo_seed=1,
+        combo_segment_start=1,
+        combo_segment_size=3,
+    )
+    assert len(keys) == 3
+    assert all(isinstance(k, tuple) for k in keys)
+
+
+def test_normalize_existing_results_adds_columns():
+    combo_df = pd.DataFrame([{"x": 1}])
+    symbol_df = pd.DataFrame([{"y": 1}])
+    combo_norm, symbol_norm = e._normalize_existing_results(combo_df, symbol_df, ["field_a"])
+    assert "timeframe" in combo_norm.columns
+    assert "data_days" in combo_norm.columns
+    assert "field_a" in combo_norm.columns
+    assert "timeframe" in symbol_norm.columns
+    assert "data_days" in symbol_norm.columns
+
+
+def test_build_seen_keys_filters_invalid_rows():
+    df = pd.DataFrame([{"a": 1, "ok": True}, {"a": 2, "ok": False}])
+    seen = e._build_seen_keys(
+        df,
+        has_all_config_fields_fn=lambda row: bool(row.get("ok")),
+        combo_key_from_dict_fn=lambda row: f"a={row['a']}",
+    )
+    assert seen == {"a=1"}

@@ -1,10 +1,12 @@
 """Engine/orchestration helpers extracted from run_btc_regime_sweep monolith."""
 
 import copy
+import itertools
 import json
 import os
 
 import numpy as np
+import pandas as pd
 
 
 DEFAULT_CONFIG = {
@@ -189,6 +191,49 @@ def _apply_quality_filters(df, min_avg_daily_trades_target, min_oos_trades_targe
             if mask.any():
                 filtered = filtered[mask].copy()
     return filtered
+
+
+def _build_combo_keys(indicator_keys, combo_sizes, combo_seed, combo_segment_start=0, combo_segment_size=None):
+    combo_keys_all = []
+    for size in combo_sizes:
+        combo_keys_all.extend(list(itertools.combinations(indicator_keys, size)))
+    rng = np.random.default_rng(int(combo_seed))
+    rng.shuffle(combo_keys_all)
+    if combo_segment_size:
+        start = int(combo_segment_start)
+        end = start + int(combo_segment_size)
+        combo_keys_all = combo_keys_all[start:end]
+    return combo_keys_all
+
+
+def _normalize_existing_results(existing_combo_df, existing_symbol_df, combo_key_fields):
+    combo_df = existing_combo_df.copy()
+    symbol_df = existing_symbol_df.copy()
+    if "timeframe" not in combo_df.columns and not combo_df.empty:
+        combo_df["timeframe"] = "1h"
+    if "data_days" not in combo_df.columns and not combo_df.empty:
+        combo_df["data_days"] = np.nan
+    if "timeframe" not in symbol_df.columns and not symbol_df.empty:
+        symbol_df["timeframe"] = "1h"
+    if "data_days" not in symbol_df.columns and not symbol_df.empty:
+        symbol_df["data_days"] = np.nan
+    if not combo_df.empty:
+        for field in combo_key_fields:
+            if field not in combo_df.columns:
+                combo_df[field] = np.nan
+    return combo_df, symbol_df
+
+
+def _build_seen_keys(existing_combo_df, has_all_config_fields_fn, combo_key_from_dict_fn):
+    if existing_combo_df.empty:
+        return set()
+    seen_keys = set()
+    for _, row in existing_combo_df.iterrows():
+        row_dict = row.to_dict()
+        if not has_all_config_fields_fn(row_dict):
+            continue
+        seen_keys.add(combo_key_from_dict_fn(row_dict))
+    return seen_keys
 
 
 def _should_emit_progress(
