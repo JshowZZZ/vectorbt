@@ -7,33 +7,87 @@
 - Allowed statuses: `todo`, `doing`, `blocked`, `done`.
 
 ## Priorities
-- P0: Foundation and correctness
+- P-1: Prerequisite (must complete before P0)
+- P0: Foundation and correctness — protocol freeze
 - P1: Core automation and ranking quality
 - P2: Scale, usability, and continuous operation
 
+## Existing Implementation Inventory
+> Before planning, acknowledge what already exists in `scripts/run_btc_regime_sweep.py` (3000-line monolith):
+
+| Capability | Current Location | Status | Gap |
+|---|---|---|---|
+| Walk-forward split | `_build_walk_forward_slices()` ~L1004 | Working (anchored mode) | No validation set; not true per-window re-optimization; hard-coded parameters |
+| IS/OOS metrics | `_calc_pf_series()`, `_aggregate_oos_metrics()` | Working, 8 IS + 10 OOS fields | Missing Sharpe ratio, stability penalty, dispersion score |
+| Indicator definitions | `INDICATOR_META` dict, 13 indicators | Working | No schema file, no validator, hard-coded |
+| Regime logic | `REGIME_NAME_MAP`, 8 types | Working | Hard-coded, no external spec |
+| Combo generation | `itertools.combinations`, C(13, 2..4) = 1079 | Working | No pruning beyond seen_keys dedup |
+| Ranking | `sort by oos_avg_total_return_pct` | Working but simplistic | No Sharpe, no drawdown penalty, no consistency score |
+| Two-stage search | `combo` → `refine` mode | Working | Already implements AWF-008 concept |
+| Artifacts | CSV + SQLite + HTML reports | Working | No config hash, no data fingerprint, all DB columns TEXT |
+| Control panel | `control_panel.py` (2250 lines) | Working web UI :8787 | Tightly coupled to sweep script |
+
 ## Backlog
-| ID | Priority | Status | Owner | Est. Date | Task | Deliverable | Exit Criteria |
-|---|---|---|---|---|---|---|---|
-| AWF-001 | P0 | todo | JshowZZZ + AI agent | TBD | Define canonical split protocol (range/rolling/expanding, set_lens policy) | Protocol section in docs/config | Fixed schema used by all runs |
-| AWF-002 | P0 | todo | JshowZZZ + AI agent | TBD | Define metric contract (IS/OOS, drawdown, Sharpe, stability terms) | Metric spec doc | Metric names/formulas frozen for MVP |
-| AWF-003 | P0 | todo | JshowZZZ + AI agent | TBD | Define strategy spec schema for indicator combos and signal logic | Schema file + validator | Invalid specs fail fast with clear errors |
-| AWF-004 | P0 | todo | JshowZZZ + AI agent | TBD | Define experiment artifact schema | Artifact contract doc | Every run emits reproducible metadata |
-| AWF-005 | P1 | todo | JshowZZZ + AI agent | TBD | Build orchestration MVP pipeline | Runnable module/script | End-to-end run from spec to leaderboard |
-| AWF-006 | P1 | todo | JshowZZZ + AI agent | TBD | Implement stability-first ranking function | Ranking module + tests | Top-N based on OOS robustness works |
-| AWF-007 | P1 | todo | JshowZZZ + AI agent | TBD | Add benchmark scenario for regression | Baseline config + expected outputs | Repeated runs are deterministic |
-| AWF-008 | P1 | todo | JshowZZZ + AI agent | TBD | Add two-stage search (coarse->focused) | Search module extension | Runtime improves vs brute-force |
-| AWF-009 | P2 | todo | JshowZZZ + AI agent | TBD | Add run registry (history + diff) | Experiment index artifacts | Can compare current run vs prior run |
-| AWF-010 | P2 | todo | JshowZZZ + AI agent | TBD | Add one-command execution entrypoint | CLI/script command | Full pipeline runnable by one command |
-| AWF-011 | P2 | todo | JshowZZZ + AI agent | TBD | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
-| AWF-012 | P2 | todo | JshowZZZ + AI agent | TBD | Add operational playbook | Runbook doc | New run can be operated without notebook |
+| ID | Priority | Status | Owner | Task | Deliverable | Exit Criteria |
+|---|---|---|---|---|---|---|
+| AWF-000 | P-1 | todo | JshowZZZ + AI | Monolith decomposition — extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
+| AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
+| AWF-002 | P0 | todo | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; includes Sharpe ratio formula |
+| AWF-003 | P0 | todo | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable |
+| AWF-004 | P0 | todo | JshowZZZ + AI | Extract + freeze artifact schema; add config hash + data fingerprint | `plans/protocols/artifact_contract.yaml` + artifact writer module | Every run emits config SHA256, data range hash, reproducible metadata |
+| AWF-005 | P1 | blocked | JshowZZZ + AI | Refactor orchestration pipeline into modular AUTOWFO engine | `scripts/autowfo/engine.py` using frozen protocol modules | End-to-end run from spec to leaderboard using modular pipeline |
+| AWF-002b | P1 | blocked | JshowZZZ + AI | Add Sharpe ratio + stability scoring to metric module | Extended `metrics.py`: per-segment Sharpe, cross-segment stddev, drawdown penalty weight | Stability metrics computable, compared side-by-side with old ranking |
+| AWF-006 | P1 | blocked | JshowZZZ + AI | Implement stability-first ranking function using AWF-002b metrics | `ranking.py` module + before/after comparison artifacts | Top-N selection uses composite score (OOS return + Sharpe + consistency - drawdown penalty) |
+| AWF-007 | P1 | blocked | JshowZZZ + AI | Add benchmark scenario for regression | Baseline config + expected outputs + golden test | Repeated runs are deterministic under fixed seed/data |
+| AWF-008 | P1 | done | — | Two-stage search (coarse → focused) | Already in `run_btc_regime_sweep.py` (`combo` + `refine` modes) | Working; to be extracted into `search.py` during AWF-000 |
+| AWF-001b | P1 | blocked | JshowZZZ + AI | Add true WFO mode (per-window re-optimization) alongside anchored mode | `split.py` extension + engine integration | Can run both anchored eval and true WFO; results comparable |
+| AWF-009 | P2 | blocked | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + diff artifacts | Can compare current run vs prior run by config/data/metric changes |
+| AWF-010 | P2 | blocked | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config sweep.yaml` works end-to-end |
+| AWF-011 | P2 | blocked | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
+| AWF-012 | P2 | blocked | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
+
+## Execution Phases
+
+### Phase 1: Decompose (AWF-000)
+> Goal: Break the monolith so individual protocols can be frozen and tested independently.
+- Map every function in `run_btc_regime_sweep.py` to its target module.
+- Extract with zero behavior change — old script output must be identical.
+- Add import bridge so `control_panel.py` continues to work.
+- **Must complete before any Gate A work begins.**
+
+### Phase 2: Protocol Freeze (AWF-001 → AWF-004, then Gate A)
+> Goal: Formalize what already works into versioned, testable specs.
+- Each task = read existing hard-coded logic → write explicit spec → add schema validation → add unit tests.
+- Gate A checklist must all pass before moving to Phase 3.
+
+### Phase 3: Ranking Upgrade (AWF-002b → AWF-006 → AWF-007, then Gate B)
+> Goal: Replace simple sort-by-return with composite robustness scoring.
+- AWF-002b: Add Sharpe + stability metrics to the metric module.
+- AWF-006: New ranking function using composite score.
+- AWF-007: Benchmark scenario to lock down deterministic results.
+- Gate B checklist must pass before Phase 4.
+
+### Phase 4: Advanced Modes (AWF-001b → AWF-005, then Gate C)
+> Goal: Add true WFO and refactor engine for modularity.
+- AWF-001b: Per-window re-optimization mode.
+- AWF-005: Full engine refactor using modular pipeline.
+- Gate C reproducibility checks.
+
+### Phase 5: Operationalize (AWF-009 → AWF-012, then Gate D)
+> Goal: Production-ready automation.
+- Run registry, CLI, regression suite, runbook.
+- Gate D regression green.
 
 ## Current Focus Window
-- Active milestone: Protocol and Constraints
-- Allowed implementation now: only tasks AWF-001 to AWF-004
-- Blocked until protocol freeze: AWF-005 and beyond
+- Active phase: **Phase 1 — Decompose**
+- Next action: **AWF-000** (monolith decomposition planning + execution)
+- Allowed implementation now: AWF-000 only
+- Blocked until AWF-000 done: AWF-001 to AWF-004
+- Blocked until Gate A passed: AWF-005 and beyond
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
 |---|---|---|---|---|---|
 | 2026-02-06 | AWF-ALL | initialized | Backlog skeleton created | Start protocol freeze tasks AWF-001~004 | initial planning commit |
 | 2026-02-06 | AWF-ALL | metadata_update | Added owner/date columns and structured logging format | Populate Est. Date during next planning sync | docs refinement |
+| 2026-02-06 | AWF-000, AWF-008 | plan_revised | Architecture review found 3000-line monolith blocking protocol freeze; AWF-008 already done in code | Added AWF-000 (P-1), AWF-002b, AWF-001b; changed AWF-001~004 from "define" to "extract+freeze"; marked AWF-008 done; restructured into 5 execution phases | Start AWF-000 decomposition | — |

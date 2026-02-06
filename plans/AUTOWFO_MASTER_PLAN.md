@@ -23,13 +23,38 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
 - Keep vectorbt core simulation and indicator engines as compute primitives.
 - Add orchestration layer on top (AUTOWFO) rather than forcing major core refactors.
 - Treat each run as an experiment with fixed seed, dataset snapshot, config, and metrics.
+- **Decompose monolith first**: the current `run_btc_regime_sweep.py` (3000 lines) contains all logic in one file; it must be split into focused modules before protocols can be individually frozen and tested.
+
+## Current Implementation Reality
+> The following already exists (as of 2026-02-06) but is embedded in a monolithic script.
+> The first milestone is to extract, not to build from scratch.
+
+| Component | Exists? | Quality | Key Gap |
+|---|---|---|---|
+| Walk-forward eval | Yes (anchored mode) | Working | Not true per-window WFO; no validation set |
+| IS/OOS metrics (8+10) | Yes | Working | No Sharpe, no stability score |
+| Indicator framework (13) | Yes | Working | Hard-coded dicts, no schema |
+| Regime logic (8 types) | Yes | Working | Hard-coded, no external spec |
+| Combo search (1079+) | Yes | Working | No intelligent pruning |
+| Two-stage search | Yes (combo→refine) | Working | AWF-008 effectively done |
+| Ranking | Yes | Simplistic | Single sort by OOS return |
+| Artifacts (CSV/DB/HTML) | Yes | Working | No config hash, no data fingerprint, TEXT-only DB |
+| Web control panel | Yes (8787) | Working | Tightly coupled to monolith |
 
 ## Milestones
+
+0. Monolith Decomposition (Prerequisite)
+- Extract `run_btc_regime_sweep.py` core logic into importable, testable modules.
+- Confirm identical output before and after decomposition.
+- Exit criteria: each module importable independently; sweep script produces same results.
+- Linked TODO IDs: `AWF-000`.
+
 1. Protocol and Constraints
-- Define canonical split protocol (train/valid/test, horizons, overlap policy).
-- Define metric set and ranking policy (return, drawdown, Sharpe, stability penalty).
-- Define experiment schema and artifact layout.
-- Exit criteria: protocol doc approved; no coding without protocol references.
+- Extract and freeze split protocol from existing `_build_walk_forward_slices()` into versioned spec.
+- Extract and freeze metric contract from existing `_calc_pf_series/_aggregate_*` functions.
+- Extract and freeze strategy spec schema from existing `INDICATOR_META/REGIME_NAME_MAP`.
+- Extract and freeze artifact schema; add config hash and data fingerprint.
+- Exit criteria: protocol docs committed with schema validation tests passing.
 - Linked TODO IDs: `AWF-001`, `AWF-002`, `AWF-003`, `AWF-004`.
 
 2. Search Space and Strategy Spec
@@ -51,20 +76,23 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
 - Linked TODO IDs: `AWF-005`, `AWF-007`.
 
 4. Stability-First Selection
+- Add Sharpe ratio and stability scoring to metric module (prerequisite for ranking upgrade).
 - Add ranking models beyond single metric max:
   - median OOS performance
-  - dispersion penalty
-  - drawdown penalty
+  - per-segment Sharpe ratio
+  - cross-segment dispersion penalty
+  - drawdown penalty weight
   - split-consistency score
+- Add true WFO mode (per-window re-optimization) alongside existing anchored eval.
 - Exit criteria: same config reruns produce stable top-N under fixed seed/data.
-- Linked TODO IDs: `AWF-006`, `AWF-011`.
+- Linked TODO IDs: `AWF-002b`, `AWF-006`, `AWF-001b`, `AWF-011`.
 
 5. Scale and Performance
-- Add two-stage search (coarse then focused).
-- Add caching and duplicate elimination.
+- Two-stage search (coarse then focused): **already implemented** (`combo` → `refine` modes).
+- Add caching and duplicate elimination (basic `seen_keys` dedup exists).
 - Add runtime and memory profiling baselines.
 - Exit criteria: meaningful speedup vs brute-force baseline.
-- Linked TODO IDs: `AWF-008`, `AWF-009`.
+- Linked TODO IDs: `AWF-008` (done), `AWF-009`.
 
 6. Automation and Governance
 - Add CLI or script entrypoint for scheduled runs.
@@ -74,6 +102,7 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
 - Linked TODO IDs: `AWF-010`, `AWF-011`, `AWF-012`.
 
 ## Stage Gates (Do Not Skip)
+- Gate 0: Monolith decomposed before protocol freeze work begins.
 - Gate A: Protocol freeze before writing search logic.
 - Gate B: Ranking rule freeze before tuning performance.
 - Gate C: Reproducibility checks before adding new features.
@@ -134,3 +163,4 @@ Each experiment should record:
 ## Change Log
 - 2026-02-06: Initial long-term AUTOWFO master plan created.
 - 2026-02-06: Added milestone-to-TODO mapping and quantified gate checklists with sign-off ownership.
+- 2026-02-06: Architecture review — documented existing implementation inventory; added Milestone 0 (monolith decomposition); updated Milestones 1/4/5 to reflect extract-from-existing approach; added Gate 0; added AWF-000, AWF-002b, AWF-001b; marked AWF-008 as done.
