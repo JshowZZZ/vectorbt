@@ -30,7 +30,7 @@
 ## Backlog
 | ID | Priority | Status | Owner | Task | Deliverable | Exit Criteria |
 |---|---|---|---|---|---|---|
-| AWF-000 | P-1 | todo | JshowZZZ + AI | Monolith decomposition — extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
+| AWF-000 | P-1 | doing | JshowZZZ + AI | Monolith decomposition — extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
 | AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
 | AWF-002 | P0 | todo | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; includes Sharpe ratio formula |
 | AWF-003 | P0 | todo | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable |
@@ -91,3 +91,4 @@
 | 2026-02-06 | AWF-ALL | initialized | Backlog skeleton created | Start protocol freeze tasks AWF-001~004 | initial planning commit |
 | 2026-02-06 | AWF-ALL | metadata_update | Added owner/date columns and structured logging format | Populate Est. Date during next planning sync | docs refinement |
 | 2026-02-06 | AWF-000, AWF-008 | plan_revised | Architecture review found 3000-line monolith blocking protocol freeze; AWF-008 already done in code | Added AWF-000 (P-1), AWF-002b, AWF-001b; changed AWF-001~004 from "define" to "extract+freeze"; marked AWF-008 done; restructured into 5 execution phases | Start AWF-000 decomposition | — |
+| 2026-02-06 | AWF-000 | doing | Completed decomposition step 1 (constants extraction with compatibility re-export + characterization tests) | Continue AWF-000 step 2: extract data module | eb4e93a |
