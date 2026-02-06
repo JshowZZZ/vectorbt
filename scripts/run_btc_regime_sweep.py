@@ -749,23 +749,25 @@ def main():
     def emit_progress(stage="running", force=False):
         nonlocal last_progress_ts, done, skipped, total_combos
         now = time.time()
-        if not force and done > 0:
-            if (done % progress_every != 0) and (now - last_progress_ts < progress_min_seconds):
-                return
-        elapsed = now - start_ts
-        eta = (elapsed / done * (total_combos - done)) if done > 0 else None
-        payload = {
-            "run_id": run_id,
-            "stage": stage,
-            "total": total_combos,
-            "done": done,
-            "remaining": max(total_combos - done, 0),
-            "skipped": skipped,
-            "percent": round(done / total_combos * 100, 2) if total_combos else 0,
-            "elapsed": _format_duration(elapsed),
-            "eta": _format_duration(eta) if eta is not None else "",
-            "updated": dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-        }
+        if not autowfo_engine._should_emit_progress(
+            done=done,
+            force=force,
+            last_progress_ts=last_progress_ts,
+            now=now,
+            progress_every=progress_every,
+            progress_min_seconds=progress_min_seconds,
+        ):
+            return
+        payload = autowfo_engine._build_progress_payload(
+            run_id=run_id,
+            stage=stage,
+            total=total_combos,
+            done=done,
+            skipped=skipped,
+            elapsed_seconds=now - start_ts,
+            updated=dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            format_duration_fn=_format_duration,
+        )
         _write_status(status_json_path, status_html_path, payload)
         print(
             f"[{stage}] {done}/{total_combos} ({payload['percent']}%) "
@@ -794,9 +796,16 @@ def main():
         if not pending_combo_rows and not pending_symbol_rows:
             return
         now = time.time()
-        if not force:
-            if done - last_checkpoint_done < checkpoint_every and (now - last_checkpoint_ts) < checkpoint_min_seconds:
-                return
+        if not autowfo_engine._should_checkpoint(
+            done=done,
+            force=force,
+            last_checkpoint_done=last_checkpoint_done,
+            last_checkpoint_ts=last_checkpoint_ts,
+            now=now,
+            checkpoint_every=checkpoint_every,
+            checkpoint_min_seconds=checkpoint_min_seconds,
+        ):
+            return
         _append_rows(combo_path, pending_combo_rows, COMBO_RESULT_FIELDS)
         _append_rows(per_symbol_path, pending_symbol_rows, SYMBOL_RESULT_FIELDS)
         try:

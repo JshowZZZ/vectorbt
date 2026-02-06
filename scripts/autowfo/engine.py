@@ -189,3 +189,65 @@ def _apply_quality_filters(df, min_avg_daily_trades_target, min_oos_trades_targe
             if mask.any():
                 filtered = filtered[mask].copy()
     return filtered
+
+
+def _should_emit_progress(
+    done,
+    force,
+    last_progress_ts,
+    now,
+    progress_every,
+    progress_min_seconds,
+):
+    if force:
+        return True
+    if done <= 0:
+        return True
+    if done % progress_every == 0:
+        return True
+    if (now - last_progress_ts) >= progress_min_seconds:
+        return True
+    return False
+
+
+def _build_progress_payload(
+    run_id,
+    stage,
+    total,
+    done,
+    skipped,
+    elapsed_seconds,
+    updated,
+    format_duration_fn,
+):
+    eta_seconds = (elapsed_seconds / done * (total - done)) if done > 0 else None
+    return {
+        "run_id": run_id,
+        "stage": stage,
+        "total": total,
+        "done": done,
+        "remaining": max(total - done, 0),
+        "skipped": skipped,
+        "percent": round(done / total * 100, 2) if total else 0,
+        "elapsed": format_duration_fn(elapsed_seconds),
+        "eta": format_duration_fn(eta_seconds) if eta_seconds is not None else "",
+        "updated": updated,
+    }
+
+
+def _should_checkpoint(
+    done,
+    force,
+    last_checkpoint_done,
+    last_checkpoint_ts,
+    now,
+    checkpoint_every,
+    checkpoint_min_seconds,
+):
+    if force:
+        return True
+    if done - last_checkpoint_done >= checkpoint_every:
+        return True
+    if (now - last_checkpoint_ts) >= checkpoint_min_seconds:
+        return True
+    return False

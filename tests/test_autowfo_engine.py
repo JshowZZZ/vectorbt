@@ -81,3 +81,69 @@ def test_apply_quality_filters():
     )
     filtered = e._apply_quality_filters(df, min_avg_daily_trades_target=5, min_oos_trades_target=1)
     assert len(filtered) == 1
+
+
+def test_should_emit_progress():
+    assert e._should_emit_progress(
+        done=0,
+        force=False,
+        last_progress_ts=100.0,
+        now=101.0,
+        progress_every=25,
+        progress_min_seconds=5,
+    )
+    assert not e._should_emit_progress(
+        done=1,
+        force=False,
+        last_progress_ts=100.0,
+        now=101.0,
+        progress_every=25,
+        progress_min_seconds=5,
+    )
+    assert e._should_emit_progress(
+        done=25,
+        force=False,
+        last_progress_ts=100.0,
+        now=101.0,
+        progress_every=25,
+        progress_min_seconds=5,
+    )
+
+
+def test_build_progress_payload():
+    payload = e._build_progress_payload(
+        run_id="r1",
+        stage="running",
+        total=10,
+        done=2,
+        skipped=1,
+        elapsed_seconds=20.0,
+        updated="2026-02-07T00:00:00Z",
+        format_duration_fn=lambda x: f"{int(x)}s" if x is not None else "",
+    )
+    assert payload["run_id"] == "r1"
+    assert payload["remaining"] == 8
+    assert payload["percent"] == 20.0
+    assert payload["elapsed"] == "20s"
+    assert payload["eta"] == "80s"
+
+
+def test_should_checkpoint():
+    assert not e._should_checkpoint(
+        done=10,
+        force=False,
+        last_checkpoint_done=5,
+        last_checkpoint_ts=100.0,
+        now=101.0,
+        checkpoint_every=200,
+        checkpoint_min_seconds=30,
+    )
+    assert e._should_checkpoint(
+        done=300,
+        force=False,
+        last_checkpoint_done=5,
+        last_checkpoint_ts=100.0,
+        now=101.0,
+        checkpoint_every=200,
+        checkpoint_min_seconds=30,
+    )
