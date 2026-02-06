@@ -4,12 +4,15 @@ __pycache__
 .idea
 .mypy_cache
 .pytest_cache
-apps/candlestick-patterns/data
+.venv
 docs/docs/api
 docs/site
 dist
 vectorbt.egg-info
 venvs
 .DS_Store
+docs/api-markdown
 build
-uv.lock
+artifacts
+.agentsmd
+AGENTS.md.base.render.*

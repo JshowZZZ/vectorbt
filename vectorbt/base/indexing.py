@@ -145,18 +145,6 @@ class PandasIndexer(IndexingBase):
         return self.indexing_func(lambda x: x.__getitem__(key), **self.indexing_kwargs)
 
 
-def _normalize_numpy_scalars(obj: tp.Any) -> tp.Any:
-    """Convert numpy scalars to Python scalars recursively.
-
-    This ensures consistent string representation across numpy versions,
-    as numpy 2.x changed how scalars are represented in strings."""
-    if isinstance(obj, tuple):
-        return tuple(_normalize_numpy_scalars(x) for x in obj)
-    elif isinstance(obj, np.generic):
-        return obj.item()
-    return obj
-
-
 class ParamLoc(LocBase):
     """Access a group of columns by parameter using `pd.Series.loc`.
 
@@ -168,8 +156,7 @@ class ParamLoc(LocBase):
         if mapper.dtype == 'O':
             # If params are objects, we must cast them to string first
             # The original mapper isn't touched
-            # Normalize numpy scalars to Python scalars for consistent string representation
-            mapper = mapper.apply(_normalize_numpy_scalars).astype(str)
+            mapper = mapper.astype(str)
         self._mapper = mapper
         self._level_name = level_name
 
@@ -189,16 +176,15 @@ class ParamLoc(LocBase):
         """Get array of indices affected by this key."""
         if self.mapper.dtype == 'O':
             # We must also cast the key to string
-            # Normalize numpy scalars to Python scalars for consistent string representation
             if isinstance(key, slice):
-                start = str(_normalize_numpy_scalars(key.start)) if key.start is not None else None
-                stop = str(_normalize_numpy_scalars(key.stop)) if key.stop is not None else None
+                start = str(key.start) if key.start is not None else None
+                stop = str(key.stop) if key.stop is not None else None
                 key = slice(start, stop, key.step)
             elif isinstance(key, (list, np.ndarray)):
-                key = list(map(lambda x: str(_normalize_numpy_scalars(x)), key))
+                key = list(map(str, key))
             else:
                 # Tuples, objects, etc.
-                key = str(_normalize_numpy_scalars(key))
+                key = str(key)
         # Use pandas to perform indexing
         mapper = pd.Series(np.arange(len(self.mapper.index)), index=self.mapper.values)
         indices = mapper.loc.__getitem__(key)

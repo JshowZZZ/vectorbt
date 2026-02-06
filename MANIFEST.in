@@ -1,1 +1,1 @@
-prune docs
+recursive-include vectorbt/templates *.json

@@ -1,0 +1,9 @@
+## Local Operator Overlay
+
+{{ vectorbt_autowfo }}
+
+# Add private preferences below (this file should be copied to `.agentsmd` locally).
+# Example:
+# - Keep every implementation tied to one AWF task ID.
+# - Run focused tests before full pytest.
+

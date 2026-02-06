@@ -1,27 +1,39 @@
-ARG BASE_IMAGE=quay.io/jupyter/scipy-notebook:python-3.11
-FROM ${BASE_IMAGE} AS vectorbt
-
-LABEL org.opencontainers.image.title="vectorbt"
-LABEL org.opencontainers.image.description="VectorBT in Jupyter"
-LABEL org.opencontainers.image.source="https://github.com/polakowo/vectorbt"
+FROM jupyter/scipy-notebook:bbf0ada0a935
 
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp
 
-USER ${NB_UID}
-WORKDIR /home/${NB_USER}/work
+RUN apt-get update && \
+ apt-get install -yq --no-install-recommends curl && \
+ apt-get clean && \
+ rm -rf /var/lib/apt/lists/*
 
-ARG VBT_EXTRAS=""
+COPY . vectorbt
+WORKDIR vectorbt
+RUN chmod -R +x scripts
 
-COPY --chown=${NB_UID}:${NB_GID} . /tmp/vectorbt
+ARG FULL="yes"
 
-RUN python -m pip install --no-cache-dir -U pip setuptools wheel \
-    && python -m pip install --no-cache-dir "/tmp/vectorbt${VBT_EXTRAS:+[${VBT_EXTRAS}]}" \
-    && rm -rf /tmp/vectorbt
+RUN if [[ -n "${FULL}" ]] ; then \
+    scripts/install-talib.sh && pip install --no-cache-dir .[full] ; else \
+    pip install --no-cache-dir . ; fi
 
-EXPOSE 8888
+RUN scripts/install-labextensions.sh && \
+    jupyter lab clean && \
+    npm cache clean --force && \
+    rm -rf /home/$NB_USER/.cache/yarn && \
+    rm -rf $CONDA_DIR/share/jupyter/lab/staging
 
-CMD ["start-notebook.py", "--ServerApp.ip=0.0.0.0", "--ServerApp.port=8888"]
+USER $NB_UID
+
+ARG TEST
+
+RUN if [[ -n "${TEST}" ]] ; then \
+    pip install --no-cache-dir pytest && \
+    export NUMBA_BOUNDSCHECK=1 && \
+    export NUMBA_DISABLE_JIT=1 && \
+    python -m pytest tests ; fi
+
+WORKDIR "$HOME/work"
+
+ENV JUPYTER_ENABLE_LAB "yes"

@@ -1,66 +1,72 @@
 # candlestick-patterns
 
-A [Dash](https://github.com/plotly/dash) app to visualize and backtest candlestick patterns.
+This app creates a dashboard using [Dash](https://github.com/plotly/dash) to visualize and backtest candlestick patterns. 
 
-## ✨ Features
+* Supports [Yahoo! Finance](https://github.com/ranaroussi/yfinance) tickers
+* Supports [TA-Lib](https://github.com/mrjbq7/ta-lib) candlestick patterns
+* Allows to choose entry and exit patterns, and override candle settings
+* Allows to specify signals manually
+* Performs backtesting on selected signals using [vectorbt](https://github.com/polakowo/vectorbt)
+* Visualizes OHLCV, signals, orders, trades and portfolio value using [Plotly](https://github.com/plotly/plotly.py)
+* Displays key performance metrics such as Sharpe ratio
+* Compares main strategy to holding and trading randomly
+* Responsive design using [Dash Bootstrap Components](https://github.com/facultyai/dash-bootstrap-components)
 
-- Fetches market data via [yfinance](https://github.com/ranaroussi/yfinance)
-- Detects candlestick patterns via [TA-Lib](https://github.com/TA-Lib/ta-lib-python)
-- Choose entry/exit patterns, override candle settings, or specify signals manually
-- Backtests signals using [VectorBT](https://github.com/polakowo/vectorbt)
-- Visualizes OHLCV, signals, orders, trades, and portfolio value with [Plotly](https://github.com/plotly/plotly.py)
-- Displays key performance metrics (e.g., Sharpe ratio)
-- Compares strategy vs buy & hold and random trading
-- Responsive UI with [Dash Bootstrap Components](https://github.com/facultyai/dash-bootstrap-components)
+## How to run the app
 
-## 🌪️ Using `uv`
+### Using Docker
 
-[`uv`](https://github.com/astral-sh/uv) is a fast, modern replacement for `pip` + `venv` workflows.
+Build the Docker image and run the container:
 
-### 1) Clone the repo
+```bash
+docker build -t candlestick-patterns . 
+docker run -p 8050:8050 -e HOST='0.0.0.0' candlestick-patterns
+```
+
+Visit [http://127.0.0.1:8050/](http://127.0.0.1:8050/)
+
+Note: Compiling for the first time may take a while.
+
+### Using virtual environment
+
+To get started, first clone this repo:
 
 ```bash
 git clone https://github.com/polakowo/vectorbt.git
 cd vectorbt/apps/candlestick-patterns
 ```
 
-### 2) Create an environment + install deps
+Create and activate a conda env:
 
 ```bash
-uv venv
-uv pip install -r requirements.txt
+conda create -n candlestick-patterns python=3.7.6
+conda activate candlestick-patterns
 ```
 
-### 3) Run the app
+Or a venv (make sure your Python is 3.6+):
 
 ```bash
-uv run python app.py
+python3 -m venv venv
+source venv/bin/activate  # Unix
+venv\Scripts\activate  # Windows
 ```
 
-Then open: http://127.0.0.1:8050/
-
-> [!TIP]
-> If you prefer activating the venv instead of using `uv run`, you can do:
->
-> - macOS/Linux: `source .venv/bin/activate`
-> - Windows (PowerShell): `.venv\Scripts\activate`
->
-> Then run `python app.py`.
-
-## 🐳 Using Docker
-
-Build and run:
+Install the requirements:
 
 ```bash
-docker build -t candlestick-patterns .
-docker run -p 8050:8050 -e HOST='0.0.0.0' candlestick-patterns
+pip install -r requirements.txt
 ```
 
-Open: http://127.0.0.1:8050/
+In case of errors related to TA-Lib, see [Troubleshooting](https://github.com/mrjbq7/ta-lib#troubleshooting).
 
-> [!NOTE]
-> The first run can take a while because of Numba JIT compilation.
+Run the app:
 
-## 🖼️ Screenshot
+```bash
+python app.py
+```
 
-![screenshot.png](https://raw.githubusercontent.com/polakowo/vectorbt/master/apps/candlestick-patterns/assets/screenshot.png)
+Visit [http://127.0.0.1:8050/](http://127.0.0.1:8050/)
+
+## Screenshot
+
+![screenshot.png](https://raw.githubusercontent.com/polakowo/vectorbt/master/apps/candlestick-patterns/screenshot.png)

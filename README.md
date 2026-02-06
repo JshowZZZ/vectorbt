@@ -47,9 +47,8 @@
 > * Plotly 6 support
 > * `ticker_kwargs` in `YFData`
 > * Fixed Pandas TA dependency (→ [pandas-ta-classic](https://github.com/xgboosted/pandas-ta-classic)).
-> * Updated apps and Docker images
 
-## 📦 Installation
+## :package: Installation
 
 ```sh
 pip install -U vectorbt
@@ -61,7 +60,7 @@ To install optional dependencies as well:
 pip install -U "vectorbt[full]"
 ```
 
-## ✨ Usage
+## :sparkles: Usage
 
 VectorBT lets you backtest strategies in just a few lines of Python.
 
@@ -221,21 +220,12 @@ vbt.save_animation("bbands.gif", bbands.wrapper.index, plot, bbands, delta=90, s
 
 This is just the tip of the iceberg. Visit the [website](https://vectorbt.dev/) to learn more.
 
-## 🕹️ Apps
-
-### Candlestick Patterns ([here](https://github.com/polakowo/vectorbt/blob/master/apps/candlestick-patterns/))
-
-Explore candlestick-pattern signals interactively and backtest them with VectorBT.
-
-[![teaser.png](https://raw.githubusercontent.com/polakowo/vectorbt/master/apps/candlestick-patterns/assets/teaser.png)](https://github.com/polakowo/vectorbt/blob/master/apps/candlestick-patterns/)
-
-## 🔗 Links
+## :link: Links
 
 * [Website](https://vectorbt.dev/)
-* [Docker images](https://hub.docker.com/r/polakowo/vectorbt)
-* [Colab notebook](https://colab.research.google.com/drive/1ibqyrf6LPFlzRb6mkPpl3hxqL6ryNBXI?usp=sharing)
+* [Colab Notebook](https://colab.research.google.com/drive/1ibqyrf6LPFlzRb6mkPpl3hxqL6ryNBXI?usp=sharing)
 
-## ⚖️ License
+## :balance_scale: License
 
 This work is [fair-code](http://faircode.io/) distributed under the [Apache 2.0 with Commons Clause](https://github.com/polakowo/vectorbt/blob/master/LICENSE.md) license.
 
@@ -245,11 +235,11 @@ If you have questions or want to request a license exception, please [contact th
 
 Installing optional dependencies may be subject to a more restrictive license.
 
-## ⭐ Star History
+## :star: Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=polakowo/vectorbt&type=Timeline)](https://star-history.com/#polakowo/vectorbt&Timeline)
 
-## ⚠️ Disclaimer
+## :warning: Disclaimer
 
 This software is for educational purposes only. Do not risk money you cannot afford to lose.
 
