@@ -11,204 +11,17 @@ import pandas as pd
 import vectorbt as vbt
 
 
-def _u(text):
-    return text.encode("ascii").decode("unicode_escape")
-
-
-def _html_entity(text):
-    return text.encode("ascii", "xmlcharrefreplace").decode("ascii")
-
-
-LABELS = {
-    "report_title": _html_entity(_u("\\u56de\\u6e2c\\u5831\\u544a")),
-    "summary_title": _html_entity(_u("\\u56de\\u6e2c\\u6458\\u8981")),
-    "params_title": _html_entity(_u("\\u6700\\u4f73\\u53c3\\u6578")),
-    "top_title": _html_entity(_u("\\u53c3\\u6578\\u6392\\u884c")),
-    "chart_title": _html_entity(_u("\\u56de\\u6e2c\\u5716\\u8868")),
-    "symbol": _html_entity(_u("\\u4ea4\\u6613\\u5c0d")),
-    "filter_name": _html_entity(_u("\\u6307\\u6a19\\u7d44\\u5408")),
-    "vol_lookback": _html_entity(_u("\\u6ce2\\u52d5\\u56de\\u770b(\\u6839)")),
-    "vol_z": _html_entity(_u("\\u6ce2\\u52d5 Z \\u5206\\u6578\\u9580\\u6abb")),
-    "mom_lookback": _html_entity(_u("\\u52d5\\u80fd\\u56de\\u770b(\\u6839)")),
-    "trade_mom_lookback": _html_entity(_u("\\u4ea4\\u6613\\u5e63\\u52d5\\u80fd\\u56de\\u770b(\\u6839)")),
-    "regime_name": _html_entity(_u("\\u7b56\\u7565\\u578b\\u614b")),
-    "regime_type": _html_entity(_u("\\u8a0a\\u865f\\u985e\\u578b")),
-    "vol_mode": _html_entity(_u("\\u6ce2\\u52d5\\u689d\\u4ef6")),
-    "regime_rsi_long": _html_entity(_u("RSI \\u56de\\u6b78\\u591a\\u982d\\u9580\\u6abb")),
-    "regime_rsi_short": _html_entity(_u("RSI \\u56de\\u6b78\\u7a7a\\u982d\\u9580\\u6abb")),
-    "tp_stop": _html_entity(_u("\\u7372\\u5229%\\u51fa\\u5834")),
-    "sl_stop": _html_entity(_u("\\u6b62\\u640d")),
-    "max_hold": _html_entity(_u("\\u6700\\u9577\\u6301\\u6709(\\u6839)")),
-    "rsi_window": _html_entity(_u("RSI \\u9031\\u671f")),
-    "rsi_long": _html_entity(_u("RSI \\u591a\\u982d\\u9580\\u6abb")),
-    "rsi_short": _html_entity(_u("RSI \\u7a7a\\u982d\\u9580\\u6abb")),
-    "bb_width": _html_entity(_u("\\u5e03\\u6797\\u5e36\\u5bec\\u5ea6\\u9580\\u6abb")),
-    "atr_ratio": _html_entity(_u("ATR/\\u50f9\\u683c\\u9580\\u6abb")),
-    "total_return_pct": _html_entity(_u("\\u7e3d\\u5831\\u916c(%)")),
-    "total_profit": _html_entity(_u("\\u7e3d\\u76c8\\u5229")),
-    "total_trades": _html_entity(_u("\\u7e3d\\u4ea4\\u6613\\u7b46\\u6578")),
-    "win_rate_pct": _html_entity(_u("\\u52dd\\u7387(%)")),
-    "avg_trade_pct": _html_entity(_u("\\u5e73\\u5747\\u6bcf\\u7b46(%)")),
-    "max_drawdown_pct": _html_entity(_u("\\u6700\\u5927\\u56de\\u64a4(%)")),
-    "position_coverage_pct": _html_entity(_u("\\u6301\\u5009\\u8986\\u84cb\\u7387(%)")),
-    "avg_total_return_pct": _html_entity(_u("\\u5e73\\u5747\\u7e3d\\u5831\\u916c(%)")),
-    "avg_win_rate_pct": _html_entity(_u("\\u5e73\\u5747\\u52dd\\u7387(%)")),
-    "avg_avg_trade_pct": _html_entity(_u("\\u5e73\\u5747\\u6bcf\\u7b46(%)")),
-    "avg_max_drawdown_pct": _html_entity(_u("\\u5e73\\u5747\\u6700\\u5927\\u56de\\u64a4(%)")),
-    "avg_position_coverage_pct": _html_entity(_u("\\u5e73\\u5747\\u6301\\u5009\\u8986\\u84cb\\u7387(%)")),
-    "avg_total_trades": _html_entity(_u("\\u5e73\\u5747\\u7e3d\\u4ea4\\u6613\\u7b46\\u6578")),
-    "min_total_trades": _html_entity(_u("\\u6700\\u5c0f\\u7e3d\\u4ea4\\u6613\\u7b46\\u6578")),
-    "avg_daily_trades": _html_entity(_u("\\u5e73\\u5747\\u6bcf\\u65e5\\u4ea4\\u6613\\u6b21\\u6578")),
-    "avg_hold_hours": _html_entity(_u("\\u5e73\\u5747\\u6301\\u5009(\\u5c0f\\u6642)")),
-    "ma_fast": _html_entity(_u("MA \\u5feb\\u7dda")),
-    "ma_slow": _html_entity(_u("MA \\u6162\\u7dda")),
-    "macd_hist_ratio": _html_entity(_u("MACD \\u67f1\\u72c0\\u6bd4\\u7387\\u9580\\u6abb")),
-    "stoch_long": _html_entity(_u("KD \\u591a\\u982d\\u9580\\u6abb")),
-    "stoch_short": _html_entity(_u("KD \\u7a7a\\u982d\\u9580\\u6abb")),
-    "obv_lookback": _html_entity(_u("OBV \\u56de\\u770b(\\u6839)")),
-    "volume_lookback": _html_entity(_u("\\u91cf\\u80fd\\u56de\\u770b(\\u6839)")),
-    "volume_z": _html_entity(_u("\\u91cf\\u80fd Z \\u5206\\u6578\\u9580\\u6abb")),
-    "roc_lookback": _html_entity(_u("ROC \\u56de\\u770b(\\u6839)")),
-    "roc_threshold": _html_entity(_u("ROC \\u9580\\u6abb")),
-    "mfi_long": _html_entity(_u("MFI \\u591a\\u982d\\u9580\\u6abb")),
-    "mfi_short": _html_entity(_u("MFI \\u7a7a\\u982d\\u9580\\u6abb")),
-    "cmf_lookback": _html_entity(_u("CMF \\u56de\\u770b(\\u6839)")),
-    "cmf_threshold": _html_entity(_u("CMF \\u9580\\u6abb")),
-    "vroc_lookback": _html_entity(_u("\\u91cf\\u80fd\\u8b8a\\u5316\\u7387 \\u56de\\u770b(\\u6839)")),
-    "vroc_threshold": _html_entity(_u("\\u91cf\\u80fd\\u8b8a\\u5316\\u7387 \\u9580\\u6abb")),
-    "ad_lookback": _html_entity(_u("A/D \\u56de\\u770b(\\u6839)")),
-    "oos_avg_total_return_pct": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u7e3d\\u5831\\u916c(%)")),
-    "oos_avg_win_rate_pct": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u52dd\\u7387(%)")),
-    "oos_avg_avg_trade_pct": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u6bcf\\u7b46(%)")),
-    "oos_avg_max_drawdown_pct": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u6700\\u5927\\u56de\\u64a4(%)")),
-    "oos_avg_position_coverage_pct": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u6301\\u5009\\u8986\\u84cb\\u7387(%)")),
-    "oos_avg_total_trades": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u4ea4\\u6613\\u7b46\\u6578")),
-    "oos_min_total_trades": _html_entity(_u("\\u9a57\\u8b49\\u6700\\u5c0f\\u4ea4\\u6613\\u7b46\\u6578")),
-    "oos_avg_daily_trades": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u6bcf\\u65e5\\u4ea4\\u6613\\u6b21\\u6578")),
-    "oos_avg_hold_hours": _html_entity(_u("\\u9a57\\u8b49\\u5e73\\u5747\\u6301\\u5009(\\u5c0f\\u6642)")),
-    "oos_segments": _html_entity(_u("\\u9a57\\u8b49\\u5340\\u6bb5\\u6578")),
-    "data_range": _html_entity(_u("\\u8cc7\\u6599\\u5340\\u9593")),
-    "scan_timeframes": _html_entity(_u("\\u6383\\u63cf\\u6642\\u9593\\u6846\\u67b6")),
-    "timeframe": _html_entity(_u("\\u6642\\u9593\\u6846\\u67b6")),
-    "data_days": _html_entity(_u("\\u8cc7\\u6599\\u5929\\u6578")),
-    "base_symbol": _html_entity(_u("\\u57fa\\u6e96\\u5e63\\u5c0d")),
-    "trade_symbols": _html_entity(_u("\\u4ea4\\u6613\\u5e63\\u5c0d")),
-    "capital_mode": _html_entity(_u("\\u8cc7\\u91d1\\u6a21\\u5f0f")),
-    "run_id": _html_entity(_u("\\u57f7\\u884c\\u7de8\\u865f")),
-    "timestamp_utc": _html_entity(_u("UTC \\u6642\\u9593")),
-    "report": _html_entity(_u("\\u5831\\u544a")),
-    "min_trades_filter": _html_entity(_u("\\u6700\\u5c0f\\u4ea4\\u6613\\u7b46\\u6578\\u9580\\u6abb")),
-    "min_trades_target": _html_entity(_u("\\u76ee\\u6a19\\u6700\\u5c0f\\u4ea4\\u6613\\u7b46\\u6578")),
-    "min_avg_daily_trades_filter": _html_entity(_u("\\u5e73\\u5747\\u6bcf\\u65e5\\u4ea4\\u6613\\u6b21\\u6578\\u9580\\u6abb")),
-    "min_avg_daily_trades_target": _html_entity(_u("\\u76ee\\u6a19\\u5e73\\u5747\\u6bcf\\u65e5\\u4ea4\\u6613\\u6b21\\u6578")),
-    "history_title": _html_entity(_u("\\u6b77\\u53f2\\u7d2f\\u7a4d")),
-    "leaderboard_title": _html_entity(_u("\\u6b77\\u53f2\\u6392\\u884c\\u699c")),
-    "recent_runs_title": _html_entity(_u("\\u6700\\u8fd1\\u57f7\\u884c\\u7d00\\u9304")),
-    "plot_symbol": _html_entity(_u("\\u5716\\u8868\\u5e63\\u5c0d")),
-    "oos_summary_title": _html_entity(_u("\\u9a57\\u8b49\\u6458\\u8981")),
-    "wf_train_days": _html_entity(_u("\\u8a13\\u7df4\\u671f\\u9593(\\u5929)")),
-    "wf_test_days": _html_entity(_u("\\u9a57\\u8b49\\u671f\\u9593(\\u5929)")),
-    "wf_step_days": _html_entity(_u("\\u524d\\u9032\\u6b65\\u9577(\\u5929)")),
-    "wf_segments": _html_entity(_u("\\u9a57\\u8b49\\u5340\\u6bb5\\u6578")),
-    "status_title": _html_entity(_u("\\u57f7\\u884c\\u72c0\\u614b")),
-    "status_stage": _html_entity(_u("\\u968e\\u6bb5")),
-    "status_total": _html_entity(_u("\\u7e3d\\u7d44\\u5408")),
-    "status_done": _html_entity(_u("\\u5df2\\u5b8c\\u6210")),
-    "status_remaining": _html_entity(_u("\\u5269\\u9918")),
-    "status_skipped": _html_entity(_u("\\u5df2\\u8df3\\u904e")),
-    "status_percent": _html_entity(_u("\\u9032\\u5ea6(%)")),
-    "status_elapsed": _html_entity(_u("\\u7d93\\u904e\\u6642\\u9593")),
-    "status_eta": _html_entity(_u("\\u9810\\u8a08\\u5269\\u9918")),
-    "status_updated": _html_entity(_u("\\u66f4\\u65b0\\u6642\\u9593")),
-    "init_cash_usdt": _html_entity(_u("\\u8d77\\u59cb\\u8cc7\\u91d1(USDT)")),
-    "order_size_pct": _html_entity(_u("\\u55ae\\u7b46\\u4f4f\\u5009(\\u6bd4\\u4f8b)")),
-    "max_concurrent_positions": _html_entity(_u("\\u6700\\u5927\\u540c\\u6642\\u6301\\u5009")),
-    "indicator_list": _html_entity(_u("\\u6307\\u6a19\\u6e05\\u55ae")),
-    "indicator_count": _html_entity(_u("\\u6307\\u6a19\\u6578\\u91cf")),
-    "slippage_bps": _html_entity(_u("\\u6ed1\\u9ede(bps)")),
-    "spread_bps": _html_entity(_u("\\u50f9\\u5dee(bps)")),
-    "funding_rate_daily": _html_entity(_u("\\u8cc7\\u91d1\\u8cbb\\u7387/\\u65e5")),
-    "sym_avg_total_return_pct": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u7e3d\\u5831\\u916c(%)")),
-    "sym_avg_win_rate_pct": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u52dd\\u7387(%)")),
-    "sym_avg_avg_trade_pct": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u6bcf\\u7b46(%)")),
-    "sym_avg_max_drawdown_pct": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u6700\\u5927\\u56de\\u64a4(%)")),
-    "sym_avg_position_coverage_pct": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u6301\\u5009\\u8986\\u84cb\\u7387(%)")),
-    "sym_avg_total_trades": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u4ea4\\u6613\\u7b46\\u6578")),
-    "sym_min_total_trades": _html_entity(_u("\\u5e63\\u5c0d\\u6700\\u5c0f\\u4ea4\\u6613\\u7b46\\u6578")),
-    "sym_avg_daily_trades": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u6bcf\\u65e5\\u4ea4\\u6613\\u6b21\\u6578")),
-    "sym_avg_hold_hours": _html_entity(_u("\\u5e63\\u5c0d\\u5e73\\u5747\\u6301\\u5009(\\u5c0f\\u6642)")),
-}
-
-FILTER_NAME_MAP = {
-    "vol_mom": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd")),
-    "vol_mom_rsi": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+RSI")),
-    "vol_mom_bb": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+\\u5e03\\u6797\\u5e36\\u5bec\\u5ea6")),
-    "vol_mom_atr": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+ATR/\\u50f9\\u683c")),
-    "vol_mom_rsi_bb": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+RSI+\\u5e03\\u6797\\u5e36\\u5bec\\u5ea6")),
-    "vol_mom_rsi_atr": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+RSI+ATR/\\u50f9\\u683c")),
-    "vol_mom_ma": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+MA")),
-    "vol_mom_macd": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+MACD")),
-    "vol_mom_stoch": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+KD")),
-    "vol_mom_obv": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+OBV")),
-    "vol_mom_volume": _html_entity(_u("\\u6ce2\\u52d5+\\u52d5\\u80fd+\\u91cf\\u80fd")),
-    "none": _html_entity(_u("\\u7121\\u984d\\u5916\\u6ffe\\u7db2")),
-}
-
-INDICATOR_LABELS = {
-    "volume_z": _html_entity(_u("\\u91cf\\u80fdZ")),
-    "obv_roc": _html_entity(_u("OBV \\u8da8\\u52e2")),
-    "cmf": _html_entity(_u("\\u8cc7\\u91d1\\u6d41\\u5411(CMF)")),
-    "mfi": _html_entity(_u("\\u8cc7\\u91d1\\u6d41\\u6307\\u6a19(MFI)")),
-    "vroc": _html_entity(_u("\\u91cf\\u80fd\\u8b8a\\u5316\\u7387")),
-    "ad": _html_entity(_u("A/D \\u8da8\\u52e2")),
-    "rsi": _html_entity(_u("RSI")),
-    "roc": _html_entity(_u("ROC")),
-    "macd_hist": _html_entity(_u("MACD \\u67f1\\u72c0")),
-    "stoch": _html_entity(_u("KD")),
-    "bb_width": _html_entity(_u("\\u5e03\\u6797\\u5e36\\u5bec\\u5ea6")),
-    "atr_ratio": _html_entity(_u("ATR/\\u50f9\\u683c")),
-    "ma_trend": _html_entity(_u("MA \\u8da8\\u52e2")),
-}
-
-INDICATOR_META = {
-    "volume_z": {"label": INDICATOR_LABELS["volume_z"], "category": "volume"},
-    "obv_roc": {"label": INDICATOR_LABELS["obv_roc"], "category": "volume"},
-    "cmf": {"label": INDICATOR_LABELS["cmf"], "category": "volume"},
-    "mfi": {"label": INDICATOR_LABELS["mfi"], "category": "volume"},
-    "vroc": {"label": INDICATOR_LABELS["vroc"], "category": "volume"},
-    "ad": {"label": INDICATOR_LABELS["ad"], "category": "volume"},
-    "rsi": {"label": INDICATOR_LABELS["rsi"], "category": "momentum"},
-    "roc": {"label": INDICATOR_LABELS["roc"], "category": "momentum"},
-    "macd_hist": {"label": INDICATOR_LABELS["macd_hist"], "category": "momentum"},
-    "stoch": {"label": INDICATOR_LABELS["stoch"], "category": "momentum"},
-    "bb_width": {"label": INDICATOR_LABELS["bb_width"], "category": "volatility"},
-    "atr_ratio": {"label": INDICATOR_LABELS["atr_ratio"], "category": "volatility"},
-    "ma_trend": {"label": INDICATOR_LABELS["ma_trend"], "category": "volatility"},
-}
-
-INDICATOR_PARAM_FIELDS = [
-    "rsi_long",
-    "rsi_short",
-    "bb_width",
-    "atr_ratio",
-    "ma_fast",
-    "ma_slow",
-    "macd_hist_ratio",
-    "stoch_long",
-    "stoch_short",
-    "obv_lookback",
-    "volume_lookback",
-    "volume_z",
-    "roc_lookback",
-    "roc_threshold",
-    "mfi_long",
-    "mfi_short",
-    "cmf_lookback",
-    "cmf_threshold",
-    "vroc_lookback",
-    "vroc_threshold",
-    "ad_lookback",
-]
+from scripts.autowfo.constants import (
+    FILTER_NAME_MAP,
+    INDICATOR_LABELS,
+    INDICATOR_META,
+    INDICATOR_PARAM_FIELDS,
+    LABELS,
+    REGIME_NAME_MAP,
+    REGIME_TYPE_MAP,
+    _html_entity,
+    _u,
+)
 
 
 def _indicator_combo_label(combo_keys):
@@ -225,24 +38,6 @@ def _format_indicator_list(value):
     if not keys:
         return str(value)
     return _indicator_combo_label(keys)
-
-REGIME_NAME_MAP = {
-    "trend_high": _html_entity(_u("\\u8da8\\u52e2(\\u9ad8\\u6ce2\\u52d5)")),
-    "trend_low": _html_entity(_u("\\u8da8\\u52e2(\\u4f4e\\u6ce2\\u52d5)")),
-    "trend_any": _html_entity(_u("\\u8da8\\u52e2(\\u4e0d\\u9650\\u6ce2\\u52d5)")),
-    "rsi_revert_low": _html_entity(_u("RSI \\u56de\\u6b78(\\u4f4e\\u6ce2\\u52d5)")),
-    "rsi_revert_high": _html_entity(_u("RSI \\u56de\\u6b78(\\u9ad8\\u6ce2\\u52d5)")),
-    "bb_revert_low": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78(\\u4f4e\\u6ce2\\u52d5)")),
-    "bb_revert_high": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78(\\u9ad8\\u6ce2\\u52d5)")),
-    "bb_breakout_high": _html_entity(_u("\\u5e03\\u6797\\u7a81\\u7834(\\u9ad8\\u6ce2\\u52d5)")),
-}
-
-REGIME_TYPE_MAP = {
-    "trend": _html_entity(_u("\\u8da8\\u52e2")),
-    "rsi_revert": _html_entity(_u("RSI \\u56de\\u6b78")),
-    "bb_revert": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78")),
-    "bb_breakout": _html_entity(_u("\\u5e03\\u6797\\u7a81\\u7834")),
-}
 
 
 def _df_to_html(df, columns, label_map):
@@ -2993,3 +2788,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
