@@ -101,3 +101,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 8 (ranking module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 9: extract report/render helpers | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 9 (report module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 10: extract portfolio execution module | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 10 (portfolio module extraction with compatibility wrapper + characterization tests) | Re-evaluate AWF-000 exit criteria and remaining thin-orchestrator gaps | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 11 (engine helper extraction for config/regime/count/filter logic + tests) | Continue AWF-000 step 12: migrate more main-flow orchestration into engine | pending |

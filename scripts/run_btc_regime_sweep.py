@@ -12,6 +12,7 @@ import vectorbt as vbt
 
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
+from scripts.autowfo import engine as autowfo_engine
 from scripts.autowfo import metrics as autowfo_metrics
 from scripts.autowfo import portfolio as autowfo_portfolio
 from scripts.autowfo import ranking as autowfo_ranking
@@ -591,73 +592,26 @@ def main():
     out_dir = "artifacts"
     os.makedirs(out_dir, exist_ok=True)
 
-    default_config = {
-        "search_mode": "combo",
-        "combo_sizes": [2, 3, 4],
-        "combo_seed": 42,
-        "combo_segment_start": 0,
-        "combo_segment_size": None,
-        "timeframes": [{"timeframe": "3m", "days": 60}],
-        "wf_train_days": 120,
-        "wf_test_days": 30,
-        "wf_step_days": 30,
-        "top_n_refine": 50,
-        "combo_group_fields": ["indicator_list", "regime_name", "vol_mode"],
-        "trade_symbols": ["ETH/BTC", "BNB/BTC", "SOL/BTC"],
-        "capital_mode": "shared",
-        "init_cash_usdt": 1000,
-        "order_size_pct": 0.5,
-        "max_concurrent_positions": 2,
-        "slippage_bps": 2.0,
-        "spread_bps": 2.0,
-        "funding_rate_daily": 0.0,
-    }
-    config_path = os.path.join(out_dir, "sweep_config.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                override = json.load(f)
-            for key, value in override.items():
-                if isinstance(value, dict) and isinstance(default_config.get(key), dict):
-                    merged = default_config[key].copy()
-                    merged.update(value)
-                    default_config[key] = merged
-                else:
-                    default_config[key] = value
-        except Exception as exc:
-            print(f"[warn] failed to load sweep_config.json: {exc}")
-
-    env_mode = os.getenv("VBT_SWEEP_MODE")
-    if env_mode:
-        default_config["search_mode"] = env_mode
-
-    search_mode = str(default_config.get("search_mode", "combo")).lower()
-    if search_mode not in {"combo", "refine"}:
-        search_mode = "combo"
+    default_config = autowfo_engine._load_runtime_config(
+        out_dir,
+        env_mode=os.getenv("VBT_SWEEP_MODE"),
+    )
+    search_mode = autowfo_engine._normalize_search_mode(default_config.get("search_mode", "combo"))
     timeframe_configs = default_config["timeframes"]
     combo_sizes = default_config["combo_sizes"]
     combo_seed = int(default_config.get("combo_seed", 42))
     combo_segment_start = int(default_config.get("combo_segment_start", 0))
     combo_segment_size = default_config.get("combo_segment_size")
     combo_group_fields = default_config.get("combo_group_fields", ["indicator_list", "regime_name", "vol_mode"])
-    trade_symbols = default_config.get("trade_symbols", default_trade_symbols)
-    if isinstance(trade_symbols, str):
-        trade_symbols = [s.strip() for s in trade_symbols.split(",") if s.strip()]
-    trade_symbols = [s.strip() for s in trade_symbols if s and str(s).strip()]
-    trade_symbols = [s for s in trade_symbols if s != base_symbol]
-    if not trade_symbols:
-        trade_symbols = default_trade_symbols
+    trade_symbols = autowfo_engine._normalize_trade_symbols(
+        default_config.get("trade_symbols", default_trade_symbols),
+        base_symbol=base_symbol,
+        default_trade_symbols=default_trade_symbols,
+    )
 
-    def _safe_positive_config_int(name, default):
-        try:
-            value = int(default_config.get(name, default))
-        except (TypeError, ValueError):
-            return default
-        return value if value > 0 else default
-
-    wf_train_days = _safe_positive_config_int("wf_train_days", 120)
-    wf_test_days = _safe_positive_config_int("wf_test_days", 30)
-    wf_step_days = _safe_positive_config_int("wf_step_days", 30)
+    wf_train_days = autowfo_engine._safe_positive_config_int(default_config, "wf_train_days", 120)
+    wf_test_days = autowfo_engine._safe_positive_config_int(default_config, "wf_test_days", 30)
+    wf_step_days = autowfo_engine._safe_positive_config_int(default_config, "wf_step_days", 30)
 
     vol_lookbacks = [24]
     vol_zs = [0.8]
@@ -673,13 +627,7 @@ def main():
     bb_alpha = 2
     atr_window = 14
     base_ma_pairs = [(10, 30), (20, 50)]
-    ma_pairs = sorted({
-        (fast_val, slow_val)
-        for base_fast, base_slow in base_ma_pairs
-        for fast_val in (base_fast - 5, base_fast, base_fast + 5)
-        for slow_val in (base_slow - 5, base_slow, base_slow + 5)
-        if fast_val > 1 and slow_val > fast_val
-    })
+    ma_pairs = autowfo_engine._build_ma_pairs(base_ma_pairs)
     lookback_refine_step = 4
     obv_lookbacks = _expand_lookback_list([12, 24], lookback_refine_step)
     volume_lookbacks = _expand_lookback_list([12, 24], lookback_refine_step)
@@ -770,70 +718,25 @@ def main():
     if combo_segment_size:
         combo_keys_all = combo_keys_all[combo_segment_start: combo_segment_start + int(combo_segment_size)]
 
-    regime_variants = [
-        {"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high", "rsi_pair": None},
-        {"regime_name": "trend_low", "regime_type": "trend", "vol_mode": "low", "rsi_pair": None},
-        {"regime_name": "trend_any", "regime_type": "trend", "vol_mode": "any", "rsi_pair": None},
-    ]
-    for rsi_pair in rsi_revert_pairs:
-        regime_variants.append({
-            "regime_name": "rsi_revert_low",
-            "regime_type": "rsi_revert",
-            "vol_mode": "low",
-            "rsi_pair": rsi_pair,
-        })
-    for rsi_pair in rsi_revert_pairs:
-        regime_variants.append({
-            "regime_name": "rsi_revert_high",
-            "regime_type": "rsi_revert",
-            "vol_mode": "high",
-            "rsi_pair": rsi_pair,
-        })
-    regime_variants.append({
-        "regime_name": "bb_revert_low",
-        "regime_type": "bb_revert",
-        "vol_mode": "low",
-        "rsi_pair": None,
-    })
-    regime_variants.append({
-        "regime_name": "bb_revert_high",
-        "regime_type": "bb_revert",
-        "vol_mode": "high",
-        "rsi_pair": None,
-    })
-    regime_variants.append({
-        "regime_name": "bb_breakout_high",
-        "regime_type": "bb_breakout",
-        "vol_mode": "high",
-        "rsi_pair": None,
-    })
+    regime_variants = autowfo_engine._build_regime_variants(rsi_revert_pairs)
 
     # scanning logic (multi-timeframe, incremental, two-space)
     regime_lookup = {regime["regime_name"]: regime for regime in regime_variants}
     timeframe_days_map = {cfg["timeframe"]: cfg["days"] for cfg in timeframe_configs}
 
     def count_coarse_combos():
-        count = 0
-        indicator_param_counts = {
-            combo: int(np.prod([len(indicator_param_options.get(key, [{}])) for key in combo]))
-            for combo in combo_keys_all
-        }
-        for regime in regime_variants:
-            mom_iter = mom_lookbacks if regime["regime_type"] == "trend" else [mom_lookbacks[0]]
-            for vol_lookback in vol_lookbacks:
-                for vol_z in vol_zs:
-                    if regime["vol_mode"] == "any" and (
-                        vol_lookback != vol_lookbacks[0] or vol_z != vol_zs[0]
-                    ):
-                        continue
-                    for mom_lookback in mom_iter:
-                        for trade_mom_lookback in trade_mom_lookbacks:
-                            for tp_stop in tp_stops:
-                                for sl_stop in sl_stops:
-                                    for max_hold in max_holds:
-                                        for combo in combo_keys_all:
-                                            count += indicator_param_counts.get(combo, 1)
-        return count
+        return autowfo_engine._count_coarse_combos(
+            regime_variants=regime_variants,
+            indicator_param_options=indicator_param_options,
+            combo_keys_all=combo_keys_all,
+            mom_lookbacks=mom_lookbacks,
+            vol_lookbacks=vol_lookbacks,
+            vol_zs=vol_zs,
+            trade_mom_lookbacks=trade_mom_lookbacks,
+            tp_stops=tp_stops,
+            sl_stops=sl_stops,
+            max_holds=max_holds,
+        )
 
     total_combos = count_coarse_combos() * len(timeframe_configs) if search_mode == "combo" else 0
     done = 0
@@ -925,19 +828,11 @@ def main():
     checkpoint_min_seconds = 30
 
     def apply_quality_filters(df):
-        filtered = df.copy()
-        if "avg_daily_trades" in filtered.columns:
-            filtered = filtered[filtered["avg_daily_trades"] >= min_avg_daily_trades_target].copy()
-        if not filtered.empty:
-            if "oos_avg_total_return_pct" in filtered.columns:
-                mask = (
-                    (filtered["oos_avg_total_return_pct"] > 0)
-                    & (filtered["oos_avg_avg_trade_pct"] > 0)
-                    & (filtered["oos_min_total_trades"] >= min_oos_trades_target)
-                )
-                if mask.any():
-                    filtered = filtered[mask].copy()
-        return filtered
+        return autowfo_engine._apply_quality_filters(
+            df,
+            min_avg_daily_trades_target=min_avg_daily_trades_target,
+            min_oos_trades_target=min_oos_trades_target,
+        )
 
     for tf_cfg in timeframe_configs:
         timeframe = tf_cfg["timeframe"]
