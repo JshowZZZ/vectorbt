@@ -53,6 +53,21 @@ def _load_runtime_config(out_dir, env_mode=None):
     return config
 
 
+def _ensure_control_file(control_path):
+    if os.path.exists(control_path):
+        return
+    with open(control_path, "w", encoding="utf-8") as f:
+        json.dump({"paused": False}, f, ensure_ascii=False, indent=2)
+
+
+def _read_control(control_path):
+    try:
+        with open(control_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"paused": False}
+
+
 def _normalize_search_mode(mode):
     search_mode = str(mode or "combo").lower()
     if search_mode not in {"combo", "refine"}:

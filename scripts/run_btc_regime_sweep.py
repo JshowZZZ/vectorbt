@@ -665,9 +665,7 @@ def main():
     status_html_path = os.path.join(out_dir, "run_status.html")
     db_path = os.path.join(out_dir, "results.db")
     control_path = os.path.join(out_dir, "run_control.json")
-    if not os.path.exists(control_path):
-        with open(control_path, "w", encoding="utf-8") as f:
-            json.dump({"paused": False}, f, ensure_ascii=False, indent=2)
+    autowfo_engine._ensure_control_file(control_path)
 
     combo_path = os.path.join(out_dir, "param_sweep_combo_summary.csv")
     per_symbol_path = os.path.join(out_dir, "param_sweep_symbol_summary.csv")
@@ -768,11 +766,7 @@ def main():
         last_progress_ts = now
 
     def _read_control():
-        try:
-            with open(control_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {"paused": False}
+        return autowfo_engine._read_control(control_path)
 
     def _wait_if_paused(stage_label):
         while True:

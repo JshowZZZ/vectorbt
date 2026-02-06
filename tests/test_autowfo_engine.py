@@ -180,3 +180,14 @@ def test_build_seen_keys_filters_invalid_rows():
         combo_key_from_dict_fn=lambda row: f"a={row['a']}",
     )
     assert seen == {"a=1"}
+
+
+def test_control_file_helpers(tmp_path):
+    control_path = tmp_path / "run_control.json"
+    e._ensure_control_file(str(control_path))
+    control = e._read_control(str(control_path))
+    assert control.get("paused") is False
+
+    bad_path = tmp_path / "missing.json"
+    fallback = e._read_control(str(bad_path))
+    assert fallback == {"paused": False}
