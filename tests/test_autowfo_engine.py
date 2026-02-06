@@ -439,3 +439,21 @@ def test_build_symbol_and_combo_rows():
     )
     assert combo_row["avg_total_return_pct"] == 8.0
     assert combo_row["oos_avg_total_return_pct"] == 7.0
+
+
+def test_compute_effective_costs_and_trade_mom_filters():
+    effective_fees, effective_slippage = e._compute_effective_costs(
+        fees=0.001,
+        slippage_bps=2.0,
+        spread_bps=2.0,
+        funding_rate_daily=0.0001,
+        max_hold=24,
+        bar_hours=1.0,
+    )
+    assert effective_fees > 0.001
+    assert effective_slippage == 0.0003
+
+    trade_mom = pd.Series([1.0, -1.0, 0.0])
+    long_filter, short_filter = e._build_trade_mom_filters(trade_mom)
+    assert list(long_filter.astype(int)) == [1, 0, 0]
+    assert list(short_filter.astype(int)) == [0, 1, 0]

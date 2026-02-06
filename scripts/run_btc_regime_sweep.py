@@ -955,12 +955,15 @@ def main():
             )
 
             trade_mom = ctx["trade_mom_by_lb"][trade_mom_lookback]
-            long_filter = trade_mom > 0
-            short_filter = trade_mom < 0
-
-            effective_slippage = (slippage_bps + (spread_bps / 2.0)) / 10000.0
-            funding_fee = funding_rate_daily * (max_hold * bar_hours / 24.0)
-            effective_fees = fees + funding_fee
+            long_filter, short_filter = autowfo_engine._build_trade_mom_filters(trade_mom)
+            effective_fees, effective_slippage = autowfo_engine._compute_effective_costs(
+                fees=fees,
+                slippage_bps=slippage_bps,
+                spread_bps=spread_bps,
+                funding_rate_daily=funding_rate_daily,
+                max_hold=max_hold,
+                bar_hours=bar_hours,
+            )
 
             long_regime_final, short_regime_final, variant_params = _apply_indicator_combo(
                 long_regime,
@@ -1017,6 +1020,9 @@ def main():
                 segment_long = long_regime_final.loc[segment_close.index]
                 segment_short = short_regime_final.loc[segment_close.index]
                 segment_trade_mom = trade_mom.loc[segment_close.index]
+                seg_long_filter, seg_short_filter = autowfo_engine._build_trade_mom_filters(
+                    segment_trade_mom
+                )
                 pf_test = _run_pf(
                     segment_close,
                     segment_long,
@@ -1026,8 +1032,8 @@ def main():
                     sl_stop,
                     tp_stop,
                     freq=timeframe,
-                    long_filter=segment_trade_mom > 0,
-                    short_filter=segment_trade_mom < 0,
+                    long_filter=seg_long_filter,
+                    short_filter=seg_short_filter,
                     init_cash=ctx["init_cash_btc"],
                     size=order_size_pct,
                     size_type="percent",

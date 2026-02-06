@@ -684,6 +684,17 @@ def _build_combo_row(
     return combo_row
 
 
+def _compute_effective_costs(fees, slippage_bps, spread_bps, funding_rate_daily, max_hold, bar_hours):
+    effective_slippage = (slippage_bps + (spread_bps / 2.0)) / 10000.0
+    funding_fee = funding_rate_daily * (max_hold * bar_hours / 24.0)
+    effective_fees = fees + funding_fee
+    return effective_fees, effective_slippage
+
+
+def _build_trade_mom_filters(trade_mom):
+    return trade_mom > 0, trade_mom < 0
+
+
 def _should_emit_progress(
     done,
     force,
