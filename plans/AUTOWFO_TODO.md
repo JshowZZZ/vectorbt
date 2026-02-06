@@ -95,3 +95,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 2 (data module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 3: extract split module | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 3 (split module extraction with compatibility wrapper + characterization tests) | Continue AWF-000 step 4: extract metrics module | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 4 (metrics module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 5: extract artifacts module | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 5 (artifacts module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 6: extract strategy module | pending |
