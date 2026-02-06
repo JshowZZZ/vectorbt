@@ -11,6 +11,7 @@ import pandas as pd
 import vectorbt as vbt
 
 from scripts.autowfo import data as autowfo_data
+from scripts.autowfo import split as autowfo_split
 
 from scripts.autowfo.constants import (
     FILTER_NAME_MAP,
@@ -583,22 +584,7 @@ def _load_or_update_symbol(symbol, exchange, timeframe, start, end, cache_dir, c
 
 
 def _build_walk_forward_slices(index, train_days, test_days, step_days):
-    if index.empty:
-        return []
-    train_delta = pd.Timedelta(days=train_days)
-    test_delta = pd.Timedelta(days=test_days)
-    step_delta = pd.Timedelta(days=step_days)
-    cursor = index[0]
-    end = index[-1]
-    slices = []
-    while True:
-        train_end = cursor + train_delta
-        test_end = train_end + test_delta
-        if test_end > end:
-            break
-        slices.append((train_end, test_end))
-        cursor = cursor + step_delta
-    return slices
+    return autowfo_split._build_walk_forward_slices(index, train_days, test_days, step_days)
 
 
 def _as_series(value, index):
