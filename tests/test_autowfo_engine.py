@@ -230,3 +230,81 @@ def test_build_refine_targets():
     )
     assert fine_total == 9
     assert len(fine_targets) == 1
+
+
+def test_build_combo_key_values_characterization():
+    values = e._build_combo_key_values(
+        timeframe="3m",
+        data_days=60,
+        exchange="binance",
+        base_symbol="BTC/USDT",
+        trade_symbols_tf=["ETH/BTC"],
+        capital_mode="shared",
+        fees=0.001,
+        slippage_bps=2.0,
+        spread_bps=2.0,
+        funding_rate_daily=0.0,
+        order_size_pct=0.5,
+        max_concurrent_positions=2,
+        init_cash_usdt=1000.0,
+        wf_train_days=120,
+        wf_test_days=30,
+        wf_step_days=30,
+        data_start="2024-01-01",
+        data_end="2024-01-31",
+        regime={"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high"},
+        filter_name="rsi+roc",
+        indicator_list="rsi,roc",
+        indicator_combo=("rsi", "roc"),
+        vol_lookback=24,
+        vol_z=0.8,
+        mom_lookback=6,
+        trade_mom_lookback=3,
+        tp_stop=0.003,
+        sl_stop=0.006,
+        max_hold=2,
+        rsi_window=14,
+        param_payload={k: None for k in [
+            "rsi_long",
+            "rsi_short",
+            "bb_width",
+            "atr_ratio",
+            "ma_fast",
+            "ma_slow",
+            "macd_hist_ratio",
+            "stoch_long",
+            "stoch_short",
+            "obv_lookback",
+            "volume_lookback",
+            "volume_z",
+            "roc_lookback",
+            "roc_threshold",
+            "mfi_long",
+            "mfi_short",
+            "cmf_lookback",
+            "cmf_threshold",
+            "vroc_lookback",
+            "vroc_threshold",
+            "ad_lookback",
+        ]},
+    )
+    assert values["trade_symbols_key"] == "ETH/BTC"
+    assert values["indicator_count"] == 2
+    assert values["mom_lookback"] == 6
+
+
+def test_resolve_regime_signals():
+    idx = pd.date_range("2024-01-01", periods=3, freq="h")
+    vol_cond = pd.Series([True, False, True], index=idx)
+    ctx = {
+        "mom_by_lb": {6: pd.Series([1.0, -1.0, 0.5], index=idx)},
+        "rsi_series": pd.Series([20.0, 60.0, 80.0], index=idx),
+        "btc_close": pd.Series([10.0, 11.0, 9.0], index=idx),
+        "bb_lower": pd.Series([10.5, 10.5, 10.5], index=idx),
+        "bb_upper": pd.Series([10.8, 10.8, 10.8], index=idx),
+    }
+    long_trend, short_trend, _, _ = e._resolve_regime_signals(
+        {"regime_type": "trend"}, vol_cond, ctx, mom_lookback=6
+    )
+    assert bool(long_trend.iloc[0]) is True
+    assert bool(short_trend.iloc[0]) is False

@@ -345,6 +345,129 @@ def _build_refine_targets(
     return fine_total, fine_targets
 
 
+def _build_combo_key_values(
+    timeframe,
+    data_days,
+    exchange,
+    base_symbol,
+    trade_symbols_tf,
+    capital_mode,
+    fees,
+    slippage_bps,
+    spread_bps,
+    funding_rate_daily,
+    order_size_pct,
+    max_concurrent_positions,
+    init_cash_usdt,
+    wf_train_days,
+    wf_test_days,
+    wf_step_days,
+    data_start,
+    data_end,
+    regime,
+    filter_name,
+    indicator_list,
+    indicator_combo,
+    vol_lookback,
+    vol_z,
+    mom_lookback,
+    trade_mom_lookback,
+    tp_stop,
+    sl_stop,
+    max_hold,
+    rsi_window,
+    param_payload,
+):
+    return {
+        "timeframe": timeframe,
+        "data_days": data_days,
+        "exchange": exchange,
+        "base_symbol": base_symbol,
+        "trade_symbols_key": ",".join(trade_symbols_tf),
+        "capital_mode": capital_mode,
+        "fees": fees,
+        "slippage_bps": slippage_bps,
+        "spread_bps": spread_bps,
+        "funding_rate_daily": funding_rate_daily,
+        "order_size_pct": order_size_pct,
+        "max_concurrent_positions": max_concurrent_positions,
+        "init_cash_usdt": init_cash_usdt,
+        "wf_train_days": wf_train_days,
+        "wf_test_days": wf_test_days,
+        "wf_step_days": wf_step_days,
+        "data_start": str(data_start),
+        "data_end": str(data_end),
+        "regime_name": regime["regime_name"],
+        "regime_type": regime["regime_type"],
+        "vol_mode": regime["vol_mode"],
+        "regime_rsi_long": regime.get("rsi_pair", (None, None))[0]
+        if regime["regime_type"] == "rsi_revert"
+        else None,
+        "regime_rsi_short": regime.get("rsi_pair", (None, None))[1]
+        if regime["regime_type"] == "rsi_revert"
+        else None,
+        "filter_name": filter_name,
+        "indicator_list": indicator_list,
+        "indicator_count": len(indicator_combo),
+        "vol_lookback": vol_lookback if regime["vol_mode"] != "any" else None,
+        "vol_z": vol_z if regime["vol_mode"] != "any" else None,
+        "mom_lookback": mom_lookback if regime["regime_type"] == "trend" else None,
+        "trade_mom_lookback": trade_mom_lookback,
+        "tp_stop": tp_stop,
+        "sl_stop": sl_stop,
+        "max_hold": max_hold,
+        "rsi_window": rsi_window if "rsi" in indicator_combo else None,
+        "rsi_long": param_payload["rsi_long"],
+        "rsi_short": param_payload["rsi_short"],
+        "bb_width": param_payload["bb_width"],
+        "atr_ratio": param_payload["atr_ratio"],
+        "ma_fast": param_payload["ma_fast"],
+        "ma_slow": param_payload["ma_slow"],
+        "macd_hist_ratio": param_payload["macd_hist_ratio"],
+        "stoch_long": param_payload["stoch_long"],
+        "stoch_short": param_payload["stoch_short"],
+        "obv_lookback": param_payload["obv_lookback"],
+        "volume_lookback": param_payload["volume_lookback"],
+        "volume_z": param_payload["volume_z"],
+        "roc_lookback": param_payload["roc_lookback"],
+        "roc_threshold": param_payload["roc_threshold"],
+        "mfi_long": param_payload["mfi_long"],
+        "mfi_short": param_payload["mfi_short"],
+        "cmf_lookback": param_payload["cmf_lookback"],
+        "cmf_threshold": param_payload["cmf_threshold"],
+        "vroc_lookback": param_payload["vroc_lookback"],
+        "vroc_threshold": param_payload["vroc_threshold"],
+        "ad_lookback": param_payload["ad_lookback"],
+    }
+
+
+def _resolve_regime_signals(regime, vol_cond, ctx, mom_lookback):
+    if regime["regime_type"] == "trend":
+        mom = ctx["mom_by_lb"][mom_lookback]
+        return vol_cond & (mom > 0), vol_cond & (mom < 0), None, None
+    if regime["regime_type"] == "rsi_revert":
+        regime_rsi_long, regime_rsi_short = regime["rsi_pair"]
+        return (
+            vol_cond & (ctx["rsi_series"] < regime_rsi_long),
+            vol_cond & (ctx["rsi_series"] > regime_rsi_short),
+            regime_rsi_long,
+            regime_rsi_short,
+        )
+    if regime["regime_type"] == "bb_revert":
+        return (
+            vol_cond & (ctx["btc_close"] < ctx["bb_lower"]),
+            vol_cond & (ctx["btc_close"] > ctx["bb_upper"]),
+            None,
+            None,
+        )
+    return (
+        vol_cond & (ctx["btc_close"] > ctx["bb_upper"]),
+        vol_cond & (ctx["btc_close"] < ctx["bb_lower"]),
+        None,
+        None,
+    )
+
+
 def _should_emit_progress(
     done,
     force,
