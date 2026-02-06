@@ -13,6 +13,7 @@ import vectorbt as vbt
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
 from scripts.autowfo import metrics as autowfo_metrics
+from scripts.autowfo import search as autowfo_search
 from scripts.autowfo import split as autowfo_split
 from scripts.autowfo import strategy as autowfo_strategy
 
@@ -253,22 +254,11 @@ STRICT_CONFIG_FIELDS = [
 
 
 def _normalize_key_value(value):
-    if value is None:
-        return None
-    if isinstance(value, float) and np.isnan(value):
-        return None
-    if isinstance(value, (float, np.floating)):
-        return round(float(value), 6)
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    return value
+    return autowfo_search._normalize_key_value(value)
 
 
 def _combo_key_from_dict(values):
-    parts = []
-    for field in COMBO_KEY_FIELDS:
-        parts.append(f"{field}={_normalize_key_value(values.get(field))}")
-    return "|".join(parts)
+    return autowfo_search._combo_key_from_dict(values, COMBO_KEY_FIELDS)
 
 
 def _safe_int(value, default):
