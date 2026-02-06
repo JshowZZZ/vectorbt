@@ -94,3 +94,4 @@
 | 2026-02-06 | AWF-000 | doing | Completed decomposition step 1 (constants extraction with compatibility re-export + characterization tests) | Continue AWF-000 step 2: extract data module | eb4e93a |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 2 (data module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 3: extract split module | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 3 (split module extraction with compatibility wrapper + characterization tests) | Continue AWF-000 step 4: extract metrics module | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 4 (metrics module extraction with compatibility wrappers + characterization tests) | Continue AWF-000 step 5: extract artifacts module | pending |
