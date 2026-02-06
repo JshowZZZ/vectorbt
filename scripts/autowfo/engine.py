@@ -822,6 +822,88 @@ def _build_trade_mom_filters(trade_mom):
     return trade_mom > 0, trade_mom < 0
 
 
+def _load_result_frames(combo_path, per_symbol_path):
+    combo_df = pd.read_csv(combo_path, low_memory=False) if os.path.exists(combo_path) else pd.DataFrame()
+    per_symbol_df = (
+        pd.read_csv(per_symbol_path, low_memory=False) if os.path.exists(per_symbol_path) else pd.DataFrame()
+    )
+    return combo_df, per_symbol_df
+
+
+def _write_run_snapshot_files(combo_df, per_symbol_df, out_dir, run_id):
+    combo_path_run = os.path.join(out_dir, f"param_sweep_combo_summary_{run_id}.csv")
+    per_symbol_path_run = os.path.join(out_dir, f"param_sweep_symbol_summary_{run_id}.csv")
+    if not combo_df.empty:
+        combo_df.to_csv(combo_path_run, index=False)
+    if not per_symbol_df.empty:
+        per_symbol_df.to_csv(per_symbol_path_run, index=False)
+    return combo_path_run, per_symbol_path_run
+
+
+def _select_current_combo_df(combo_df, timeframe_configs):
+    combo_df_current = combo_df
+    if "timeframe" in combo_df.columns:
+        valid_timeframes = {cfg["timeframe"] for cfg in timeframe_configs}
+        tf_subset = combo_df[combo_df["timeframe"].isin(valid_timeframes)].copy()
+        if not tf_subset.empty:
+            combo_df_current = tf_subset
+    return combo_df_current
+
+
+def _fallback_activity_filter(combo_df_current, min_avg_daily_trades_target, apply_quality_filters_fn):
+    min_avg_daily_trades_filter = min_avg_daily_trades_target
+    filtered = apply_quality_filters_fn(combo_df_current)
+    if filtered.empty and "avg_daily_trades" in combo_df_current.columns:
+        filtered = combo_df_current[
+            combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter
+        ].copy()
+    if filtered.empty:
+        min_avg_daily_trades_filter = 2
+        filtered = combo_df_current[
+            combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter
+        ].copy()
+    if filtered.empty:
+        min_avg_daily_trades_filter = 0
+        filtered = combo_df_current.copy()
+    return filtered, min_avg_daily_trades_filter
+
+
+def _pick_best_from_top(top_df, timeframe_configs, timeframe_days_map, safe_int_fn):
+    best = top_df.iloc[0].to_dict()
+    best_timeframe = best.get("timeframe")
+    if best_timeframe is None or (isinstance(best_timeframe, float) and np.isnan(best_timeframe)):
+        best_timeframe = timeframe_configs[0]["timeframe"]
+    best_timeframe = str(best_timeframe)
+    if best_timeframe not in timeframe_days_map:
+        best_timeframe = timeframe_configs[0]["timeframe"]
+    best_data_days = safe_int_fn(
+        best.get("data_days"),
+        timeframe_days_map.get(best_timeframe, timeframe_configs[0]["days"]),
+    )
+    return best, best_timeframe, best_data_days
+
+
+def _append_leaderboard_row(leaderboard_path, leaderboard_row):
+    if os.path.exists(leaderboard_path):
+        lb_df = pd.read_csv(leaderboard_path, low_memory=False)
+        lb_df = pd.concat([lb_df, pd.DataFrame([leaderboard_row])], ignore_index=True)
+    else:
+        lb_df = pd.DataFrame([leaderboard_row])
+    lb_df.to_csv(leaderboard_path, index=False)
+    return lb_df
+
+
+def _build_leaderboard_views(lb_df, history_rows, top_by_score_fn):
+    lb_view = lb_df.copy()
+    if "report_file" in lb_view.columns:
+        lb_view["report"] = lb_view["report_file"].apply(lambda x: f'<a href="{x}">{x}</a>' if x else "")
+    else:
+        lb_view["report"] = ""
+    lb_recent = lb_view.sort_values("timestamp_utc", ascending=False).head(history_rows)
+    lb_best, _ = top_by_score_fn(lb_view, top_n=history_rows, tie_break_avg_hold=False)
+    return lb_view, lb_recent, lb_best
+
+
 def _should_emit_progress(
     done,
     force,

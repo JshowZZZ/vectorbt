@@ -110,3 +110,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 17 (engine extraction for symbol/combo row assembly helpers + tests) | Continue AWF-000 step 18: isolate eval runner orchestration into engine callable | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 18 (engine extraction for effective-cost and trade-momentum filter helpers + tests) | Continue AWF-000 step 19: package eval loop into engine callable runner | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 19 (engine callable runner for timeframe search orchestration + tests) | Continue AWF-000 step 20: extract final report/leaderboard finalize pipeline | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 20 (engine extraction for finalize pipeline helpers: result-load/snapshot/filter/best-pick/leaderboard views + tests) | Continue AWF-000 step 21: validate bit-identical outputs for extracted orchestration | pending |

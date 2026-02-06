@@ -554,3 +554,110 @@ def test_run_search_for_timeframe_refine():
     )
     assert len(calls) == 1
     assert refine_notice["fine_total"] == 1
+
+
+def test_load_result_frames_and_write_run_snapshot_files(tmp_path):
+    combo_src = tmp_path / "combo.csv"
+    symbol_src = tmp_path / "symbol.csv"
+    combo_df = pd.DataFrame([{"timeframe": "3m", "x": 1}])
+    symbol_df = pd.DataFrame([{"timeframe": "3m", "symbol": "ETH/BTC"}])
+    combo_df.to_csv(combo_src, index=False)
+    symbol_df.to_csv(symbol_src, index=False)
+
+    combo_loaded, symbol_loaded = e._load_result_frames(str(combo_src), str(symbol_src))
+    assert len(combo_loaded) == 1
+    assert len(symbol_loaded) == 1
+
+    combo_run_path, symbol_run_path = e._write_run_snapshot_files(
+        combo_df=combo_loaded,
+        per_symbol_df=symbol_loaded,
+        out_dir=str(tmp_path),
+        run_id="r1",
+    )
+    assert (tmp_path / "param_sweep_combo_summary_r1.csv").exists()
+    assert (tmp_path / "param_sweep_symbol_summary_r1.csv").exists()
+    assert combo_run_path.endswith("param_sweep_combo_summary_r1.csv")
+    assert symbol_run_path.endswith("param_sweep_symbol_summary_r1.csv")
+
+
+def test_select_current_combo_df_prefers_valid_timeframes():
+    combo_df = pd.DataFrame(
+        [
+            {"timeframe": "3m", "x": 1},
+            {"timeframe": "1h", "x": 2},
+        ]
+    )
+    filtered = e._select_current_combo_df(combo_df, [{"timeframe": "3m"}, {"timeframe": "5m"}])
+    assert list(filtered["timeframe"]) == ["3m"]
+
+    unchanged = e._select_current_combo_df(combo_df, [{"timeframe": "15m"}])
+    assert len(unchanged) == 2
+
+
+def test_fallback_activity_filter_tiers():
+    combo_df = pd.DataFrame([{"avg_daily_trades": 1.0}, {"avg_daily_trades": 3.0}])
+    filtered, min_filter = e._fallback_activity_filter(
+        combo_df_current=combo_df,
+        min_avg_daily_trades_target=5,
+        apply_quality_filters_fn=lambda df: df.iloc[0:0],
+    )
+    assert min_filter == 2
+    assert len(filtered) == 1
+
+    low_df = pd.DataFrame([{"avg_daily_trades": 1.0}])
+    filtered_low, min_filter_low = e._fallback_activity_filter(
+        combo_df_current=low_df,
+        min_avg_daily_trades_target=5,
+        apply_quality_filters_fn=lambda df: df.iloc[0:0],
+    )
+    assert min_filter_low == 0
+    assert len(filtered_low) == 1
+
+
+def test_pick_best_from_top_defaults():
+    top_df = pd.DataFrame([{"timeframe": float("nan"), "data_days": float("nan")}])
+
+    def _safe_int(v, default):
+        return default if v is None or pd.isna(v) else int(v)
+
+    best, best_timeframe, best_data_days = e._pick_best_from_top(
+        top_df=top_df,
+        timeframe_configs=[{"timeframe": "3m", "days": 60}],
+        timeframe_days_map={"3m": 60},
+        safe_int_fn=_safe_int,
+    )
+    assert isinstance(best, dict)
+    assert best_timeframe == "3m"
+    assert best_data_days == 60
+
+
+def test_append_leaderboard_row_and_build_views(tmp_path):
+    leaderboard_path = tmp_path / "leaderboard.csv"
+    first = {
+        "run_id": "r1",
+        "timestamp_utc": "2026-02-07T00:00:00Z",
+        "report_file": "r1.html",
+        "score": 10.0,
+    }
+    second = {
+        "run_id": "r2",
+        "timestamp_utc": "2026-02-07T01:00:00Z",
+        "report_file": "r2.html",
+        "score": 20.0,
+    }
+    e._append_leaderboard_row(str(leaderboard_path), first)
+    lb_df = e._append_leaderboard_row(str(leaderboard_path), second)
+    assert len(lb_df) == 2
+
+    lb_view, lb_recent, lb_best = e._build_leaderboard_views(
+        lb_df=lb_df,
+        history_rows=1,
+        top_by_score_fn=lambda df, top_n, tie_break_avg_hold: (
+            df.sort_values("score", ascending=False).head(top_n),
+            "score",
+        ),
+    )
+    assert "report" in lb_view.columns
+    assert "href=" in lb_view.iloc[0]["report"]
+    assert lb_recent.iloc[0]["run_id"] == "r2"
+    assert lb_best.iloc[0]["run_id"] == "r2"

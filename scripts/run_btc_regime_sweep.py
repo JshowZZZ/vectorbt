@@ -1195,52 +1195,31 @@ def main():
 
     _checkpoint(force=True)
 
-    combo_df = pd.read_csv(combo_path, low_memory=False) if os.path.exists(combo_path) else pd.DataFrame()
-    per_symbol_df = pd.read_csv(per_symbol_path, low_memory=False) if os.path.exists(per_symbol_path) else pd.DataFrame()
+    combo_df, per_symbol_df = autowfo_engine._load_result_frames(combo_path, per_symbol_path)
+    combo_path_run, per_symbol_path_run = autowfo_engine._write_run_snapshot_files(
+        combo_df, per_symbol_df, out_dir, run_id
+    )
 
-    combo_path_run = os.path.join(out_dir, f"param_sweep_combo_summary_{run_id}.csv")
-    per_symbol_path_run = os.path.join(out_dir, f"param_sweep_symbol_summary_{run_id}.csv")
-    if not combo_df.empty:
-        combo_df.to_csv(combo_path_run, index=False)
-    if not per_symbol_df.empty:
-        per_symbol_df.to_csv(per_symbol_path_run, index=False)
-
-    combo_df_current = combo_df
-    if "timeframe" in combo_df.columns:
-        valid_timeframes = {cfg["timeframe"] for cfg in timeframe_configs}
-        tf_subset = combo_df[combo_df["timeframe"].isin(valid_timeframes)].copy()
-        if not tf_subset.empty:
-            combo_df_current = tf_subset
+    combo_df_current = autowfo_engine._select_current_combo_df(combo_df, timeframe_configs)
     if combo_df_current.empty:
         print("[warn] No valid combinations evaluated; check data download and filters.")
         return
 
-    # Avoid picking low-activity strategies by requiring minimum average daily trades.
-    min_avg_daily_trades_filter = min_avg_daily_trades_target
-    filtered = apply_quality_filters(combo_df_current)
-    if filtered.empty and "avg_daily_trades" in combo_df_current.columns:
-        filtered = combo_df_current[combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter].copy()
-    if filtered.empty:
-        min_avg_daily_trades_filter = 2
-        filtered = combo_df_current[combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter].copy()
-    if filtered.empty:
-        min_avg_daily_trades_filter = 0
-        filtered = combo_df_current.copy()
+    filtered, min_avg_daily_trades_filter = autowfo_engine._fallback_activity_filter(
+        combo_df_current=combo_df_current,
+        min_avg_daily_trades_target=min_avg_daily_trades_target,
+        apply_quality_filters_fn=apply_quality_filters,
+    )
 
     top10, _ = _top_by_score(filtered, top_n=10, tie_break_avg_hold=True)
     top10_path = os.path.join(out_dir, f"param_sweep_top10_{run_id}.csv")
     top10.to_csv(top10_path, index=False)
 
-    best = top10.iloc[0].to_dict()
-    best_timeframe = best.get("timeframe")
-    if best_timeframe is None or (isinstance(best_timeframe, float) and np.isnan(best_timeframe)):
-        best_timeframe = timeframe_configs[0]["timeframe"]
-    best_timeframe = str(best_timeframe)
-    if best_timeframe not in timeframe_days_map:
-        best_timeframe = timeframe_configs[0]["timeframe"]
-    best_data_days = _safe_int(
-        best.get("data_days"),
-        timeframe_days_map.get(best_timeframe, timeframe_configs[0]["days"]),
+    best, best_timeframe, best_data_days = autowfo_engine._pick_best_from_top(
+        top_df=top10,
+        timeframe_configs=timeframe_configs,
+        timeframe_days_map=timeframe_days_map,
+        safe_int_fn=_safe_int,
     )
     try:
         best_ctx = _prepare_timeframe_context(
@@ -1622,18 +1601,15 @@ def main():
         "report_file": report_file_run,
     }
 
-    if os.path.exists(leaderboard_path):
-        lb_df = pd.read_csv(leaderboard_path, low_memory=False)
-        lb_df = pd.concat([lb_df, pd.DataFrame([leaderboard_row])], ignore_index=True)
-    else:
-        lb_df = pd.DataFrame([leaderboard_row])
-    lb_df.to_csv(leaderboard_path, index=False)
-
-    lb_view = lb_df.copy()
-    if "report_file" in lb_view.columns:
-        lb_view["report"] = lb_view["report_file"].apply(lambda x: f'<a href="{x}">{x}</a>' if x else "")
-    else:
-        lb_view["report"] = ""
+    lb_df = autowfo_engine._append_leaderboard_row(
+        leaderboard_path=leaderboard_path,
+        leaderboard_row=leaderboard_row,
+    )
+    lb_view, lb_recent, lb_best = autowfo_engine._build_leaderboard_views(
+        lb_df=lb_df,
+        history_rows=history_rows,
+        top_by_score_fn=_top_by_score,
+    )
     lb_cols = [
         "timestamp_utc",
         "run_id",
@@ -1654,8 +1630,6 @@ def main():
         "filter_name",
         "report",
     ]
-    lb_recent = lb_view.sort_values("timestamp_utc", ascending=False).head(history_rows)
-    lb_best, _ = _top_by_score(lb_view, top_n=history_rows, tie_break_avg_hold=False)
     lb_recent_html = _df_to_html(lb_recent.reindex(columns=lb_cols), lb_cols, LABELS)
     lb_best_html = _df_to_html(lb_best.reindex(columns=lb_cols), lb_cols, LABELS)
 
