@@ -105,3 +105,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 12 (engine extraction for progress/checkpoint gating + payload helpers + tests) | Continue AWF-000 step 13: migrate main loop blocks into engine runner | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 13 (engine extraction for combo keyspace, existing-result normalization, seen-key build + tests) | Continue AWF-000 step 14: migrate timeframe evaluation runner blocks into engine | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 14 (engine extraction for control file bootstrap/read helpers + tests) | Continue AWF-000 step 15: migrate timeframe eval loop scaffolding into engine | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 15 (engine extraction for coarse-plan iterator and refine-target builder + tests) | Continue AWF-000 step 16: migrate eval_combo state construction helpers into engine | pending |

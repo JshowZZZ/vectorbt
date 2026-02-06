@@ -191,3 +191,42 @@ def test_control_file_helpers(tmp_path):
     bad_path = tmp_path / "missing.json"
     fallback = e._read_control(str(bad_path))
     assert fallback == {"paused": False}
+
+
+def test_iter_coarse_plan_count():
+    def _iter_indicator(combo_keys, param_options):
+        for item in param_options.get(combo_keys[0], [{}]):
+            yield item
+
+    plan = list(
+        e._iter_coarse_plan(
+            regime_variants=[{"regime_type": "trend", "vol_mode": "high"}],
+            mom_lookbacks=[6],
+            vol_lookbacks=[24],
+            vol_zs=[0.8],
+            trade_mom_lookbacks=[3],
+            tp_stops=[0.003],
+            sl_stops=[0.006],
+            max_holds=[2],
+            combo_keys_all=[("a",)],
+            iter_indicator_param_combos_fn=_iter_indicator,
+            indicator_param_options={"a": [{"x": 1}, {"x": 2}]},
+        )
+    )
+    assert len(plan) == 2
+
+
+def test_build_refine_targets():
+    top_candidates = pd.DataFrame([{"indicator_list": "rsi", "tp_stop": 0.003, "sl_stop": 0.006}])
+    fine_total, fine_targets = e._build_refine_targets(
+        top_candidates=top_candidates,
+        tp_stops=[0.003],
+        sl_stops=[0.006],
+        indicator_defaults={"rsi": {"rsi_long": 60, "rsi_short": 40}},
+        refine_steps={"tp_stop": 0.001, "sl_stop": 0.002, "threshold_pair": 5},
+        expand_float_fn=lambda base, step, min_value=None: [base - step, base, base + step],
+        safe_float_fn=lambda v, d: d if v is None else float(v),
+        refine_indicator_params_fn=lambda key, row, steps, defaults: [defaults[key]],
+    )
+    assert fine_total == 9
+    assert len(fine_targets) == 1

@@ -251,6 +251,100 @@ def _build_seen_keys(existing_combo_df, has_all_config_fields_fn, combo_key_from
     return seen_keys
 
 
+def _iter_coarse_plan(
+    regime_variants,
+    mom_lookbacks,
+    vol_lookbacks,
+    vol_zs,
+    trade_mom_lookbacks,
+    tp_stops,
+    sl_stops,
+    max_holds,
+    combo_keys_all,
+    iter_indicator_param_combos_fn,
+    indicator_param_options,
+):
+    for regime in regime_variants:
+        mom_iter = mom_lookbacks if regime["regime_type"] == "trend" else [mom_lookbacks[0]]
+        for vol_lookback in vol_lookbacks:
+            for vol_z in vol_zs:
+                if regime["vol_mode"] == "any" and (
+                    vol_lookback != vol_lookbacks[0] or vol_z != vol_zs[0]
+                ):
+                    continue
+                for mom_lookback in mom_iter:
+                    for trade_mom_lookback in trade_mom_lookbacks:
+                        for tp_stop in tp_stops:
+                            for sl_stop in sl_stops:
+                                for max_hold in max_holds:
+                                    for combo_keys in combo_keys_all:
+                                        for combo_params in iter_indicator_param_combos_fn(
+                                            combo_keys, indicator_param_options
+                                        ):
+                                            yield (
+                                                regime,
+                                                combo_keys,
+                                                combo_params,
+                                                vol_lookback,
+                                                vol_z,
+                                                mom_lookback,
+                                                trade_mom_lookback,
+                                                tp_stop,
+                                                sl_stop,
+                                                max_hold,
+                                            )
+
+
+def _default_refine_steps():
+    return {
+        "threshold_pair": 5,
+        "lookback": 4,
+        "ma_step": 5,
+        "bb_width": 0.01,
+        "atr_ratio": 0.001,
+        "macd_hist_ratio": 0.0005,
+        "roc_threshold": 0.005,
+        "volume_z": 0.1,
+        "cmf_threshold": 0.02,
+        "vroc_threshold": 0.2,
+        "tp_stop": 0.001,
+        "sl_stop": 0.002,
+    }
+
+
+def _build_refine_targets(
+    top_candidates,
+    tp_stops,
+    sl_stops,
+    indicator_defaults,
+    refine_steps,
+    expand_float_fn,
+    safe_float_fn,
+    refine_indicator_params_fn,
+):
+    fine_total = 0
+    fine_targets = []
+    for _, row in top_candidates.iterrows():
+        indicator_list = row.get("indicator_list")
+        if not indicator_list:
+            continue
+        indicator_combo = tuple([v for v in str(indicator_list).split(",") if v])
+        if not indicator_combo:
+            continue
+        base_tp = safe_float_fn(row.get("tp_stop"), tp_stops[0])
+        base_sl = safe_float_fn(row.get("sl_stop"), sl_stops[0])
+        tp_candidates = expand_float_fn(base_tp, refine_steps["tp_stop"], min_value=0.0001)
+        sl_candidates = expand_float_fn(base_sl, refine_steps["sl_stop"], min_value=0.0001)
+        param_options = {
+            key: refine_indicator_params_fn(key, row, refine_steps, indicator_defaults)
+            for key in indicator_combo
+        }
+        indicator_count = int(np.prod([len(param_options.get(key, [{}])) for key in indicator_combo]))
+        fine_total += indicator_count * max(len(tp_candidates), 1) * max(len(sl_candidates), 1)
+        fine_targets.append((row, indicator_combo, tp_candidates, sl_candidates, param_options))
+    return fine_total, fine_targets
+
+
 def _should_emit_progress(
     done,
     force,
