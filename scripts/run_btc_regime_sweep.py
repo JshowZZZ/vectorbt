@@ -13,6 +13,7 @@ import vectorbt as vbt
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
 from scripts.autowfo import metrics as autowfo_metrics
+from scripts.autowfo import ranking as autowfo_ranking
 from scripts.autowfo import search as autowfo_search
 from scripts.autowfo import split as autowfo_split
 from scripts.autowfo import strategy as autowfo_strategy
@@ -464,6 +465,40 @@ def _aggregate_metrics(series_metrics):
 
 def _aggregate_oos_metrics(oos_rows):
     return autowfo_metrics._aggregate_oos_metrics(oos_rows)
+
+
+def _choose_score_col(df, preferred="oos_avg_total_return_pct", fallback="avg_total_return_pct"):
+    return autowfo_ranking._choose_score_col(df, preferred=preferred, fallback=fallback)
+
+
+def _sort_by_score(
+    df,
+    preferred="oos_avg_total_return_pct",
+    fallback="avg_total_return_pct",
+    tie_break_avg_hold=True,
+):
+    return autowfo_ranking._sort_by_score(
+        df,
+        preferred=preferred,
+        fallback=fallback,
+        tie_break_avg_hold=tie_break_avg_hold,
+    )
+
+
+def _top_by_score(
+    df,
+    top_n,
+    preferred="oos_avg_total_return_pct",
+    fallback="avg_total_return_pct",
+    tie_break_avg_hold=True,
+):
+    return autowfo_ranking._top_by_score(
+        df,
+        top_n=top_n,
+        preferred=preferred,
+        fallback=fallback,
+        tie_break_avg_hold=tie_break_avg_hold,
+    )
 
 
 def _build_indicator_param_options_coarse():
@@ -1424,15 +1459,7 @@ def main():
             tf_existing = existing_combo_df[existing_combo_df["timeframe"] == timeframe] if not existing_combo_df.empty else pd.DataFrame()
             tf_combo_df = tf_existing.copy()
             tf_filtered = apply_quality_filters(tf_combo_df)
-            sort_primary = "oos_avg_total_return_pct"
-            if sort_primary not in tf_filtered.columns or not tf_filtered[sort_primary].notna().any():
-                sort_primary = "avg_total_return_pct"
-            sort_cols = [sort_primary]
-            sort_asc = [False]
-            if "avg_hold_hours" in tf_filtered.columns:
-                sort_cols.append("avg_hold_hours")
-                sort_asc.append(True)
-            tf_sorted = tf_filtered.sort_values(sort_cols, ascending=sort_asc)
+            tf_sorted, _ = _sort_by_score(tf_filtered, tie_break_avg_hold=True)
             group_fields = [field for field in combo_group_fields if field in tf_sorted.columns]
             if group_fields:
                 tf_sorted = tf_sorted.drop_duplicates(subset=group_fields)
@@ -1537,15 +1564,7 @@ def main():
         min_avg_daily_trades_filter = 0
         filtered = combo_df_current.copy()
 
-    sort_col = "oos_avg_total_return_pct"
-    if sort_col not in filtered.columns or not filtered[sort_col].notna().any():
-        sort_col = "avg_total_return_pct"
-    sort_cols = [sort_col]
-    sort_asc = [False]
-    if "avg_hold_hours" in filtered.columns:
-        sort_cols.append("avg_hold_hours")
-        sort_asc.append(True)
-    top10 = filtered.sort_values(sort_cols, ascending=sort_asc).head(10)
+    top10, _ = _top_by_score(filtered, top_n=10, tie_break_avg_hold=True)
     top10_path = os.path.join(out_dir, f"param_sweep_top10_{run_id}.csv")
     top10.to_csv(top10_path, index=False)
 
@@ -1973,10 +1992,7 @@ def main():
         "report",
     ]
     lb_recent = lb_view.sort_values("timestamp_utc", ascending=False).head(history_rows)
-    lb_sort_col = "oos_avg_total_return_pct"
-    if lb_sort_col not in lb_view.columns or not lb_view[lb_sort_col].notna().any():
-        lb_sort_col = "avg_total_return_pct"
-    lb_best = lb_view.sort_values(lb_sort_col, ascending=False).head(history_rows)
+    lb_best, _ = _top_by_score(lb_view, top_n=history_rows, tie_break_avg_hold=False)
     lb_recent_html = _df_to_html(lb_recent.reindex(columns=lb_cols), lb_cols, LABELS)
     lb_best_html = _df_to_html(lb_best.reindex(columns=lb_cols), lb_cols, LABELS)
 
