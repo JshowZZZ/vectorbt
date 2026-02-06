@@ -107,3 +107,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 14 (engine extraction for control file bootstrap/read helpers + tests) | Continue AWF-000 step 15: migrate timeframe eval loop scaffolding into engine | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 15 (engine extraction for coarse-plan iterator and refine-target builder + tests) | Continue AWF-000 step 16: migrate eval_combo state construction helpers into engine | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 16 (engine extraction for combo-key payload builder and regime-signal resolver + tests) | Continue AWF-000 step 17: extract row-assembly helpers and finalize thin orchestrator | pending |
+| 2026-02-07 | AWF-000 | doing | Completed decomposition step 17 (engine extraction for symbol/combo row assembly helpers + tests) | Continue AWF-000 step 18: isolate eval runner orchestration into engine callable | pending |
