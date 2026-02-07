@@ -1,12 +1,16 @@
 import datetime as dt
 import json
-import sqlite3
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from scripts import run_btc_regime_sweep as sweep
+from scripts.autowfo import data as autowfo_data
+from scripts.autowfo import metrics as autowfo_metrics
+from scripts.autowfo import portfolio as autowfo_portfolio
+from scripts.autowfo import split as autowfo_split
+from scripts.autowfo import strategy as autowfo_strategy
 
 
 def _make_ohlcv(index, base=100.0):
@@ -52,7 +56,7 @@ def _common_ctx_kwargs():
     )
 
 
-def test_prepare_timeframe_context_success(monkeypatch):
+def test_prepare_timeframe_context_success():
     index = pd.date_range("2024-01-01", periods=50, freq="h")
     base_df = _make_ohlcv(index, base=100.0)
     trade_df = _make_ohlcv(index, base=1.0)
@@ -60,15 +64,16 @@ def test_prepare_timeframe_context_success(monkeypatch):
     def loader(symbol, *_args, **_kwargs):
         return base_df if symbol == "BTC/USDT" else trade_df
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
-    ctx = sweep._prepare_timeframe_context(**_common_ctx_kwargs())
+    ctx = autowfo_data._prepare_timeframe_context(
+        **_common_ctx_kwargs(), load_or_update_symbol_fn=loader
+    )
 
     assert ctx["trade_close"].shape[1] == 2
     assert ctx["total_days"] >= 1
     assert ctx["init_cash_btc"] > 0
 
 
-def test_prepare_timeframe_context_no_overlap(monkeypatch):
+def test_prepare_timeframe_context_no_overlap():
     base_index = pd.date_range("2024-01-01", periods=10, freq="h")
     trade_index = pd.date_range("2024-02-01", periods=10, freq="h")
     base_df = _make_ohlcv(base_index, base=100.0)
@@ -77,13 +82,13 @@ def test_prepare_timeframe_context_no_overlap(monkeypatch):
     def loader(symbol, *_args, **_kwargs):
         return base_df if symbol == "BTC/USDT" else trade_df
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
-
     with pytest.raises(RuntimeError, match="No overlapping"):
-        sweep._prepare_timeframe_context(**_common_ctx_kwargs())
+        autowfo_data._prepare_timeframe_context(
+            **_common_ctx_kwargs(), load_or_update_symbol_fn=loader
+        )
 
 
-def test_prepare_timeframe_context_clips_to_requested_days(monkeypatch):
+def test_prepare_timeframe_context_clips_to_requested_days():
     index = pd.date_range("2024-01-01", periods=24 * 30, freq="h")
     base_df = _make_ohlcv(index, base=100.0)
     trade_df = _make_ohlcv(index, base=1.0)
@@ -91,10 +96,11 @@ def test_prepare_timeframe_context_clips_to_requested_days(monkeypatch):
     def loader(symbol, *_args, **_kwargs):
         return base_df if symbol == "BTC/USDT" else trade_df
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
     cfg = _common_ctx_kwargs()
     cfg["data_days"] = 3
-    ctx = sweep._prepare_timeframe_context(**cfg)
+    ctx = autowfo_data._prepare_timeframe_context(
+        **cfg, load_or_update_symbol_fn=loader
+    )
 
     assert ctx["total_days"] <= 4
     assert (ctx["trade_close"].index[-1] - ctx["trade_close"].index[0]) <= pd.Timedelta(days=4)
@@ -112,7 +118,7 @@ def test_run_pf_combo_metrics_group_by():
     long_regime = pd.Series(True, index=index)
     short_regime = pd.Series(False, index=index)
 
-    pf = sweep._run_pf(
+    pf = autowfo_portfolio._run_pf(
         trade_close,
         long_regime,
         short_regime,
@@ -131,7 +137,7 @@ def test_run_pf_combo_metrics_group_by():
         max_positions=None,
     )
 
-    metrics = sweep._calc_pf_combo_metrics(pf, bar_hours=1.0)
+    metrics = autowfo_metrics._calc_pf_combo_metrics(pf, bar_hours=1.0)
     assert metrics["total_trades"] > 0
     assert np.isfinite(metrics["total_return_pct"])
 
@@ -148,7 +154,7 @@ def test_run_pf_costs_reduce_return():
     long_regime = pd.Series(True, index=index)
     short_regime = pd.Series(False, index=index)
 
-    pf_no_cost = sweep._run_pf(
+    pf_no_cost = autowfo_portfolio._run_pf(
         trade_close,
         long_regime,
         short_regime,
@@ -167,7 +173,7 @@ def test_run_pf_costs_reduce_return():
         max_positions=None,
     )
 
-    pf_cost = sweep._run_pf(
+    pf_cost = autowfo_portfolio._run_pf(
         trade_close,
         long_regime,
         short_regime,
@@ -191,26 +197,6 @@ def test_run_pf_costs_reduce_return():
     assert np.isfinite(ret_no)
     assert np.isfinite(ret_cost)
     assert ret_cost <= ret_no + 1e-9
-
-
-def test_db_schema_append(tmp_path):
-    db_path = tmp_path / "results.db"
-    columns = ["timeframe", "value"]
-
-    sweep._ensure_db_schema(str(db_path), "combo_summary", columns, indexes=[("idx_tf", ["timeframe"])])
-    inserted = sweep._append_db_rows(
-        str(db_path),
-        "combo_summary",
-        [{"timeframe": "3m", "value": "1"}, {"timeframe": "15m", "value": "2"}],
-        columns,
-    )
-
-    assert inserted == 2
-    with sqlite3.connect(db_path) as conn:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(combo_summary)").fetchall()]
-        assert "created_utc" in cols
-        count = conn.execute("SELECT COUNT(*) FROM combo_summary").fetchone()[0]
-        assert count == 2
 
 
 def test_main_smoke_integration(tmp_path, monkeypatch):
@@ -240,7 +226,7 @@ def test_main_smoke_integration(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        sweep,
+        autowfo_data,
         "_fetch_top_trade_symbols",
         lambda exchange, limit=10, fallback=None: ["ETH/BTC"],
     )
@@ -250,9 +236,9 @@ def test_main_smoke_integration(tmp_path, monkeypatch):
         base = 100.0 if symbol == "BTC/USDT" else 1.0
         return _make_ohlcv(index, base=base)
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
+    monkeypatch.setattr(autowfo_data, "_load_or_update_symbol", loader)
     monkeypatch.setattr(
-        sweep,
+        autowfo_strategy,
         "_build_indicator_param_options_coarse",
         lambda: {"volume_z": [{"volume_lookback": 12, "volume_z": 0.1}]},
     )
@@ -261,7 +247,7 @@ def test_main_smoke_integration(tmp_path, monkeypatch):
         "INDICATOR_META",
         {"volume_z": {"label": "volume_z", "category": "volume"}},
     )
-    monkeypatch.setattr(sweep, "_build_walk_forward_slices", lambda index, *_args, **_kwargs: [])
+    monkeypatch.setattr(autowfo_split, "_build_walk_forward_slices", lambda index, *_args, **_kwargs: [])
 
     sweep.main()
 
@@ -283,7 +269,7 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
         "timeframes": [{"timeframe": "1h", "days": 2}],
         "wf_train_days": 7,
         "wf_test_days": 2,
-        "wf_step_days": 1,
+        "wf_step_days": 2,
         "top_n_refine": 1,
         "trade_symbols": ["ETH/BTC"],
         "capital_mode": "per_symbol",
@@ -301,7 +287,7 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        sweep,
+        autowfo_data,
         "_fetch_top_trade_symbols",
         lambda exchange, limit=10, fallback=None: ["ETH/BTC"],
     )
@@ -311,9 +297,9 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
         base = 100.0 if symbol == "BTC/USDT" else 1.0
         return _make_ohlcv(index, base=base)
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
+    monkeypatch.setattr(autowfo_data, "_load_or_update_symbol", loader)
     monkeypatch.setattr(
-        sweep,
+        autowfo_strategy,
         "_build_indicator_param_options_coarse",
         lambda: {"volume_z": [{"volume_lookback": 12, "volume_z": 0.1}]},
     )
@@ -328,11 +314,11 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
         seen["wf"] = (train_days, test_days, step_days)
         return []
 
-    monkeypatch.setattr(sweep, "_build_walk_forward_slices", _capture_wf)
+    monkeypatch.setattr(autowfo_split, "_build_walk_forward_slices", _capture_wf)
 
     sweep.main()
 
-    assert seen.get("wf") == (7, 2, 1)
+    assert seen.get("wf") == (7, 2, 2)
 
 
 def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
@@ -371,7 +357,7 @@ def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sweep.dt, "datetime", _FrozenDatetime)
     monkeypatch.setattr(
-        sweep,
+        autowfo_data,
         "_fetch_top_trade_symbols",
         lambda exchange, limit=10, fallback=None: ["ETH/BTC"],
     )
@@ -381,9 +367,9 @@ def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
         base = 100.0 if symbol == "BTC/USDT" else 1.0
         return _make_ohlcv(index, base=base)
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
+    monkeypatch.setattr(autowfo_data, "_load_or_update_symbol", loader)
     monkeypatch.setattr(
-        sweep,
+        autowfo_strategy,
         "_build_indicator_param_options_coarse",
         lambda: {"volume_z": [{"volume_lookback": 12, "volume_z": 0.1}]},
     )
@@ -392,7 +378,7 @@ def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
         "INDICATOR_META",
         {"volume_z": {"label": "volume_z", "category": "volume"}},
     )
-    monkeypatch.setattr(sweep, "_build_walk_forward_slices", lambda index, *_args, **_kwargs: [])
+    monkeypatch.setattr(autowfo_split, "_build_walk_forward_slices", lambda index, *_args, **_kwargs: [])
 
     run_dirs = [tmp_path / "run_a", tmp_path / "run_b"]
     for run_dir in run_dirs:

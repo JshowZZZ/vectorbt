@@ -1,13 +1,9 @@
 import datetime as dt
 import os
 import time
-import json
-import csv
-import sqlite3
 
 import numpy as np
 import pandas as pd
-import vectorbt as vbt
 
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
@@ -22,47 +18,12 @@ from scripts.autowfo import strategy as autowfo_strategy
 
 from scripts.autowfo.constants import (
     FILTER_NAME_MAP,
-    INDICATOR_LABELS,
     INDICATOR_META,
     INDICATOR_PARAM_FIELDS,
     LABELS,
     REGIME_NAME_MAP,
     REGIME_TYPE_MAP,
-    _html_entity,
-    _u,
 )
-
-
-def _indicator_combo_label(combo_keys):
-    return autowfo_report._indicator_combo_label(combo_keys, INDICATOR_META)
-
-
-def _format_indicator_list(value):
-    return autowfo_report._format_indicator_list(value, INDICATOR_META)
-
-
-def _df_to_html(df, columns, label_map):
-    return autowfo_report._df_to_html(
-        df,
-        columns,
-        label_map,
-        FILTER_NAME_MAP,
-        REGIME_NAME_MAP,
-        REGIME_TYPE_MAP,
-        format_indicator_list_fn=_format_indicator_list,
-    )
-
-
-def _normalize_index(df):
-    return autowfo_data._normalize_index(df)
-
-
-def _format_duration(seconds):
-    return autowfo_report._format_duration(seconds)
-
-
-def _timeframe_to_hours(timeframe):
-    return autowfo_metrics._timeframe_to_hours(timeframe)
 
 
 COMBO_KEY_FIELDS = [
@@ -235,9 +196,7 @@ STRICT_CONFIG_FIELDS = [
 ]
 
 
-def _normalize_key_value(value):
-    return autowfo_search._normalize_key_value(value)
-
+# --- Convenience helpers (not yet extracted to autowfo) ---
 
 def _combo_key_from_dict(values):
     return autowfo_search._combo_key_from_dict(values, COMBO_KEY_FIELDS)
@@ -255,14 +214,6 @@ def _safe_float(value, default):
     return float(value)
 
 
-def _pick_series_from_map(series_map, key, default_key=None):
-    return autowfo_strategy._pick_series_from_map(series_map, key, default_key=default_key)
-
-
-def _coerce_indicator_params(combo_keys, params, ctx):
-    return autowfo_strategy._coerce_indicator_params(combo_keys, params, ctx)
-
-
 def _has_all_config_fields(values):
     for field in STRICT_CONFIG_FIELDS:
         val = values.get(field)
@@ -275,298 +226,19 @@ def _has_all_config_fields(values):
     return True
 
 
-def _ensure_csv_schema(path, columns):
-    return autowfo_artifacts._ensure_csv_schema(path, columns)
+def _indicator_combo_label(combo_keys):
+    return autowfo_report._indicator_combo_label(combo_keys, INDICATOR_META)
 
 
-def _append_rows(path, rows, columns):
-    return autowfo_artifacts._append_rows(path, rows, columns)
+def _format_indicator_list(value):
+    return autowfo_report._format_indicator_list(value, INDICATOR_META)
 
 
-def _ensure_db_schema(db_path, table, columns, indexes=None):
-    return autowfo_artifacts._ensure_db_schema(db_path, table, columns, indexes=indexes)
-
-
-def _append_db_rows(db_path, table, rows, columns):
-    return autowfo_artifacts._append_db_rows(
-        db_path,
-        table,
-        rows,
-        columns,
-        normalize_key_value_fn=_normalize_key_value,
-    )
-
-
-def _write_status(status_json_path, status_html_path, payload):
-    return autowfo_artifacts._write_status(
-        status_json_path=status_json_path,
-        status_html_path=status_html_path,
-        payload=payload,
-        labels=LABELS,
-    )
-
-
-def _prepare_timeframe_context(
-    timeframe,
-    data_days,
-    base_symbol,
-    trade_symbols,
-    exchange,
-    cache_dir,
-    cache_format,
-    vol_lookbacks,
-    mom_lookbacks,
-    trade_mom_lookbacks,
-    rsi_window,
-    bb_window,
-    bb_alpha,
-    atr_window,
-    ma_pairs,
-    obv_lookbacks,
-    volume_lookbacks,
-    roc_lookbacks,
-    cmf_lookbacks,
-    mfi_window,
-    vroc_lookbacks,
-    ad_lookbacks,
-    init_cash_usdt,
-    capital_mode,
-):
-    return autowfo_data._prepare_timeframe_context(
-        timeframe=timeframe,
-        data_days=data_days,
-        base_symbol=base_symbol,
-        trade_symbols=trade_symbols,
-        exchange=exchange,
-        cache_dir=cache_dir,
-        cache_format=cache_format,
-        vol_lookbacks=vol_lookbacks,
-        mom_lookbacks=mom_lookbacks,
-        trade_mom_lookbacks=trade_mom_lookbacks,
-        rsi_window=rsi_window,
-        bb_window=bb_window,
-        bb_alpha=bb_alpha,
-        atr_window=atr_window,
-        ma_pairs=ma_pairs,
-        obv_lookbacks=obv_lookbacks,
-        volume_lookbacks=volume_lookbacks,
-        roc_lookbacks=roc_lookbacks,
-        cmf_lookbacks=cmf_lookbacks,
-        mfi_window=mfi_window,
-        vroc_lookbacks=vroc_lookbacks,
-        ad_lookbacks=ad_lookbacks,
-        init_cash_usdt=init_cash_usdt,
-        capital_mode=capital_mode,
-        load_or_update_symbol_fn=_load_or_update_symbol,
-    )
-
-
-def _has_parquet_engine():
-    return autowfo_data._has_parquet_engine()
-
-
-def _fetch_top_trade_symbols(exchange, limit=10, fallback=None):
-    return autowfo_data._fetch_top_trade_symbols(exchange=exchange, limit=limit, fallback=fallback)
-
-
-def _read_cache(path, cache_format):
-    return autowfo_data._read_cache(path, cache_format)
-
-
-def _write_cache(df, path, cache_format):
-    return autowfo_data._write_cache(df, path, cache_format)
-
-
-def _download_symbol_ohlcv(symbol, exchange, timeframe, start, end, show_progress):
-    return autowfo_data._download_symbol_ohlcv(
-        symbol=symbol,
-        exchange=exchange,
-        timeframe=timeframe,
-        start=start,
-        end=end,
-        show_progress=show_progress,
-        normalize_index_fn=_normalize_index,
-    )
-
-
-def _load_or_update_symbol(symbol, exchange, timeframe, start, end, cache_dir, cache_format):
-    return autowfo_data._load_or_update_symbol(
-        symbol=symbol,
-        exchange=exchange,
-        timeframe=timeframe,
-        start=start,
-        end=end,
-        cache_dir=cache_dir,
-        cache_format=cache_format,
-        read_cache_fn=_read_cache,
-        write_cache_fn=_write_cache,
-        download_symbol_ohlcv_fn=_download_symbol_ohlcv,
-        normalize_index_fn=_normalize_index,
-    )
-
-
-def _build_walk_forward_slices(index, train_days, test_days, step_days):
-    return autowfo_split._build_walk_forward_slices(index, train_days, test_days, step_days)
-
-
-def _as_series(value, index):
-    return autowfo_metrics._as_series(value, index)
-
-
-def _as_scalar(value):
-    return autowfo_metrics._as_scalar(value)
-
-
-def _calc_pf_series(pf, symbols, bar_hours):
-    return autowfo_metrics._calc_pf_series(pf, symbols, bar_hours)
-
-
-def _calc_pf_combo_metrics(pf, bar_hours):
-    return autowfo_metrics._calc_pf_combo_metrics(pf, bar_hours)
-
-
-def _plot_portfolio(pf, plot_symbol):
-    return autowfo_report._plot_portfolio(pf, plot_symbol)
-
-
-def _aggregate_metrics(series_metrics):
-    return autowfo_metrics._aggregate_metrics(series_metrics)
-
-
-def _aggregate_oos_metrics(oos_rows):
-    return autowfo_metrics._aggregate_oos_metrics(oos_rows)
-
-
-def _choose_score_col(df, preferred="oos_avg_total_return_pct", fallback="avg_total_return_pct"):
-    return autowfo_ranking._choose_score_col(df, preferred=preferred, fallback=fallback)
-
-
-def _sort_by_score(
-    df,
-    preferred="oos_avg_total_return_pct",
-    fallback="avg_total_return_pct",
-    tie_break_avg_hold=True,
-):
-    return autowfo_ranking._sort_by_score(
-        df,
-        preferred=preferred,
-        fallback=fallback,
-        tie_break_avg_hold=tie_break_avg_hold,
-    )
-
-
-def _top_by_score(
-    df,
-    top_n,
-    preferred="oos_avg_total_return_pct",
-    fallback="avg_total_return_pct",
-    tie_break_avg_hold=True,
-):
-    return autowfo_ranking._top_by_score(
-        df,
-        top_n=top_n,
-        preferred=preferred,
-        fallback=fallback,
-        tie_break_avg_hold=tie_break_avg_hold,
-    )
-
-
-def _build_indicator_param_options_coarse():
-    return autowfo_strategy._build_indicator_param_options_coarse()
-
-
-def _expand_float(base, step, min_value=None, max_value=None):
-    return autowfo_strategy._expand_float(
-        base,
-        step,
-        min_value=min_value,
-        max_value=max_value,
-    )
-
-
-def _expand_int(base, step, min_value=1):
-    return autowfo_strategy._expand_int(base, step, min_value=min_value)
-
-
-def _expand_lookback_list(values, step, min_value=2):
-    return autowfo_strategy._expand_lookback_list(values, step, min_value=min_value)
-
-
-def _expand_pair(base_long, base_short, step, min_value=0, max_value=100):
-    return autowfo_strategy._expand_pair(
-        base_long,
-        base_short,
-        step,
-        min_value=min_value,
-        max_value=max_value,
-    )
-
-
-def _indicator_defaults(options):
-    return autowfo_strategy._indicator_defaults(options)
-
-
-def _refine_indicator_params(ind_key, base_row, steps, defaults):
-    return autowfo_strategy._refine_indicator_params(ind_key, base_row, steps, defaults)
-
-
-def _iter_indicator_param_combos(combo_keys, param_options):
-    yield from autowfo_strategy._iter_indicator_param_combos(combo_keys, param_options)
-
-
-def _apply_indicator_combo(long_regime, short_regime, combo_keys, combo_params, ctx):
-    return autowfo_strategy._apply_indicator_combo(
-        long_regime,
-        short_regime,
-        combo_keys,
-        combo_params,
-        ctx,
-    )
-
-
-def _run_pf(
-    trade_close,
-    long_regime,
-    short_regime,
-    max_hold,
-    fees,
-    sl_stop,
-    tp_stop,
-    freq,
-    slippage=None,
-    long_filter=None,
-    short_filter=None,
-    init_cash=None,
-    size=None,
-    size_type=None,
-    cash_sharing=None,
-    lock_cash=None,
-    allow_partial=None,
-    max_positions=None,
-    long_scores=None,
-    short_scores=None,
-):
-    return autowfo_portfolio._run_pf(
-        trade_close=trade_close,
-        long_regime=long_regime,
-        short_regime=short_regime,
-        max_hold=max_hold,
-        fees=fees,
-        sl_stop=sl_stop,
-        tp_stop=tp_stop,
-        freq=freq,
-        slippage=slippage,
-        long_filter=long_filter,
-        short_filter=short_filter,
-        init_cash=init_cash,
-        size=size,
-        size_type=size_type,
-        cash_sharing=cash_sharing,
-        lock_cash=lock_cash,
-        allow_partial=allow_partial,
-        max_positions=max_positions,
-        long_scores=long_scores,
-        short_scores=short_scores,
+def _df_to_html(df, columns, label_map):
+    return autowfo_report._df_to_html(
+        df, columns, label_map,
+        FILTER_NAME_MAP, REGIME_NAME_MAP, REGIME_TYPE_MAP,
+        format_indicator_list_fn=_format_indicator_list,
     )
 
 
@@ -585,7 +257,7 @@ def main():
         "LTC/BTC",
         "AVAX/BTC",
     ]
-    default_trade_symbols = _fetch_top_trade_symbols(
+    default_trade_symbols = autowfo_data._fetch_top_trade_symbols(
         exchange, limit=10, fallback=fallback_trade_symbols
     )
     out_dir = "artifacts"
@@ -628,13 +300,13 @@ def main():
     base_ma_pairs = [(10, 30), (20, 50)]
     ma_pairs = autowfo_engine._build_ma_pairs(base_ma_pairs)
     lookback_refine_step = 4
-    obv_lookbacks = _expand_lookback_list([12, 24], lookback_refine_step)
-    volume_lookbacks = _expand_lookback_list([12, 24], lookback_refine_step)
-    roc_lookbacks = _expand_lookback_list([6, 12], lookback_refine_step)
-    cmf_lookbacks = _expand_lookback_list([20, 30], lookback_refine_step)
+    obv_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
+    volume_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
+    roc_lookbacks = autowfo_strategy._expand_lookback_list([6, 12], lookback_refine_step)
+    cmf_lookbacks = autowfo_strategy._expand_lookback_list([20, 30], lookback_refine_step)
     mfi_window = 14
-    vroc_lookbacks = _expand_lookback_list([12, 24], lookback_refine_step)
-    ad_lookbacks = _expand_lookback_list([20, 40], lookback_refine_step)
+    vroc_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
+    ad_lookbacks = autowfo_strategy._expand_lookback_list([20, 40], lookback_refine_step)
 
     fees = 0.001
     slippage_bps = float(default_config.get("slippage_bps", 0.0) or 0.0)
@@ -651,7 +323,7 @@ def main():
         order_size_pct = 0.5
     max_concurrent_positions = int(default_config.get("max_concurrent_positions", 2) or 2)
     cache_dir = os.path.join(out_dir, "cache_ccxt")
-    cache_format = "parquet" if _has_parquet_engine() else "csv"
+    cache_format = "parquet" if autowfo_data._has_parquet_engine() else "csv"
     run_id = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     timestamp_utc = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     # Minimum average daily trades across all symbols.
@@ -671,15 +343,15 @@ def main():
     per_symbol_path = os.path.join(out_dir, "param_sweep_symbol_summary.csv")
     existing_combo_df = pd.read_csv(combo_path, low_memory=False) if os.path.exists(combo_path) else pd.DataFrame()
     existing_symbol_df = pd.read_csv(per_symbol_path, low_memory=False) if os.path.exists(per_symbol_path) else pd.DataFrame()
-    _ensure_csv_schema(combo_path, COMBO_RESULT_FIELDS)
-    _ensure_csv_schema(per_symbol_path, SYMBOL_RESULT_FIELDS)
-    _ensure_db_schema(
+    autowfo_artifacts._ensure_csv_schema(combo_path, COMBO_RESULT_FIELDS)
+    autowfo_artifacts._ensure_csv_schema(per_symbol_path, SYMBOL_RESULT_FIELDS)
+    autowfo_artifacts._ensure_db_schema(
         db_path,
         "combo_summary",
         COMBO_RESULT_FIELDS,
         indexes=[("idx_combo_timeframe", ["timeframe"])],
     )
-    _ensure_db_schema(
+    autowfo_artifacts._ensure_db_schema(
         db_path,
         "symbol_summary",
         SYMBOL_RESULT_FIELDS,
@@ -697,8 +369,8 @@ def main():
         existing_symbol_df,
         COMBO_KEY_FIELDS,
     )
-    indicator_param_options = _build_indicator_param_options_coarse()
-    indicator_defaults = _indicator_defaults(indicator_param_options)
+    indicator_param_options = autowfo_strategy._build_indicator_param_options_coarse()
+    indicator_defaults = autowfo_strategy._indicator_defaults(indicator_param_options)
     combo_keys_all = autowfo_engine._build_combo_keys(
         indicator_keys=list(INDICATOR_META.keys()),
         combo_sizes=combo_sizes,
@@ -755,9 +427,9 @@ def main():
             skipped=skipped,
             elapsed_seconds=now - start_ts,
             updated=dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-            format_duration_fn=_format_duration,
+            format_duration_fn=autowfo_report._format_duration,
         )
-        _write_status(status_json_path, status_html_path, payload)
+        autowfo_artifacts._write_status(status_json_path, status_html_path, payload, LABELS)
         print(
             f"[{stage}] {done}/{total_combos} ({payload['percent']}%) "
             f"skipped {skipped} elapsed {payload['elapsed']} eta {payload['eta']}",
@@ -791,11 +463,13 @@ def main():
             checkpoint_min_seconds=checkpoint_min_seconds,
         ):
             return
-        _append_rows(combo_path, pending_combo_rows, COMBO_RESULT_FIELDS)
-        _append_rows(per_symbol_path, pending_symbol_rows, SYMBOL_RESULT_FIELDS)
+        autowfo_artifacts._append_rows(combo_path, pending_combo_rows, COMBO_RESULT_FIELDS)
+        autowfo_artifacts._append_rows(per_symbol_path, pending_symbol_rows, SYMBOL_RESULT_FIELDS)
         try:
-            _append_db_rows(db_path, "combo_summary", pending_combo_rows, COMBO_RESULT_FIELDS)
-            _append_db_rows(db_path, "symbol_summary", pending_symbol_rows, SYMBOL_RESULT_FIELDS)
+            autowfo_artifacts._append_db_rows(db_path, "combo_summary", pending_combo_rows, COMBO_RESULT_FIELDS,
+                                               normalize_key_value_fn=autowfo_search._normalize_key_value)
+            autowfo_artifacts._append_db_rows(db_path, "symbol_summary", pending_symbol_rows, SYMBOL_RESULT_FIELDS,
+                                               normalize_key_value_fn=autowfo_search._normalize_key_value)
         except Exception as exc:
             print(f"[warn] db write failed: {exc}")
         pending_combo_rows.clear()
@@ -830,33 +504,33 @@ def main():
         timeframe = tf_cfg["timeframe"]
         data_days = tf_cfg["days"]
         stage_prefix = f"{timeframe}"
-        bar_hours = _timeframe_to_hours(timeframe)
+        bar_hours = autowfo_metrics._timeframe_to_hours(timeframe)
         try:
-            ctx = _prepare_timeframe_context(
-                timeframe,
-                data_days,
-                base_symbol,
-                trade_symbols,
-                exchange,
-                cache_dir,
-                cache_format,
-                vol_lookbacks,
-                mom_lookbacks,
-                trade_mom_lookbacks,
-                rsi_window,
-                bb_window,
-                bb_alpha,
-                atr_window,
-                ma_pairs,
-                obv_lookbacks,
-                volume_lookbacks,
-                roc_lookbacks,
-                cmf_lookbacks,
-                mfi_window,
-                vroc_lookbacks,
-                ad_lookbacks,
-                init_cash_usdt,
-                capital_mode,
+            ctx = autowfo_data._prepare_timeframe_context(
+                timeframe=timeframe,
+                data_days=data_days,
+                base_symbol=base_symbol,
+                trade_symbols=trade_symbols,
+                exchange=exchange,
+                cache_dir=cache_dir,
+                cache_format=cache_format,
+                vol_lookbacks=vol_lookbacks,
+                mom_lookbacks=mom_lookbacks,
+                trade_mom_lookbacks=trade_mom_lookbacks,
+                rsi_window=rsi_window,
+                bb_window=bb_window,
+                bb_alpha=bb_alpha,
+                atr_window=atr_window,
+                ma_pairs=ma_pairs,
+                obv_lookbacks=obv_lookbacks,
+                volume_lookbacks=volume_lookbacks,
+                roc_lookbacks=roc_lookbacks,
+                cmf_lookbacks=cmf_lookbacks,
+                mfi_window=mfi_window,
+                vroc_lookbacks=vroc_lookbacks,
+                ad_lookbacks=ad_lookbacks,
+                init_cash_usdt=init_cash_usdt,
+                capital_mode=capital_mode,
             )
         except Exception as exc:
             if search_mode == "combo":
@@ -868,7 +542,7 @@ def main():
         trade_symbols_tf = ctx["trade_symbols"]
         plot_symbol_tf = trade_symbols_tf[0]
         timeframe_ranges.append(f"{timeframe} ({data_days}d): {ctx['data_range']}")
-        wf_slices = _build_walk_forward_slices(
+        wf_slices = autowfo_split._build_walk_forward_slices(
             ctx["trade_close"].index, wf_train_days, wf_test_days, wf_step_days
         )
         if not wf_slices:
@@ -965,7 +639,7 @@ def main():
                 bar_hours=bar_hours,
             )
 
-            long_regime_final, short_regime_final, variant_params = _apply_indicator_combo(
+            long_regime_final, short_regime_final, variant_params = autowfo_strategy._apply_indicator_combo(
                 long_regime,
                 short_regime,
                 indicator_combo,
@@ -973,7 +647,7 @@ def main():
                 ctx,
             )
 
-            pf = _run_pf(
+            pf = autowfo_portfolio._run_pf(
                 ctx["trade_close"],
                 long_regime_final,
                 short_regime_final,
@@ -996,10 +670,10 @@ def main():
                 slippage=effective_slippage,
             )
 
-            metrics = _calc_pf_series(pf, trade_symbols_tf, bar_hours)
-            sym_metrics = _aggregate_metrics(metrics)
+            metrics = autowfo_metrics._calc_pf_series(pf, trade_symbols_tf, bar_hours)
+            sym_metrics = autowfo_metrics._aggregate_metrics(metrics)
             if capital_mode == "shared":
-                combo_metrics = _calc_pf_combo_metrics(pf, bar_hours)
+                combo_metrics = autowfo_metrics._calc_pf_combo_metrics(pf, bar_hours)
             else:
                 combo_metrics = {
                     "total_return_pct": sym_metrics["avg_total_return_pct"],
@@ -1023,7 +697,7 @@ def main():
                 seg_long_filter, seg_short_filter = autowfo_engine._build_trade_mom_filters(
                     segment_trade_mom
                 )
-                pf_test = _run_pf(
+                pf_test = autowfo_portfolio._run_pf(
                     segment_close,
                     segment_long,
                     segment_short,
@@ -1046,10 +720,10 @@ def main():
                     slippage=effective_slippage,
                 )
                 if capital_mode == "shared":
-                    seg_combo_metrics = _calc_pf_combo_metrics(pf_test, bar_hours)
+                    seg_combo_metrics = autowfo_metrics._calc_pf_combo_metrics(pf_test, bar_hours)
                 else:
-                    seg_series = _calc_pf_series(pf_test, trade_symbols_tf, bar_hours)
-                    seg_agg = _aggregate_metrics(seg_series)
+                    seg_series = autowfo_metrics._calc_pf_series(pf_test, trade_symbols_tf, bar_hours)
+                    seg_agg = autowfo_metrics._aggregate_metrics(seg_series)
                     seg_combo_metrics = {
                         "total_return_pct": seg_agg["avg_total_return_pct"],
                         "total_profit": np.nan,
@@ -1073,7 +747,7 @@ def main():
                 segment_days = int(segment_close.index.normalize().nunique())
                 seg_row["avg_daily_trades"] = float(seg_combo_metrics["total_trades"]) / max(segment_days, 1)
                 oos_rows.append(seg_row)
-            oos_metrics = _aggregate_oos_metrics(oos_rows)
+            oos_metrics = autowfo_metrics._aggregate_oos_metrics(oos_rows)
 
             for symbol in trade_symbols_tf:
                 pending_symbol_rows.append(
@@ -1177,18 +851,18 @@ def main():
             sl_stops=sl_stops,
             max_holds=max_holds,
             combo_keys_all=combo_keys_all,
-            iter_indicator_param_combos_fn=_iter_indicator_param_combos,
+            iter_indicator_param_combos_fn=autowfo_strategy._iter_indicator_param_combos,
             indicator_param_options=indicator_param_options,
             eval_combo_fn=eval_combo,
             existing_combo_df=existing_combo_df,
             apply_quality_filters_fn=apply_quality_filters,
-            sort_by_score_fn=_sort_by_score,
+            sort_by_score_fn=autowfo_ranking._sort_by_score,
             combo_group_fields=combo_group_fields,
             top_n_fine=top_n_fine,
             indicator_defaults=indicator_defaults,
-            expand_float_fn=_expand_float,
+            expand_float_fn=autowfo_strategy._expand_float,
             safe_float_fn=_safe_float,
-            refine_indicator_params_fn=_refine_indicator_params,
+            refine_indicator_params_fn=autowfo_strategy._refine_indicator_params,
             safe_int_fn=_safe_int,
             on_refine_plan_fn=_on_refine_plan,
         )
@@ -1211,7 +885,7 @@ def main():
         apply_quality_filters_fn=apply_quality_filters,
     )
 
-    top10, _ = _top_by_score(filtered, top_n=10, tie_break_avg_hold=True)
+    top10, _ = autowfo_ranking._top_by_score(filtered, top_n=10, tie_break_avg_hold=True)
     top10_path = os.path.join(out_dir, f"param_sweep_top10_{run_id}.csv")
     top10.to_csv(top10_path, index=False)
 
@@ -1222,31 +896,31 @@ def main():
         safe_int_fn=_safe_int,
     )
     try:
-        best_ctx = _prepare_timeframe_context(
-            best_timeframe,
-            best_data_days,
-            base_symbol,
-            trade_symbols,
-            exchange,
-            cache_dir,
-            cache_format,
-            vol_lookbacks,
-            mom_lookbacks,
-            trade_mom_lookbacks,
-            rsi_window,
-            bb_window,
-            bb_alpha,
-            atr_window,
-            ma_pairs,
-            obv_lookbacks,
-            volume_lookbacks,
-            roc_lookbacks,
-            cmf_lookbacks,
-            mfi_window,
-            vroc_lookbacks,
-            ad_lookbacks,
-            init_cash_usdt,
-            capital_mode,
+        best_ctx = autowfo_data._prepare_timeframe_context(
+            timeframe=best_timeframe,
+            data_days=best_data_days,
+            base_symbol=base_symbol,
+            trade_symbols=trade_symbols,
+            exchange=exchange,
+            cache_dir=cache_dir,
+            cache_format=cache_format,
+            vol_lookbacks=vol_lookbacks,
+            mom_lookbacks=mom_lookbacks,
+            trade_mom_lookbacks=trade_mom_lookbacks,
+            rsi_window=rsi_window,
+            bb_window=bb_window,
+            bb_alpha=bb_alpha,
+            atr_window=atr_window,
+            ma_pairs=ma_pairs,
+            obv_lookbacks=obv_lookbacks,
+            volume_lookbacks=volume_lookbacks,
+            roc_lookbacks=roc_lookbacks,
+            cmf_lookbacks=cmf_lookbacks,
+            mfi_window=mfi_window,
+            vroc_lookbacks=vroc_lookbacks,
+            ad_lookbacks=ad_lookbacks,
+            init_cash_usdt=init_cash_usdt,
+            capital_mode=capital_mode,
         )
     except Exception as exc:
         print(f"[warn] best report skipped: {exc}")
@@ -1280,7 +954,7 @@ def main():
     ad_roc_by_lb = best_ctx["ad_roc_by_lb"]
     data_range = best_ctx["data_range"]
     scan_timeframes = "; ".join(timeframe_ranges) if timeframe_ranges else ""
-    wf_slices = _build_walk_forward_slices(
+    wf_slices = autowfo_split._build_walk_forward_slices(
         trade_close.index, wf_train_days, wf_test_days, wf_step_days
     )
     best_regime = {
@@ -1299,7 +973,7 @@ def main():
     for field in INDICATOR_PARAM_FIELDS:
         value = best.get(field)
         best_params[field] = value if pd.notna(value) else None
-    best_params = _coerce_indicator_params(best_indicator_combo, best_params, best_ctx)
+    best_params = autowfo_strategy._coerce_indicator_params(best_indicator_combo, best_params, best_ctx)
 
     best_vol_lookback = int(best["vol_lookback"]) if pd.notna(best["vol_lookback"]) else vol_lookbacks[0]
     best_vol_z = float(best["vol_z"]) if pd.notna(best["vol_z"]) else vol_zs[0]
@@ -1309,7 +983,7 @@ def main():
     best_sl_stop = float(best["sl_stop"])
     best_max_hold = int(best["max_hold"])
 
-    vol_zscore, _ = _pick_series_from_map(vol_zscore_by_lb, best_vol_lookback, vol_lookbacks[0] if vol_lookbacks else None)
+    vol_zscore, _ = autowfo_strategy._pick_series_from_map(vol_zscore_by_lb, best_vol_lookback, vol_lookbacks[0] if vol_lookbacks else None)
     if best_regime["vol_mode"] == "high":
         vol_cond = vol_zscore > best_vol_z
     elif best_regime["vol_mode"] == "low":
@@ -1317,25 +991,26 @@ def main():
     else:
         vol_cond = pd.Series(True, index=vol_zscore.index)
 
-    if best_regime["regime_type"] == "trend":
-        mom, _ = _pick_series_from_map(mom_by_lb, best_mom_lookback, mom_lookbacks[0] if mom_lookbacks else None)
-        long_regime = vol_cond & (mom > 0)
-        short_regime = vol_cond & (mom < 0)
-    elif best_regime["regime_type"] == "rsi_revert":
-        long_regime = vol_cond & (rsi_series < best_regime["regime_rsi_long"])
-        short_regime = vol_cond & (rsi_series > best_regime["regime_rsi_short"])
-    elif best_regime["regime_type"] == "bb_revert":
-        long_regime = vol_cond & (btc_close < bb_lower)
-        short_regime = vol_cond & (btc_close > bb_upper)
-    else:
-        long_regime = vol_cond & (btc_close > bb_upper)
-        short_regime = vol_cond & (btc_close < bb_lower)
-    trade_mom, _ = _pick_series_from_map(
+    # Use the same regime signal builder as eval_combo to avoid duplication
+    best_regime_for_resolve = {
+        "regime_name": best_regime["regime_name"],
+        "regime_type": best_regime["regime_type"],
+        "vol_mode": best_regime["vol_mode"],
+        "rsi_pair": (best_regime["regime_rsi_long"], best_regime["regime_rsi_short"])
+        if best_regime["regime_type"] == "rsi_revert" else None,
+    }
+    long_regime, short_regime, _, _ = autowfo_engine._resolve_regime_signals(
+        regime=best_regime_for_resolve,
+        vol_cond=vol_cond,
+        ctx=best_ctx,
+        mom_lookback=best_mom_lookback,
+    )
+    trade_mom, _ = autowfo_strategy._pick_series_from_map(
         trade_mom_by_lb,
         best_trade_mom_lookback,
         trade_mom_lookbacks[0] if trade_mom_lookbacks else None,
     )
-    long_regime, short_regime, best_params = _apply_indicator_combo(
+    long_regime, short_regime, best_params = autowfo_strategy._apply_indicator_combo(
         long_regime,
         short_regime,
         best_indicator_combo,
@@ -1343,12 +1018,18 @@ def main():
         best_ctx,
     )
 
-    best_bar_hours = _timeframe_to_hours(best_timeframe)
-    best_effective_slippage = (slippage_bps + (spread_bps / 2.0)) / 10000.0
-    best_funding_fee = funding_rate_daily * (best_max_hold * best_bar_hours / 24.0)
-    best_effective_fees = fees + best_funding_fee
+    best_bar_hours = autowfo_metrics._timeframe_to_hours(best_timeframe)
+    # Use the same cost computation as eval_combo to guarantee consistency
+    best_effective_fees, best_effective_slippage = autowfo_engine._compute_effective_costs(
+        fees=fees,
+        slippage_bps=slippage_bps,
+        spread_bps=spread_bps,
+        funding_rate_daily=funding_rate_daily,
+        max_hold=best_max_hold,
+        bar_hours=best_bar_hours,
+    )
 
-    best_pf = _run_pf(
+    best_pf = autowfo_portfolio._run_pf(
         trade_close,
         long_regime,
         short_regime,
@@ -1370,10 +1051,10 @@ def main():
         short_scores=-trade_mom,
         slippage=best_effective_slippage,
     )
-    fig = _plot_portfolio(best_pf, plot_symbol)
+    fig = autowfo_report._plot_portfolio(best_pf, plot_symbol)
     plot_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
 
-    best_metrics = _calc_pf_series(best_pf, trade_symbols, _timeframe_to_hours(best_timeframe))
+    best_metrics = autowfo_metrics._calc_pf_series(best_pf, trade_symbols, autowfo_metrics._timeframe_to_hours(best_timeframe))
     best_summary = pd.DataFrame({
         "symbol": trade_symbols,
         "total_return_pct": (best_metrics["total_return_pct"]).to_numpy(),
@@ -1608,7 +1289,7 @@ def main():
     lb_view, lb_recent, lb_best = autowfo_engine._build_leaderboard_views(
         lb_df=lb_df,
         history_rows=history_rows,
-        top_by_score_fn=_top_by_score,
+        top_by_score_fn=autowfo_ranking._top_by_score,
     )
     lb_cols = [
         "timestamp_utc",

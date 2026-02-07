@@ -4,11 +4,6 @@ from scripts import run_btc_regime_sweep as sweep
 from scripts.autowfo import report as r
 
 
-def test_format_duration_wrapper_matches_module():
-    assert sweep._format_duration(3661) == r._format_duration(3661)
-    assert sweep._format_duration(None) == r._format_duration(None)
-
-
 def test_format_indicator_list_wrapper_matches_module():
     value = "rsi,roc"
     expected = r._format_indicator_list(value, sweep.INDICATOR_META)

@@ -4,6 +4,11 @@ import pandas as pd
 
 
 def _build_walk_forward_slices(index, train_days, test_days, step_days):
+    if step_days < test_days:
+        raise ValueError(
+            f"step_days ({step_days}) must be >= test_days ({test_days}) "
+            "to avoid overlapping OOS segments"
+        )
     if index.empty:
         return []
     train_delta = pd.Timedelta(days=train_days)

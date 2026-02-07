@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-from scripts import run_btc_regime_sweep as sweep
 from scripts.autowfo import data as d
 
 
@@ -60,7 +59,7 @@ def test_normalize_index_sorts_and_deduplicates():
     assert float(got.iloc[-1]["Close"]) == 2.0
 
 
-def test_prepare_timeframe_context_module_and_wrapper_match(monkeypatch, tmp_path):
+def test_prepare_timeframe_context_characterization(tmp_path):
     index = pd.date_range("2024-01-01", periods=50, freq="h")
     base_df = _make_ohlcv(index, base=100.0)
     trade_df = _make_ohlcv(index, base=1.0)
@@ -69,16 +68,11 @@ def test_prepare_timeframe_context_module_and_wrapper_match(monkeypatch, tmp_pat
         return base_df if symbol == "BTC/USDT" else trade_df
 
     kwargs = _common_ctx_kwargs(str(tmp_path / "cache"))
-    expected = d._prepare_timeframe_context(**kwargs, load_or_update_symbol_fn=loader)
+    ctx = d._prepare_timeframe_context(**kwargs, load_or_update_symbol_fn=loader)
 
-    monkeypatch.setattr(sweep, "_load_or_update_symbol", loader)
-    actual = sweep._prepare_timeframe_context(**kwargs)
-
-    pd.testing.assert_frame_equal(actual["trade_close"], expected["trade_close"])
-    pd.testing.assert_series_equal(actual["btc_close"], expected["btc_close"])
-    assert actual["trade_symbols"] == expected["trade_symbols"]
-    assert actual["total_days"] == expected["total_days"]
-    assert actual["data_range"] == expected["data_range"]
+    assert ctx["trade_close"].shape[1] == 2
+    assert ctx["total_days"] >= 1
+    assert ctx["init_cash_btc"] > 0
 
 
 def test_cache_csv_roundtrip(tmp_path):

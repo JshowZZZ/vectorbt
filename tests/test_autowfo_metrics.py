@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from scripts import run_btc_regime_sweep as sweep
 from scripts.autowfo import metrics as m
+from scripts.autowfo import portfolio as p
 
 
 def test_timeframe_to_hours_characterization():
@@ -44,13 +44,13 @@ def test_aggregate_oos_metrics_characterization():
     assert got["oos_segments"] == 2
 
 
-def test_calc_pf_combo_metrics_wrapper_matches_module():
+def test_calc_pf_combo_metrics_characterization():
     index = pd.date_range("2024-01-01", periods=30, freq="h")
     trade_close = pd.DataFrame({"ETH/BTC": np.linspace(1.0, 2.0, len(index))}, index=index)
     long_regime = pd.Series(True, index=index)
     short_regime = pd.Series(False, index=index)
 
-    pf = sweep._run_pf(
+    pf = p._run_pf(
         trade_close,
         long_regime,
         short_regime,
@@ -69,11 +69,6 @@ def test_calc_pf_combo_metrics_wrapper_matches_module():
         max_positions=None,
     )
 
-    expected = m._calc_pf_combo_metrics(pf, bar_hours=1.0)
-    actual = sweep._calc_pf_combo_metrics(pf, bar_hours=1.0)
-
-    assert expected.keys() == actual.keys()
-    for key in expected:
-        if np.isnan(expected[key]) and np.isnan(actual[key]):
-            continue
-        assert np.isclose(expected[key], actual[key], equal_nan=True)
+    metrics = m._calc_pf_combo_metrics(pf, bar_hours=1.0)
+    assert metrics["total_trades"] > 0
+    assert np.isfinite(metrics["total_return_pct"])

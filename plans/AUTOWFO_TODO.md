@@ -79,10 +79,11 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 2 ??Protocol Freeze**
-- Next action: **AWF-001** (extract + freeze split protocol from current implementation)
-- Allowed implementation now: AWF-001 to AWF-004
-- Blocked until AWF-001~AWF-004 + Gate A passed: AWF-005 and beyond
+- Active phase: **Phase 1 complete; Phase 2 deferred**
+- Decision: Anti-over-engineering — protocol freeze (AWF-001~004) deferred until proven necessary
+- Next action: Focus on running end-to-end backtests, fix bugs as they surface
+- Allowed implementation now: Bug fixes, end-to-end validation
+- Blocked: AWF-001~004 deferred; AWF-005+ still blocked
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
@@ -112,3 +113,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 20 (engine extraction for finalize pipeline helpers: result-load/snapshot/filter/best-pick/leaderboard views + tests) | Continue AWF-000 step 21: validate bit-identical outputs for extracted orchestration | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 21 (deterministic dual-run characterization test verifies artifact CSV outputs are bit-identical) | Continue AWF-000 step 22: perform exit-criteria audit and decide AWF-000 closure | pending |
 | 2026-02-07 | AWF-000 | done | Completed decomposition step 22 exit audit: module importability check added, deterministic bit-identical artifact test in place, and phase focus moved to protocol freeze | Start AWF-001 split protocol extraction and schema freeze | pending |
+| 2026-02-10 | AWF-000 | cleanup | Anti-over-engineering cleanup: (1) Added AUTOWFO Development Principles to AGENTS.md, (2) Added WF step_days >= test_days validation in split.py, (3) Removed 535 lines of thin wrappers from monolith (1724→1311 lines), main() now calls autowfo sub-modules directly, (4) Fixed report block duplicated regime signal reconstruction and cost calculation, (5) Deleted 3 pure wrapper-equivalence test files, updated remaining 8 test files to use sub-modules directly. 23 tests pass. | Continue end-to-end backtesting or address real bugs as they arise | pending |

@@ -1,11 +1,11 @@
 import pandas as pd
+import pytest
 
-from scripts import run_btc_regime_sweep as sweep
 from scripts.autowfo import split as s
 
 
 def test_build_walk_forward_slices_empty_index():
-    got = s._build_walk_forward_slices(pd.DatetimeIndex([]), train_days=5, test_days=2, step_days=1)
+    got = s._build_walk_forward_slices(pd.DatetimeIndex([]), train_days=5, test_days=2, step_days=2)
     assert got == []
 
 
@@ -18,8 +18,7 @@ def test_build_walk_forward_slices_characterization():
     assert all(test_end <= index[-1] for _, test_end in got)
 
 
-def test_build_walk_forward_slices_wrapper_matches_module():
-    index = pd.date_range("2024-01-01", periods=24 * 12, freq="h")
-    expected = s._build_walk_forward_slices(index, train_days=4, test_days=2, step_days=1)
-    actual = sweep._build_walk_forward_slices(index, train_days=4, test_days=2, step_days=1)
-    assert actual == expected
+def test_build_walk_forward_slices_step_lt_test_raises():
+    index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
+    with pytest.raises(ValueError, match="step_days.*must be.*test_days"):
+        s._build_walk_forward_slices(index, train_days=5, test_days=3, step_days=2)
