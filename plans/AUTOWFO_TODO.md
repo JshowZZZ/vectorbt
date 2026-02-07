@@ -81,7 +81,7 @@
 ## Current Focus Window
 - Active phase: **Phase 1 complete; Phase 2 deferred**
 - Decision: Anti-over-engineering — protocol freeze (AWF-001~004) deferred until proven necessary
-- Next action: Focus on running end-to-end backtests, fix bugs as they surface
+- Next action: Continue end-to-end baselines; run next window with non-empty OOS segments and re-evaluate ranking trigger
 - Allowed implementation now: Bug fixes, end-to-end validation
 - Blocked: AWF-001~004 deferred; AWF-005+ still blocked
 
@@ -114,3 +114,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 21 (deterministic dual-run characterization test verifies artifact CSV outputs are bit-identical) | Continue AWF-000 step 22: perform exit-criteria audit and decide AWF-000 closure | pending |
 | 2026-02-07 | AWF-000 | done | Completed decomposition step 22 exit audit: module importability check added, deterministic bit-identical artifact test in place, and phase focus moved to protocol freeze | Start AWF-001 split protocol extraction and schema freeze | pending |
 | 2026-02-10 | AWF-000 | cleanup | Anti-over-engineering cleanup: (1) Added AUTOWFO Development Principles to AGENTS.md, (2) Added WF step_days >= test_days validation in split.py, (3) Removed 535 lines of thin wrappers from monolith (1724→1311 lines), main() now calls autowfo sub-modules directly, (4) Fixed report block duplicated regime signal reconstruction and cost calculation, (5) Deleted 3 pure wrapper-equivalence test files, updated remaining 8 test files to use sub-modules directly. 23 tests pass. | Continue end-to-end backtesting or address real bugs as they arise | pending |
+| 2026-02-07 | AWF-008, AWF-002b, AWF-006 | e2e_baseline | Implemented `scripts/run_autowfo_baseline.py` and baseline helpers/tests; executed real-data two-pass sweep (`combo` then `refine`) with snapshot/comparison/trigger artifacts under `artifacts/runs/20260207_103734`; trigger result: `false` (only D2 true) so AWF-002b/AWF-006 not activated this round | Run next baseline window with non-empty OOS segments (adjust timeframe/data days or WF horizon), then re-check trigger | pending |

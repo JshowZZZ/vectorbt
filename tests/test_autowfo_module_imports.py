@@ -14,6 +14,7 @@ def test_autowfo_modules_importable_with_expected_symbols():
         "scripts.autowfo.report": ["_df_to_html", "_plot_portfolio"],
         "scripts.autowfo.portfolio": ["_run_pf"],
         "scripts.autowfo.engine": ["DEFAULT_CONFIG", "_run_search_for_timeframe"],
+        "scripts.autowfo.baseline": ["_trigger_decision", "_comparison_summary"],
     }
 
     for module_name, symbols in expected.items():
