@@ -57,6 +57,11 @@ def _run_pass(repo_root: Path, artifacts_dir: Path, pass_dir: Path, mode: str) -
     snapshot["run_id"] = run_id
     snapshot["mode"] = mode
     snapshot["copied"] = copied
+    run_status = autowfo_baseline._read_run_status(pass_dir)
+    snapshot["run_total"] = int(run_status.get("total", 0)) if run_status else 0
+    snapshot["run_done"] = int(run_status.get("done", 0)) if run_status else 0
+    snapshot["run_skipped"] = int(run_status.get("skipped", 0)) if run_status else 0
+    snapshot["run_stage"] = run_status.get("stage") if run_status else None
     autowfo_baseline._write_json(pass_dir / "quality_snapshot.json", snapshot)
     return run_id, snapshot
 
@@ -85,6 +90,7 @@ def main() -> None:
         "config_snapshot": str(snapshot_path.relative_to(repo_root)).replace("\\", "/"),
         "removed_temp_files": removed,
         "passes": [],
+        "warnings": [],
     }
     autowfo_baseline._write_json(run_root / "manifest.json", manifest)
 
@@ -97,6 +103,11 @@ def main() -> None:
 
     refine_run_id, refine_snapshot = _run_pass(repo_root, artifacts_dir, refine_dir, "refine")
     manifest["passes"].append({"mode": "refine", "run_id": refine_run_id, "snapshot": refine_snapshot})
+
+    if int(refine_snapshot.get("run_total", 0)) == 0:
+        warning = "refine pass processed zero candidates (run_total=0); comparison deltas may be non-informative"
+        manifest["warnings"].append(warning)
+        print(f"[baseline][warning] {warning}")
 
     comparison = autowfo_baseline._comparison_summary(combo_snapshot, refine_snapshot)
     autowfo_baseline._write_json(run_root / "comparison.json", comparison)

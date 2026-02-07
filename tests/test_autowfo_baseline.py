@@ -97,3 +97,28 @@ def test_copy_run_outputs_copies_current_run_and_latest_report_only(tmp_path):
     copied = b._copy_run_outputs(artifacts, target, run_id)
     reports = sorted(copied["reports"])
     assert reports == sorted([f"btc_regime_ETH-BTC_{run_id}.html", "btc_regime_ETH-BTC.html"])
+
+
+def test_read_run_status_reads_json_dict(tmp_path):
+    target = tmp_path / "out"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "run_status.json").write_text(
+        '{"stage":"complete","total":12,"done":12,"skipped":0}',
+        encoding="utf-8",
+    )
+    got = b._read_run_status(target)
+    assert got["stage"] == "complete"
+    assert got["total"] == 12
+    assert got["done"] == 12
+    assert got["skipped"] == 0
+
+
+def test_read_run_status_handles_missing_and_invalid(tmp_path):
+    missing = b._read_run_status(tmp_path / "missing")
+    assert missing == {}
+
+    target = tmp_path / "out"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "run_status.json").write_text("{invalid json", encoding="utf-8")
+    invalid = b._read_run_status(target)
+    assert invalid == {}
