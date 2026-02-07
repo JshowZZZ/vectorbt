@@ -25,6 +25,18 @@ def test_load_runtime_config_reads_file_and_env_override(tmp_path):
     assert config["trade_symbols"] == ["ETH/BTC"]
 
 
+def test_load_runtime_config_accepts_utf8_bom(tmp_path):
+    out_dir = tmp_path
+    cfg_path = out_dir / "sweep_config.json"
+    cfg_path.write_text(
+        json.dumps({"search_mode": "refine", "combo_seed": 9}),
+        encoding="utf-8-sig",
+    )
+    config = e._load_runtime_config(str(out_dir), env_mode=None)
+    assert config["search_mode"] == "refine"
+    assert config["combo_seed"] == 9
+
+
 def test_normalize_trade_symbols():
     got = e._normalize_trade_symbols(
         "ETH/BTC, BTC/USDT, SOL/BTC",

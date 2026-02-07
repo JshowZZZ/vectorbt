@@ -37,7 +37,8 @@ def _load_runtime_config(out_dir, env_mode=None):
     config_path = os.path.join(out_dir, "sweep_config.json")
     if os.path.exists(config_path):
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            # Accept UTF-8 files with or without BOM to avoid silent fallback to defaults.
+            with open(config_path, "r", encoding="utf-8-sig") as f:
                 override = json.load(f)
             for key, value in override.items():
                 if isinstance(value, dict) and isinstance(config.get(key), dict):
