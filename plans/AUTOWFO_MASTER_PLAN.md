@@ -164,3 +164,4 @@ Each experiment should record:
 - 2026-02-06: Initial long-term AUTOWFO master plan created.
 - 2026-02-06: Added milestone-to-TODO mapping and quantified gate checklists with sign-off ownership.
 - 2026-02-06: Architecture review — documented existing implementation inventory; added Milestone 0 (monolith decomposition); updated Milestones 1/4/5 to reflect extract-from-existing approach; added Gate 0; added AWF-000, AWF-002b, AWF-001b; marked AWF-008 as done.
+- 2026-02-07: Gate 0 passed ??AWF-000 decomposition exit criteria verified (module importability coverage + deterministic bit-identical artifact characterization at commit `c059646`).

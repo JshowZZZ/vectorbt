@@ -30,7 +30,7 @@
 ## Backlog
 | ID | Priority | Status | Owner | Task | Deliverable | Exit Criteria |
 |---|---|---|---|---|---|---|
-| AWF-000 | P-1 | doing | JshowZZZ + AI | Monolith decomposition ??extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
+| AWF-000 | P-1 | done | JshowZZZ + AI | Monolith decomposition ??extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
 | AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
 | AWF-002 | P0 | todo | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; includes Sharpe ratio formula |
 | AWF-003 | P0 | todo | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable |
@@ -79,11 +79,10 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 1 ??Decompose**
-- Next action: **AWF-000** (monolith decomposition planning + execution)
-- Allowed implementation now: AWF-000 only
-- Blocked until AWF-000 done: AWF-001 to AWF-004
-- Blocked until Gate A passed: AWF-005 and beyond
+- Active phase: **Phase 2 ??Protocol Freeze**
+- Next action: **AWF-001** (extract + freeze split protocol from current implementation)
+- Allowed implementation now: AWF-001 to AWF-004
+- Blocked until AWF-001~AWF-004 + Gate A passed: AWF-005 and beyond
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
@@ -112,3 +111,4 @@
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 19 (engine callable runner for timeframe search orchestration + tests) | Continue AWF-000 step 20: extract final report/leaderboard finalize pipeline | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 20 (engine extraction for finalize pipeline helpers: result-load/snapshot/filter/best-pick/leaderboard views + tests) | Continue AWF-000 step 21: validate bit-identical outputs for extracted orchestration | pending |
 | 2026-02-07 | AWF-000 | doing | Completed decomposition step 21 (deterministic dual-run characterization test verifies artifact CSV outputs are bit-identical) | Continue AWF-000 step 22: perform exit-criteria audit and decide AWF-000 closure | pending |
+| 2026-02-07 | AWF-000 | done | Completed decomposition step 22 exit audit: module importability check added, deterministic bit-identical artifact test in place, and phase focus moved to protocol freeze | Start AWF-001 split protocol extraction and schema freeze | pending |
