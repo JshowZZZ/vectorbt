@@ -31,18 +31,19 @@
 | ID | Priority | Status | Owner | Task | Deliverable | Exit Criteria |
 |---|---|---|---|---|---|---|
 | AWF-000 | P-1 | done | JshowZZZ + AI | Monolith decomposition ??extract `run_btc_regime_sweep.py` core logic into modules | `scripts/autowfo/split.py`, `metrics.py`, `strategy.py`, `artifacts.py`, `ranking.py`, `search.py`; main script becomes thin orchestrator | Each module importable + testable independently; sweep script still produces identical results |
-| AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
-| AWF-002 | P0 | todo | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; includes Sharpe ratio formula |
-| AWF-003 | P0 | todo | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable |
+| AWF-003 | P0 | todo | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable; adding a new indicator only requires config change |
+| AWF-002 | P0 | todo | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; cross-run comparability guaranteed |
 | AWF-004 | P0 | todo | JshowZZZ + AI | Extract + freeze artifact schema; add config hash + data fingerprint | `plans/protocols/artifact_contract.yaml` + artifact writer module | Every run emits config SHA256, data range hash, reproducible metadata |
+| AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
 | AWF-005 | P1 | blocked | JshowZZZ + AI | Refactor orchestration pipeline into modular AUTOWFO engine | `scripts/autowfo/engine.py` using frozen protocol modules | End-to-end run from spec to leaderboard using modular pipeline |
 | AWF-002b | P1 | blocked | JshowZZZ + AI | Add Sharpe ratio + stability scoring to metric module | Extended `metrics.py`: per-segment Sharpe, cross-segment stddev, drawdown penalty weight | Stability metrics computable, compared side-by-side with old ranking |
 | AWF-006 | P1 | blocked | JshowZZZ + AI | Implement stability-first ranking function using AWF-002b metrics | `ranking.py` module + before/after comparison artifacts | Top-N selection uses composite score (OOS return + Sharpe + consistency - drawdown penalty) |
 | AWF-007 | P1 | blocked | JshowZZZ + AI | Add benchmark scenario for regression | Baseline config + expected outputs + golden test | Repeated runs are deterministic under fixed seed/data |
 | AWF-008 | P1 | done | ??| Two-stage search (coarse ??focused) | Already in `run_btc_regime_sweep.py` (`combo` + `refine` modes) | Working; to be extracted into `search.py` during AWF-000 |
 | AWF-001b | P1 | blocked | JshowZZZ + AI | Add true WFO mode (per-window re-optimization) alongside anchored mode | `split.py` extension + engine integration | Can run both anchored eval and true WFO; results comparable |
-| AWF-009 | P2 | blocked | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + diff artifacts | Can compare current run vs prior run by config/data/metric changes |
-| AWF-010 | P2 | blocked | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config sweep.yaml` works end-to-end |
+| AWF-013 | P1 | blocked | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
+| AWF-009 | P1 | blocked | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
+| AWF-010 | P1 | blocked | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
 | AWF-011 | P2 | blocked | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
 | AWF-012 | P2 | blocked | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
 
@@ -55,35 +56,47 @@
 - Add import bridge so `control_panel.py` continues to work.
 - **Must complete before any Gate A work begins.**
 
-### Phase 2: Protocol Freeze (AWF-001 ??AWF-004, then Gate A)
-> Goal: Formalize what already works into versioned, testable specs.
-- Each task = read existing hard-coded logic ??write explicit spec ??add schema validation ??add unit tests.
+### Phase 2: Foundation — Protocol Freeze (AWF-003 → AWF-002 → AWF-004 → AWF-001, then Gate A)
+> Goal: Make the system trustworthy and extensible for repeated use as a strategy-exploration platform.
+- Order rationale: AWF-003 first (strategy spec externalization enables adding indicators via config),
+  then AWF-002 (metric contract ensures cross-run comparability),
+  then AWF-004 (config hash + data fingerprint for run traceability),
+  then AWF-001 (split protocol documentation).
+- Each task = read existing hard-coded logic → write explicit spec → add schema validation → add unit tests.
 - Gate A checklist must all pass before moving to Phase 3.
 
-### Phase 3: Ranking Upgrade (AWF-002b ??AWF-006 ??AWF-007, then Gate B)
+### Phase 3: Scale — Performance + Experiment Management (AWF-013, AWF-009, AWF-010)
+> Goal: Run faster, track what's been tested, lower operational cost.
+- AWF-013: Multi-process parallelization (×2.5-3 speedup on 4-core machine).
+- AWF-009: Run registry to see coverage across symbols/timeframes.
+- AWF-010: Single-command execution for operational ease.
+
+### Phase 4: Ranking Upgrade — Evidence-Driven (AWF-002b → AWF-006 → AWF-007, then Gate B)
 > Goal: Replace simple sort-by-return with composite robustness scoring.
+> Trigger: only activated when baseline runs show D1 or D2 pass (ranking quality is the bottleneck).
 - AWF-002b: Add Sharpe + stability metrics to the metric module.
 - AWF-006: New ranking function using composite score.
 - AWF-007: Benchmark scenario to lock down deterministic results.
-- Gate B checklist must pass before Phase 4.
+- Gate B checklist must pass before Phase 5.
 
-### Phase 4: Advanced Modes (AWF-001b ??AWF-005, then Gate C)
+### Phase 5: Advanced Modes (AWF-001b → AWF-005, then Gate C)
 > Goal: Add true WFO and refactor engine for modularity.
 - AWF-001b: Per-window re-optimization mode.
 - AWF-005: Full engine refactor using modular pipeline.
 - Gate C reproducibility checks.
 
-### Phase 5: Operationalize (AWF-009 ??AWF-012, then Gate D)
+### Phase 6: Operationalize (AWF-011, AWF-012, then Gate D)
 > Goal: Production-ready automation.
-- Run registry, CLI, regression suite, runbook.
+- Regression suite, runbook.
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 1 complete; Phase 2 deferred**
-- Decision: Anti-over-engineering — protocol freeze (AWF-001~004) deferred until proven necessary
-- Next action: Keep AWF-002b/AWF-006 deferred for now; design one targeted evidence run on a different symbol/timeframe mix to verify whether persistent D3-only is structural (trade-frequency constraint) or ranking-quality related
-- Allowed implementation now: Bug fixes, end-to-end validation
-- Blocked: AWF-001~004 deferred; AWF-005+ still blocked
+- Active phase: **Phase 2 — Foundation (Protocol Freeze)**
+- Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
+- Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
+- Next action: Start AWF-003 (externalize `INDICATOR_META` + `REGIME_NAME_MAP` to JSON spec + validator)
+- AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
+- AWF-013 (parallelization): starts after Phase 2 Gate A passes
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
@@ -122,3 +135,4 @@
 | 2026-02-08 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window4 | Executed baseline under `artifacts/runs/20260208_034213` (temporary config: `1h/300d`, `combo_segment_size=20`, `top_n_refine=20`, `min_avg_daily_trades_target=0.1`, restored afterward). Refine executed `486/486` (non-zero), comparison became informative, and trigger stayed `false` (D1=false, D2=false, D3=true). | Add one more non-zero-refine window to confirm trigger stability before enabling AWF-002b/AWF-006 | pending |
 | 2026-02-08 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window5 | Executed baseline under `artifacts/runs/20260208_055709` (temporary config: `4h/365d`, `combo_segment_size=10`, `top_n_refine=20`, `min_avg_daily_trades_target=0.1`, restored afterward). Refine executed `1107/1107` (non-zero), comparison remained informative (`delta_avg_oos_return_pct=+0.2482`), and trigger stayed `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). | Run one more non-zero-refine window with stricter activity floor to test whether persistent D3 is data-regime noise or ranking-quality signal before AWF-002b/AWF-006 decision | pending |
 | 2026-02-08 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window6 | Executed strict-floor baseline under `artifacts/runs/20260208_081420` (temporary config: `4h/365d`, `combo_segment_size=10`, `top_n_refine=20`, `min_avg_daily_trades_target=1.0`, restored afterward). Refine still executed `5508/5508` (non-zero), comparison remained informative (`delta_avg_oos_return_pct=+0.0512`), and trigger remained `false` with persistent D3-only (`D1=false`, `D2=false`, `D3=true`). | Keep AWF-002b/AWF-006 deferred; run one targeted different market window (or symbols mix) to confirm whether D3 persistence is structural before any ranking-logic change | pending |
+| 2026-02-08 | AWF-ALL | plan_revised | Shifted to platform mindset: AUTOWFO is a reusable strategy-exploration tool, not a one-off script. Correctness and extensibility prioritized over speed. | Reactivated Phase 2 (Protocol Freeze) as next focus: AWF-003 → AWF-002 → AWF-004 → AWF-001. Added AWF-013 (parallelization) to backlog. Promoted AWF-009/010 to P1. Updated AGENTS.md principles. AWF-002b/006 remain evidence-gated. | Start AWF-003 | pending |

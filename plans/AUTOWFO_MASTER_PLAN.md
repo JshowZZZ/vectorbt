@@ -1,7 +1,10 @@
 # AUTOWFO Master Plan
 
 ## Objective
-Build a long-term, reproducible, and automation-first workflow for discovering robust strategy-indicator combinations using time stacking (walk-forward style), not one-off best-parameter picks.
+Build a long-term, reproducible, and automation-first **platform** for systematically
+exploring the strategy-indicator space using time stacking (walk-forward style),
+not one-off best-parameter picks. Users will repeatedly run it with different
+indicators, symbols, and time windows to discover robust combinations.
 
 ## North Star
 - Primary outcome: improve out-of-sample robustness, not in-sample peak performance.
@@ -20,10 +23,11 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
   - Full AutoML/Bayesian orchestration across external clusters.
 
 ## Architectural Direction
+- **Platform mindset**: AUTOWFO is a reusable strategy-exploration tool; correctness first, extensibility second, speed third.
 - Keep vectorbt core simulation and indicator engines as compute primitives.
 - Add orchestration layer on top (AUTOWFO) rather than forcing major core refactors.
 - Treat each run as an experiment with fixed seed, dataset snapshot, config, and metrics.
-- **Decompose monolith first**: the current `run_btc_regime_sweep.py` (3000 lines) contains all logic in one file; it must be split into focused modules before protocols can be individually frozen and tested.
+- ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Modules live in `scripts/autowfo/`.
 
 ## Current Implementation Reality
 > The following already exists (as of 2026-02-06) but is embedded in a monolithic script.
@@ -55,7 +59,7 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
 - Extract and freeze strategy spec schema from existing `INDICATOR_META/REGIME_NAME_MAP`.
 - Extract and freeze artifact schema; add config hash and data fingerprint.
 - Exit criteria: protocol docs committed with schema validation tests passing.
-- Linked TODO IDs: `AWF-001`, `AWF-002`, `AWF-003`, `AWF-004`.
+- Linked TODO IDs: `AWF-003`, `AWF-002`, `AWF-004`, `AWF-001` (execution order).
 
 2. Search Space and Strategy Spec
 - Define strategy spec schema:
@@ -89,10 +93,12 @@ Build a long-term, reproducible, and automation-first workflow for discovering r
 
 5. Scale and Performance
 - Two-stage search (coarse then focused): **already implemented** (`combo` → `refine` modes).
+- Add multi-process parallelization (ProcessPoolExecutor, centralized IO) for combo evaluation.
 - Add caching and duplicate elimination (basic `seen_keys` dedup exists).
+- Add run registry and one-command execution entrypoint.
 - Add runtime and memory profiling baselines.
-- Exit criteria: meaningful speedup vs brute-force baseline.
-- Linked TODO IDs: `AWF-008` (done), `AWF-009`.
+- Exit criteria: meaningful speedup vs brute-force baseline; coverage tracking operational.
+- Linked TODO IDs: `AWF-008` (done), `AWF-013`, `AWF-009`, `AWF-010`.
 
 6. Automation and Governance
 - Add CLI or script entrypoint for scheduled runs.
@@ -173,3 +179,4 @@ Each experiment should record:
 - 2026-02-08: Fourth baseline window executed at `artifacts/runs/20260208_034213` with non-zero refine execution (`486/486`); trigger decision remained `false` (D3-only), so AWF-002b/AWF-006 stay deferred pending additional multi-window evidence.
 - 2026-02-08: Fifth baseline window executed at `artifacts/runs/20260208_055709` (`4h/365d`, segmented combo window) with non-zero refine execution (`1107/1107`); trigger again remained `false` with D3-only while combo-vs-refine comparison stayed informative (positive OOS return delta), so AWF-002b/AWF-006 remains deferred pending one more stricter-floor evidence pass.
 - 2026-02-08: Sixth baseline window executed at `artifacts/runs/20260208_081420` using stricter activity floor (`min_avg_daily_trades_target=1.0`); refine remained non-zero (`5508/5508`) and trigger still stayed `false` with D3-only. This suggests current non-trigger outcome is stable across multiple non-zero-refine windows, so AWF-002b/AWF-006 continues to be deferred pending targeted cross-window confirmation.
+- 2026-02-08: **Platform mindset shift** — reframed AUTOWFO as a reusable strategy-exploration platform (correctness > extensibility > speed). Reordered phases: Protocol Freeze (Phase 2) reactivated as immediate focus with AWF-003 first; added AWF-013 (parallelization) to Milestone 5; promoted AWF-009/010 to P1; AWF-002b/006 remain evidence-gated. Updated AGENTS.md, AUTOWFO_TODO.md, and this file.
