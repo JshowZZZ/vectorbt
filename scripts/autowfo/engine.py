@@ -19,6 +19,8 @@ DEFAULT_CONFIG = {
     "wf_train_days": 120,
     "wf_test_days": 30,
     "wf_step_days": 30,
+    "min_avg_daily_trades_target": 5.0,
+    "min_oos_trades_target": 1,
     "top_n_refine": 50,
     "combo_group_fields": ["indicator_list", "regime_name", "vol_mode"],
     "trade_symbols": ["ETH/BTC", "BNB/BTC", "SOL/BTC"],
@@ -368,6 +370,7 @@ def _run_search_for_timeframe(
     sort_by_score_fn,
     combo_group_fields,
     top_n_fine,
+    min_avg_daily_trades_target,
     indicator_defaults,
     expand_float_fn,
     safe_float_fn,
@@ -424,7 +427,13 @@ def _run_search_for_timeframe(
         else pd.DataFrame()
     )
     tf_combo_df = tf_existing.copy()
-    tf_filtered = apply_quality_filters_fn(tf_combo_df)
+    # Reuse the same activity fallback path as finalize stage so refine does not
+    # silently collapse to 0 candidates on low-frequency windows.
+    tf_filtered, _ = _fallback_activity_filter(
+        combo_df_current=tf_combo_df,
+        min_avg_daily_trades_target=min_avg_daily_trades_target,
+        apply_quality_filters_fn=apply_quality_filters_fn,
+    )
     tf_sorted, _ = sort_by_score_fn(tf_filtered, tie_break_avg_hold=True)
     group_fields = [field for field in combo_group_fields if field in tf_sorted.columns]
     if group_fields:
@@ -854,11 +863,12 @@ def _select_current_combo_df(combo_df, timeframe_configs):
 def _fallback_activity_filter(combo_df_current, min_avg_daily_trades_target, apply_quality_filters_fn):
     min_avg_daily_trades_filter = min_avg_daily_trades_target
     filtered = apply_quality_filters_fn(combo_df_current)
-    if filtered.empty and "avg_daily_trades" in combo_df_current.columns:
+    has_avg_daily_trades = "avg_daily_trades" in combo_df_current.columns
+    if filtered.empty and has_avg_daily_trades:
         filtered = combo_df_current[
             combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter
         ].copy()
-    if filtered.empty:
+    if filtered.empty and has_avg_daily_trades:
         min_avg_daily_trades_filter = 2
         filtered = combo_df_current[
             combo_df_current["avg_daily_trades"] >= min_avg_daily_trades_filter

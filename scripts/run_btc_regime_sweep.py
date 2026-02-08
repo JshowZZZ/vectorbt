@@ -326,10 +326,13 @@ def main():
     cache_format = "parquet" if autowfo_data._has_parquet_engine() else "csv"
     run_id = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     timestamp_utc = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-    # Minimum average daily trades across all symbols.
-    # User requirement: >= 5 trades per day.
-    min_avg_daily_trades_target = 5
-    min_oos_trades_target = 1
+    # Quality filters can be tuned via sweep_config.json.
+    min_avg_daily_trades_target = float(default_config.get("min_avg_daily_trades_target", 5.0) or 5.0)
+    if min_avg_daily_trades_target < 0:
+        min_avg_daily_trades_target = 0.0
+    min_oos_trades_target = int(default_config.get("min_oos_trades_target", 1) or 1)
+    if min_oos_trades_target < 0:
+        min_oos_trades_target = 0
     top_n_fine = int(default_config.get("top_n_refine", 50))
     history_rows = 20
     leaderboard_path = os.path.join(out_dir, "leaderboard.csv")
@@ -859,6 +862,7 @@ def main():
             sort_by_score_fn=autowfo_ranking._sort_by_score,
             combo_group_fields=combo_group_fields,
             top_n_fine=top_n_fine,
+            min_avg_daily_trades_target=min_avg_daily_trades_target,
             indicator_defaults=indicator_defaults,
             expand_float_fn=autowfo_strategy._expand_float,
             safe_float_fn=_safe_float,

@@ -499,6 +499,7 @@ def test_run_search_for_timeframe_combo():
         sort_by_score_fn=lambda df, tie_break_avg_hold=True: (df, "x"),
         combo_group_fields=[],
         top_n_fine=10,
+        min_avg_daily_trades_target=5.0,
         indicator_defaults={},
         expand_float_fn=lambda base, step, min_value=None: [base],
         safe_float_fn=lambda v, d: d if v is None else float(v),
@@ -529,6 +530,7 @@ def test_run_search_for_timeframe_refine():
                 "mom_lookback": 6,
                 "trade_mom_lookback": 3,
                 "max_hold": 2,
+                "avg_daily_trades": 6.0,
             }
         ]
     )
@@ -555,6 +557,7 @@ def test_run_search_for_timeframe_refine():
         sort_by_score_fn=lambda df, tie_break_avg_hold=True: (df, "x"),
         combo_group_fields=[],
         top_n_fine=10,
+        min_avg_daily_trades_target=5.0,
         indicator_defaults={"rsi": {}},
         expand_float_fn=lambda base, step, min_value=None: [base],
         safe_float_fn=lambda v, d: d if v is None else float(v),
@@ -566,6 +569,74 @@ def test_run_search_for_timeframe_refine():
     )
     assert len(calls) == 1
     assert refine_notice["fine_total"] == 1
+
+
+def test_run_search_for_timeframe_refine_activity_fallback_keeps_candidates():
+    calls = []
+
+    def _eval(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    existing = pd.DataFrame(
+        [
+            {
+                "timeframe": "1h",
+                "indicator_list": "rsi",
+                "regime_name": "trend_high",
+                "tp_stop": 0.003,
+                "sl_stop": 0.006,
+                "vol_lookback": 24,
+                "vol_z": 0.8,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "max_hold": 2,
+                "avg_daily_trades": 0.2,
+            }
+        ]
+    )
+
+    e._run_search_for_timeframe(
+        search_mode="refine",
+        stage_prefix="1h",
+        timeframe="1h",
+        regime_variants=[{"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}],
+        regime_lookup={"trend_high": {"regime_type": "trend", "vol_mode": "high", "regime_name": "trend_high"}},
+        mom_lookbacks=[6],
+        vol_lookbacks=[24],
+        vol_zs=[0.8],
+        trade_mom_lookbacks=[3],
+        tp_stops=[0.003],
+        sl_stops=[0.006],
+        max_holds=[2],
+        combo_keys_all=[("rsi",)],
+        iter_indicator_param_combos_fn=lambda combo, opts: [{}],
+        indicator_param_options={"rsi": [{}]},
+        eval_combo_fn=_eval,
+        existing_combo_df=existing,
+        apply_quality_filters_fn=lambda df: df[df["avg_daily_trades"] >= 5.0],
+        sort_by_score_fn=lambda df, tie_break_avg_hold=True: (df, "x"),
+        combo_group_fields=[],
+        top_n_fine=10,
+        min_avg_daily_trades_target=5.0,
+        indicator_defaults={"rsi": {}},
+        expand_float_fn=lambda base, step, min_value=None: [base],
+        safe_float_fn=lambda v, d: d if v is None else float(v),
+        refine_indicator_params_fn=lambda key, row, steps, defaults: [defaults.get(key, {})],
+        safe_int_fn=lambda v, d: d if v is None else int(v),
+        on_refine_plan_fn=None,
+    )
+    assert len(calls) == 1
+
+
+def test_fallback_activity_filter_without_avg_daily_trades_column():
+    combo_df = pd.DataFrame([{"timeframe": "1h", "indicator_list": "rsi"}])
+    filtered, min_avg = e._fallback_activity_filter(
+        combo_df_current=combo_df,
+        min_avg_daily_trades_target=5.0,
+        apply_quality_filters_fn=lambda df: pd.DataFrame(),
+    )
+    assert min_avg == 0
+    assert len(filtered) == 1
 
 
 def test_load_result_frames_and_write_run_snapshot_files(tmp_path):
