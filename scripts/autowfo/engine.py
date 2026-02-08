@@ -638,6 +638,8 @@ def _build_symbol_row(
     rsi_window,
     variant_params,
     metrics,
+    config_sha256=None,
+    data_fingerprint=None,
 ):
     return {
         "timeframe": timeframe,
@@ -655,6 +657,8 @@ def _build_symbol_row(
         "wf_step_days": wf_step_days,
         "data_start": str(data_start),
         "data_end": str(data_end),
+        "config_sha256": config_sha256,
+        "data_fingerprint": data_fingerprint,
         "symbol": symbol,
         "regime_name": regime["regime_name"],
         "regime_type": regime["regime_type"],
@@ -742,6 +746,8 @@ def _build_combo_row(
     metrics,
     ctx_total_days,
     oos_metrics,
+    config_sha256=None,
+    data_fingerprint=None,
 ):
     combo_row = {
         "timeframe": timeframe,
@@ -761,6 +767,8 @@ def _build_combo_row(
         "wf_step_days": wf_step_days,
         "data_start": str(data_start),
         "data_end": str(data_end),
+        "config_sha256": config_sha256,
+        "data_fingerprint": data_fingerprint,
         "regime_name": regime["regime_name"],
         "regime_type": regime["regime_type"],
         "vol_mode": regime["vol_mode"],

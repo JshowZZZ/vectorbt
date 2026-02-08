@@ -26,6 +26,9 @@ from scripts.autowfo.constants import (
 )
 
 
+ARTIFACT_ROW_METADATA_FIELDS = list(autowfo_artifacts.ROW_METADATA_FIELDS)
+
+
 COMBO_KEY_FIELDS = [
     "timeframe",
     "data_days",
@@ -84,7 +87,7 @@ COMBO_KEY_FIELDS = [
     "ad_lookback",
 ]
 
-COMBO_RESULT_FIELDS = COMBO_KEY_FIELDS + [
+COMBO_RESULT_FIELDS = COMBO_KEY_FIELDS + ARTIFACT_ROW_METADATA_FIELDS + [
     "avg_total_return_pct",
     "avg_win_rate_pct",
     "avg_avg_trade_pct",
@@ -131,6 +134,7 @@ SYMBOL_RESULT_FIELDS = [
     "wf_step_days",
     "data_start",
     "data_end",
+    *ARTIFACT_ROW_METADATA_FIELDS,
     "symbol",
     "regime_name",
     "regime_type",
@@ -268,6 +272,8 @@ def main():
         env_mode=os.getenv("VBT_SWEEP_MODE"),
     )
     search_mode = autowfo_engine._normalize_search_mode(default_config.get("search_mode", "combo"))
+    config_sha256 = autowfo_artifacts._compute_config_sha256(default_config)
+    config_path = os.path.join(out_dir, "sweep_config.json")
     timeframe_configs = default_config["timeframes"]
     combo_sizes = default_config["combo_sizes"]
     combo_seed = int(default_config.get("combo_seed", 42))
@@ -338,6 +344,8 @@ def main():
     leaderboard_path = os.path.join(out_dir, "leaderboard.csv")
     status_json_path = os.path.join(out_dir, "run_status.json")
     status_html_path = os.path.join(out_dir, "run_status.html")
+    run_metadata_path = os.path.join(out_dir, "run_metadata.json")
+    run_metadata_path_run = os.path.join(out_dir, f"run_metadata_{run_id}.json")
     db_path = os.path.join(out_dir, "results.db")
     control_path = os.path.join(out_dir, "run_control.json")
     autowfo_engine._ensure_control_file(control_path)
@@ -387,6 +395,7 @@ def main():
     # scanning logic (multi-timeframe, incremental, two-space)
     regime_lookup = {regime["regime_name"]: regime for regime in regime_variants}
     timeframe_days_map = {cfg["timeframe"]: cfg["days"] for cfg in timeframe_configs}
+    timeframe_fingerprints = []
 
     def count_coarse_combos():
         return autowfo_engine._count_coarse_combos(
@@ -545,6 +554,18 @@ def main():
         trade_symbols_tf = ctx["trade_symbols"]
         plot_symbol_tf = trade_symbols_tf[0]
         timeframe_ranges.append(f"{timeframe} ({data_days}d): {ctx['data_range']}")
+        timeframe_data_fingerprint = autowfo_artifacts._compute_data_fingerprint(
+            {
+                "exchange": exchange,
+                "base_symbol": base_symbol,
+                "trade_symbols": trade_symbols_tf,
+                "timeframe": timeframe,
+                "data_days": data_days,
+                "data_start": str(ctx["trade_close"].index[0]),
+                "data_end": str(ctx["trade_close"].index[-1]),
+            }
+        )
+        timeframe_fingerprints.append(timeframe_data_fingerprint)
         wf_slices = autowfo_split._build_walk_forward_slices(
             ctx["trade_close"].index, wf_train_days, wf_test_days, wf_step_days
         )
@@ -787,6 +808,8 @@ def main():
                         rsi_window=rsi_window,
                         variant_params=variant_params,
                         metrics=metrics,
+                        config_sha256=config_sha256,
+                        data_fingerprint=timeframe_data_fingerprint,
                     )
                 )
 
@@ -828,6 +851,8 @@ def main():
                 metrics=metrics,
                 ctx_total_days=ctx["total_days"],
                 oos_metrics=oos_metrics,
+                config_sha256=config_sha256,
+                data_fingerprint=timeframe_data_fingerprint,
             )
             pending_combo_rows.append(combo_row)
             seen_keys.add(combo_key)
@@ -1214,6 +1239,8 @@ def main():
     leaderboard_row = {
         "run_id": run_id,
         "timestamp_utc": timestamp_utc,
+        "config_sha256": config_sha256,
+        "data_fingerprint": best.get("data_fingerprint"),
         "plot_symbol": plot_symbol,
         "timeframe": best_timeframe,
         "data_days": best_data_days,
@@ -1298,6 +1325,7 @@ def main():
     lb_cols = [
         "timestamp_utc",
         "run_id",
+        "config_sha256",
         "plot_symbol",
         "timeframe",
         "data_days",
@@ -1393,12 +1421,35 @@ def main():
     with open(report_path_run, "w", encoding="utf-8") as f:
         f.write(html)
 
+    run_data_fingerprint = autowfo_artifacts._combine_data_fingerprints(timeframe_fingerprints)
+    run_metadata_payload = {
+        "run_id": run_id,
+        "timestamp_utc": timestamp_utc,
+        "search_mode": search_mode,
+        "config_sha256": config_sha256,
+        "data_fingerprint": run_data_fingerprint,
+        "config_path": config_path,
+        "exchange": exchange,
+        "base_symbol": base_symbol,
+        "trade_symbols": trade_symbols,
+        "timeframes": timeframe_configs,
+        "wf_train_days": wf_train_days,
+        "wf_test_days": wf_test_days,
+        "wf_step_days": wf_step_days,
+        "capital_mode": capital_mode,
+        "init_cash_usdt": init_cash_usdt,
+    }
+    autowfo_artifacts._write_run_metadata(run_metadata_path, run_metadata_payload)
+    autowfo_artifacts._write_run_metadata(run_metadata_path_run, run_metadata_payload)
+
     emit_progress(stage="complete", force=True)
 
     print("combo_summary", combo_path)
     print("per_symbol_summary", per_symbol_path)
     print("top10", top10_path)
     print("leaderboard", leaderboard_path)
+    print("run_metadata", run_metadata_path)
+    print("run_metadata_run", run_metadata_path_run)
     print("report_latest", report_path_latest)
     print("report_run", report_path_run)
 

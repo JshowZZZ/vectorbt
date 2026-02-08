@@ -1,12 +1,67 @@
 """Artifact IO helpers extracted from run_btc_regime_sweep monolith."""
 
 import csv
+import hashlib
 import json
 import os
 import sqlite3
 
 import numpy as np
 import pandas as pd
+
+from scripts.autowfo import artifact_contract as autowfo_artifact_contract
+
+
+ARTIFACT_CONTRACT = autowfo_artifact_contract.load_artifact_contract()
+REQUIRED_ARTIFACT_FILES = tuple(
+    autowfo_artifact_contract.build_string_list(ARTIFACT_CONTRACT, "required_files")
+)
+ROW_METADATA_FIELDS = tuple(
+    autowfo_artifact_contract.build_string_list(ARTIFACT_CONTRACT, "row_metadata_fields")
+)
+RUN_METADATA_FIELDS = tuple(
+    autowfo_artifact_contract.build_string_list(ARTIFACT_CONTRACT, "run_metadata_fields")
+)
+
+
+def _assert_required_fields(payload, required_fields, scope):
+    missing = [field for field in required_fields if field not in payload]
+    if missing:
+        raise ValueError(f"{scope} missing required fields: {missing}")
+
+
+def _stable_json_dumps(payload):
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _sha256_hex(payload):
+    text = _stable_json_dumps(payload)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _compute_config_sha256(config):
+    if not isinstance(config, dict):
+        raise ValueError("config must be a dict")
+    return _sha256_hex(config)
+
+
+def _compute_data_fingerprint(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("data fingerprint payload must be a dict")
+    return _sha256_hex(payload)
+
+
+def _combine_data_fingerprints(fingerprints):
+    values = sorted(str(value) for value in fingerprints if value)
+    return _sha256_hex(values) if values else ""
+
+
+def _write_run_metadata(path, payload):
+    if not isinstance(payload, dict):
+        raise ValueError("run metadata payload must be a dict")
+    _assert_required_fields(payload, RUN_METADATA_FIELDS, "run metadata")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 def _ensure_csv_schema(path, columns):

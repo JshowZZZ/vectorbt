@@ -1,0 +1,34 @@
+{
+  "contract_version": "1.0.0",
+  "description": "AUTOWFO artifact contract for reproducibility metadata",
+  "required_files": [
+    "param_sweep_combo_summary.csv",
+    "param_sweep_symbol_summary.csv",
+    "leaderboard.csv",
+    "results.db",
+    "run_status.json",
+    "run_status.html",
+    "run_metadata.json"
+  ],
+  "row_metadata_fields": [
+    "config_sha256",
+    "data_fingerprint"
+  ],
+  "run_metadata_fields": [
+    "run_id",
+    "timestamp_utc",
+    "search_mode",
+    "config_sha256",
+    "data_fingerprint",
+    "config_path",
+    "exchange",
+    "base_symbol",
+    "trade_symbols",
+    "timeframes",
+    "wf_train_days",
+    "wf_test_days",
+    "wf_step_days",
+    "capital_mode",
+    "init_cash_usdt"
+  ]
+}

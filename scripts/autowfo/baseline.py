@@ -63,6 +63,7 @@ def _copy_run_outputs(artifacts_dir: Path, target_dir: Path, run_id: str) -> Dic
         "results.db",
         "run_status.json",
         "run_status.html",
+        "run_metadata.json",
     ]
     for name in static_names:
         if _copy_if_exists(artifacts_dir / name, target_dir / name):
@@ -72,6 +73,7 @@ def _copy_run_outputs(artifacts_dir: Path, target_dir: Path, run_id: str) -> Dic
         f"param_sweep_combo_summary_{run_id}.csv",
         f"param_sweep_symbol_summary_{run_id}.csv",
         f"param_sweep_top10_{run_id}.csv",
+        f"run_metadata_{run_id}.json",
     ]
     for name in run_specific_names:
         if _copy_if_exists(artifacts_dir / name, target_dir / name):
