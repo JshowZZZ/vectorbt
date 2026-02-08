@@ -11,6 +11,22 @@ from scripts.autowfo import portfolio as autowfo_portfolio
 from scripts.autowfo import strategy as autowfo_strategy
 
 
+SERIES_METRIC_FIELDS = (
+    "total_return_pct",
+    "total_profit",
+    "total_trades",
+    "win_rate_pct",
+    "avg_trade_pct",
+    "max_drawdown_pct",
+    "position_coverage_pct",
+    "avg_hold_hours",
+)
+
+
+def _series_to_symbol_map(series_value, symbols):
+    return {symbol: float(series_value[symbol]) for symbol in symbols}
+
+
 def evaluate_combo_task(task, runtime):
     """Evaluate one combo task and return combo/symbol rows.
 
@@ -192,90 +208,16 @@ def evaluate_combo_task(task, runtime):
         oos_rows.append(seg_row)
     oos_metrics = autowfo_metrics._aggregate_oos_metrics(oos_rows)
 
-    symbol_rows = []
-    for symbol in trade_symbols_tf:
-        symbol_rows.append(
-            autowfo_engine._build_symbol_row(
-                timeframe=timeframe,
-                data_days=data_days,
-                exchange=exchange,
-                base_symbol=base_symbol,
-                trade_symbols_tf=trade_symbols_tf,
-                capital_mode=capital_mode,
-                fees=fees,
-                order_size_pct=order_size_pct,
-                max_concurrent_positions=max_concurrent_positions,
-                init_cash_usdt=init_cash_usdt,
-                wf_train_days=wf_train_days,
-                wf_test_days=wf_test_days,
-                wf_step_days=wf_step_days,
-                data_start=ctx["trade_close"].index[0],
-                data_end=ctx["trade_close"].index[-1],
-                symbol=symbol,
-                regime=regime,
-                regime_rsi_long=regime_rsi_long,
-                regime_rsi_short=regime_rsi_short,
-                filter_name=filter_name,
-                indicator_list=indicator_list,
-                indicator_combo=indicator_combo,
-                vol_lookback=vol_lookback,
-                vol_z=vol_z,
-                mom_lookback=mom_lookback,
-                trade_mom_lookback=trade_mom_lookback,
-                tp_stop=tp_stop,
-                sl_stop=sl_stop,
-                max_hold=max_hold,
-                rsi_window=rsi_window,
-                variant_params=variant_params,
-                metrics=metrics,
-                config_sha256=config_sha256,
-                data_fingerprint=data_fingerprint,
-            )
-        )
-
-    combo_row = autowfo_engine._build_combo_row(
-        timeframe=timeframe,
-        data_days=data_days,
-        exchange=exchange,
-        base_symbol=base_symbol,
-        trade_symbols_tf=trade_symbols_tf,
-        fees=fees,
-        slippage_bps=slippage_bps,
-        spread_bps=spread_bps,
-        funding_rate_daily=funding_rate_daily,
-        order_size_pct=order_size_pct,
-        max_concurrent_positions=max_concurrent_positions,
-        init_cash_usdt=init_cash_usdt,
-        wf_train_days=wf_train_days,
-        wf_test_days=wf_test_days,
-        wf_step_days=wf_step_days,
-        data_start=ctx["trade_close"].index[0],
-        data_end=ctx["trade_close"].index[-1],
-        regime=regime,
-        regime_rsi_long=regime_rsi_long,
-        regime_rsi_short=regime_rsi_short,
-        filter_name=filter_name,
-        indicator_list=indicator_list,
-        indicator_combo=indicator_combo,
-        vol_lookback=vol_lookback,
-        vol_z=vol_z,
-        mom_lookback=mom_lookback,
-        trade_mom_lookback=trade_mom_lookback,
-        tp_stop=tp_stop,
-        sl_stop=sl_stop,
-        max_hold=max_hold,
-        rsi_window=rsi_window,
-        variant_params=variant_params,
-        combo_metrics=combo_metrics,
-        sym_metrics=sym_metrics,
-        metrics=metrics,
-        ctx_total_days=ctx["total_days"],
-        oos_metrics=oos_metrics,
-        config_sha256=config_sha256,
-        data_fingerprint=data_fingerprint,
-    )
+    metrics_values = {
+        field: _series_to_symbol_map(metrics[field], trade_symbols_tf)
+        for field in SERIES_METRIC_FIELDS
+    }
     return {
-        "combo_key": task["combo_key"],
-        "combo_row": combo_row,
-        "symbol_rows": symbol_rows,
+        "regime_rsi_long": regime_rsi_long,
+        "regime_rsi_short": regime_rsi_short,
+        "variant_params": variant_params,
+        "metrics_values": metrics_values,
+        "combo_metrics": combo_metrics,
+        "sym_metrics": sym_metrics,
+        "oos_metrics": oos_metrics,
     }

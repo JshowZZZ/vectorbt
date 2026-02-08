@@ -673,6 +673,113 @@ def main():
             }
             return combo_key, task_payload
 
+        def _append_eval_result(result, task_meta):
+            metrics_values = result.get("metrics_values")
+            if not isinstance(metrics_values, dict):
+                return
+
+            regime = task_meta["regime"]
+            indicator_combo = tuple(task_meta["indicator_combo"])
+            filter_name = task_meta["filter_name"]
+            indicator_list = task_meta["indicator_list"]
+            vol_lookback = task_meta["vol_lookback"]
+            vol_z = task_meta["vol_z"]
+            mom_lookback = task_meta["mom_lookback"]
+            trade_mom_lookback = task_meta["trade_mom_lookback"]
+            tp_stop = task_meta["tp_stop"]
+            sl_stop = task_meta["sl_stop"]
+            max_hold = task_meta["max_hold"]
+            metrics = {
+                name: pd.Series(values).reindex(trade_symbols_tf)
+                for name, values in metrics_values.items()
+            }
+            variant_params = result["variant_params"]
+            regime_rsi_long = result["regime_rsi_long"]
+            regime_rsi_short = result["regime_rsi_short"]
+
+            for symbol in trade_symbols_tf:
+                pending_symbol_rows.append(
+                    autowfo_engine._build_symbol_row(
+                        timeframe=timeframe,
+                        data_days=data_days,
+                        exchange=exchange,
+                        base_symbol=base_symbol,
+                        trade_symbols_tf=trade_symbols_tf,
+                        capital_mode=capital_mode,
+                        fees=fees,
+                        order_size_pct=order_size_pct,
+                        max_concurrent_positions=max_concurrent_positions,
+                        init_cash_usdt=init_cash_usdt,
+                        wf_train_days=wf_train_days,
+                        wf_test_days=wf_test_days,
+                        wf_step_days=wf_step_days,
+                        data_start=ctx["trade_close"].index[0],
+                        data_end=ctx["trade_close"].index[-1],
+                        symbol=symbol,
+                        regime=regime,
+                        regime_rsi_long=regime_rsi_long,
+                        regime_rsi_short=regime_rsi_short,
+                        filter_name=filter_name,
+                        indicator_list=indicator_list,
+                        indicator_combo=indicator_combo,
+                        vol_lookback=vol_lookback,
+                        vol_z=vol_z,
+                        mom_lookback=mom_lookback,
+                        trade_mom_lookback=trade_mom_lookback,
+                        tp_stop=tp_stop,
+                        sl_stop=sl_stop,
+                        max_hold=max_hold,
+                        rsi_window=rsi_window,
+                        variant_params=variant_params,
+                        metrics=metrics,
+                        config_sha256=config_sha256,
+                        data_fingerprint=timeframe_data_fingerprint,
+                    )
+                )
+
+            combo_row = autowfo_engine._build_combo_row(
+                timeframe=timeframe,
+                data_days=data_days,
+                exchange=exchange,
+                base_symbol=base_symbol,
+                trade_symbols_tf=trade_symbols_tf,
+                fees=fees,
+                slippage_bps=slippage_bps,
+                spread_bps=spread_bps,
+                funding_rate_daily=funding_rate_daily,
+                order_size_pct=order_size_pct,
+                max_concurrent_positions=max_concurrent_positions,
+                init_cash_usdt=init_cash_usdt,
+                wf_train_days=wf_train_days,
+                wf_test_days=wf_test_days,
+                wf_step_days=wf_step_days,
+                data_start=ctx["trade_close"].index[0],
+                data_end=ctx["trade_close"].index[-1],
+                regime=regime,
+                regime_rsi_long=regime_rsi_long,
+                regime_rsi_short=regime_rsi_short,
+                filter_name=filter_name,
+                indicator_list=indicator_list,
+                indicator_combo=indicator_combo,
+                vol_lookback=vol_lookback,
+                vol_z=vol_z,
+                mom_lookback=mom_lookback,
+                trade_mom_lookback=trade_mom_lookback,
+                tp_stop=tp_stop,
+                sl_stop=sl_stop,
+                max_hold=max_hold,
+                rsi_window=rsi_window,
+                variant_params=variant_params,
+                combo_metrics=result["combo_metrics"],
+                sym_metrics=result["sym_metrics"],
+                metrics=metrics,
+                ctx_total_days=ctx["total_days"],
+                oos_metrics=result["oos_metrics"],
+                config_sha256=config_sha256,
+                data_fingerprint=timeframe_data_fingerprint,
+            )
+            pending_combo_rows.append(combo_row)
+
         def eval_combo(
             regime,
             indicator_combo,
@@ -707,8 +814,7 @@ def main():
                 return
 
             result = autowfo_evaluator.evaluate_combo_task(task_payload, runtime_eval)
-            pending_symbol_rows.extend(result["symbol_rows"])
-            pending_combo_rows.append(result["combo_row"])
+            _append_eval_result(result, task_payload)
             seen_keys.add(combo_key)
             done += 1
             emit_progress(stage=stage)
@@ -767,14 +873,16 @@ def main():
                 planned_keys.add(combo_key)
                 combo_tasks.append(task_payload)
 
-            for result in autowfo_parallel._run_combo_tasks(
+            for task_payload, result in zip(
+                combo_tasks,
+                autowfo_parallel._run_combo_tasks(
                 combo_tasks,
                 runtime_eval,
                 max_workers=max_workers,
+                ),
             ):
-                pending_symbol_rows.extend(result["symbol_rows"])
-                pending_combo_rows.append(result["combo_row"])
-                seen_keys.add(result["combo_key"])
+                _append_eval_result(result, task_payload)
+                seen_keys.add(task_payload["combo_key"])
                 done += 1
                 emit_progress(stage=stage)
                 _checkpoint()
