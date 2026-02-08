@@ -91,12 +91,12 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 2 — Foundation (Protocol Freeze)**
+- Active phase: **Phase 3 — Scale (Performance + Experiment Management)**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
 - Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
-- Next action: Run Gate A protocol-freeze checklist and record freeze commit hash
+- Next action: Start AWF-013 (multi-process parallelization for combo evaluation)
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
-- AWF-013 (parallelization): starts after Phase 2 Gate A passes
+- Gate A status: passed at commit `524f837`
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
@@ -140,3 +140,4 @@
 | 2026-02-08 | AWF-002 | done | Completed metric contract freeze: added `plans/protocols/metric_contract.yaml` and `scripts/autowfo/metric_contract.py`, wired `metrics.py` to load/validate frozen metric sections, and added fail-fast + contract coverage tests. Also fixed empty-OOS output consistency by always emitting `oos_avg_daily_trades`. | Move to AWF-004 artifact contract extraction and reproducibility metadata freeze | pending |
 | 2026-02-08 | AWF-004 | done | Completed artifact contract freeze: added `plans/protocols/artifact_contract.yaml` and `scripts/autowfo/artifact_contract.py`, wired `artifacts.py` to enforce required run-metadata fields, and added deterministic config/data hash helpers. Sweep now emits `config_sha256` + `data_fingerprint` into combo/symbol/leaderboard outputs and writes `run_metadata.json` plus run-scoped metadata snapshot. | Move to AWF-001 split protocol extraction and freeze | pending |
 | 2026-02-08 | AWF-001 | done | Completed split protocol freeze: added `plans/protocols/split_protocol.yaml` and `scripts/autowfo/split_protocol.py`, wired `split.py` to load/validate supported mode and positive horizon constraints, and added fail-fast/contract tests. Existing walk-forward slice outputs remain behavior-compatible for default anchored mode. | Run Gate A checklist and record protocol freeze commit hash | pending |
+| 2026-02-08 | AWF-ALL | gate_a_passed | Gate A checklist satisfied after finishing AWF-003/AWF-002/AWF-004/AWF-001 and validation suite. | Protocol frozen at commit `524f837`; phase focus moves to Phase 3 with AWF-013 as next task. | 524f837 |

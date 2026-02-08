@@ -116,11 +116,11 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Gate Checklists
 Gate A (Protocol Freeze) owner: Maintainer + AI agent pair sign-off
-- [ ] Split schema config/YAML finalized and committed.
-- [ ] Metric contract doc finalized and committed.
-- [ ] Schema validation tests pass locally.
-- [ ] `plans/AUTOWFO_TODO.md` focus window updated.
-- [ ] `Change Log` entry added with `Protocol frozen at commit <hash>`.
+- [x] Split schema config/YAML finalized and committed.
+- [x] Metric contract doc finalized and committed.
+- [x] Schema validation tests pass locally.
+- [x] `plans/AUTOWFO_TODO.md` focus window updated.
+- [x] `Change Log` entry added with `Protocol frozen at commit <hash>`.
 
 Gate B (Ranking Freeze) owner: Maintainer + AI agent pair sign-off
 - [ ] Ranking formula spec finalized (including penalties).
@@ -184,3 +184,4 @@ Each experiment should record:
 - 2026-02-08: AWF-002 implemented: metric definitions are now frozen in `plans/protocols/metric_contract.yaml` and validated by `scripts/autowfo/metric_contract.py`; `scripts/autowfo/metrics.py` enforces metric key consistency against the contract and keeps empty-OOS outputs schema-complete (including `oos_avg_daily_trades`) to preserve cross-run comparability.
 - 2026-02-08: AWF-004 implemented: artifact schema/metadata rules moved into `plans/protocols/artifact_contract.yaml` with loader/validator in `scripts/autowfo/artifact_contract.py`; run artifacts now include reproducibility metadata (`config_sha256`, `data_fingerprint`) in combo/symbol/leaderboard outputs and emit `run_metadata.json` plus `run_metadata_<run_id>.json`.
 - 2026-02-08: AWF-001 implemented: split protocol moved into `plans/protocols/split_protocol.yaml` with loader/validator in `scripts/autowfo/split_protocol.py`; `scripts/autowfo/split.py` now validates protocol-backed mode/constraint assumptions (default `anchored`, positive horizons, non-overlapping OOS via `step_days >= test_days`) while preserving current walk-forward slice outputs.
+- 2026-02-08: Protocol frozen at commit `524f837` (Gate A passed): strategy schema, metric contract, artifact contract, and split protocol are all externalized and validated; TODO focus moves from Phase 2 to Phase 3 (AWF-013).
