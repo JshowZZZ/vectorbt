@@ -4,6 +4,7 @@ import importlib
 def test_autowfo_modules_importable_with_expected_symbols():
     expected = {
         "scripts.autowfo.constants": ["LABELS", "INDICATOR_META", "INDICATOR_PARAM_FIELDS"],
+        "scripts.autowfo.strategy_schema": ["load_strategy_schema", "validate_strategy_schema"],
         "scripts.autowfo.data": ["_prepare_timeframe_context", "_load_or_update_symbol"],
         "scripts.autowfo.split": ["_build_walk_forward_slices"],
         "scripts.autowfo.metrics": ["_calc_pf_series", "_aggregate_oos_metrics"],

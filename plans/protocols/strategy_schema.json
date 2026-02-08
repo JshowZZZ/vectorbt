@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0.0",
+  "description": "AUTOWFO strategy metadata schema extracted from INDICATOR_META and REGIME_NAME_MAP",
+  "indicator_categories": [
+    "volume",
+    "momentum",
+    "volatility"
+  ],
+  "vol_modes": [
+    "high",
+    "low",
+    "any"
+  ],
+  "regime_types": [
+    {
+      "key": "trend",
+      "label": "\u8da8\u52e2"
+    },
+    {
+      "key": "rsi_revert",
+      "label": "RSI \u56de\u6b78"
+    },
+    {
+      "key": "bb_revert",
+      "label": "\u5e03\u6797\u56de\u6b78"
+    },
+    {
+      "key": "bb_breakout",
+      "label": "\u5e03\u6797\u7a81\u7834"
+    }
+  ],
+  "indicators": [
+    {
+      "key": "volume_z",
+      "label": "\u91cf\u80fdZ",
+      "category": "volume"
+    },
+    {
+      "key": "obv_roc",
+      "label": "OBV \u8da8\u52e2",
+      "category": "volume"
+    },
+    {
+      "key": "cmf",
+      "label": "\u8cc7\u91d1\u6d41\u5411(CMF)",
+      "category": "volume"
+    },
+    {
+      "key": "mfi",
+      "label": "\u8cc7\u91d1\u6d41\u6307\u6a19(MFI)",
+      "category": "volume"
+    },
+    {
+      "key": "vroc",
+      "label": "\u91cf\u80fd\u8b8a\u5316\u7387",
+      "category": "volume"
+    },
+    {
+      "key": "ad",
+      "label": "A/D \u8da8\u52e2",
+      "category": "volume"
+    },
+    {
+      "key": "rsi",
+      "label": "RSI",
+      "category": "momentum"
+    },
+    {
+      "key": "roc",
+      "label": "ROC",
+      "category": "momentum"
+    },
+    {
+      "key": "macd_hist",
+      "label": "MACD \u67f1\u72c0",
+      "category": "momentum"
+    },
+    {
+      "key": "stoch",
+      "label": "KD",
+      "category": "momentum"
+    },
+    {
+      "key": "bb_width",
+      "label": "\u5e03\u6797\u5e36\u5bec\u5ea6",
+      "category": "volatility"
+    },
+    {
+      "key": "atr_ratio",
+      "label": "ATR/\u50f9\u683c",
+      "category": "volatility"
+    },
+    {
+      "key": "ma_trend",
+      "label": "MA \u8da8\u52e2",
+      "category": "volatility"
+    }
+  ],
+  "regimes": [
+    {
+      "name": "trend_high",
+      "label": "\u8da8\u52e2(\u9ad8\u6ce2\u52d5)",
+      "type": "trend",
+      "vol_mode": "high"
+    },
+    {
+      "name": "trend_low",
+      "label": "\u8da8\u52e2(\u4f4e\u6ce2\u52d5)",
+      "type": "trend",
+      "vol_mode": "low"
+    },
+    {
+      "name": "trend_any",
+      "label": "\u8da8\u52e2(\u4e0d\u9650\u6ce2\u52d5)",
+      "type": "trend",
+      "vol_mode": "any"
+    },
+    {
+      "name": "rsi_revert_low",
+      "label": "RSI \u56de\u6b78(\u4f4e\u6ce2\u52d5)",
+      "type": "rsi_revert",
+      "vol_mode": "low"
+    },
+    {
+      "name": "rsi_revert_high",
+      "label": "RSI \u56de\u6b78(\u9ad8\u6ce2\u52d5)",
+      "type": "rsi_revert",
+      "vol_mode": "high"
+    },
+    {
+      "name": "bb_revert_low",
+      "label": "\u5e03\u6797\u56de\u6b78(\u4f4e\u6ce2\u52d5)",
+      "type": "bb_revert",
+      "vol_mode": "low"
+    },
+    {
+      "name": "bb_revert_high",
+      "label": "\u5e03\u6797\u56de\u6b78(\u9ad8\u6ce2\u52d5)",
+      "type": "bb_revert",
+      "vol_mode": "high"
+    },
+    {
+      "name": "bb_breakout_high",
+      "label": "\u5e03\u6797\u7a81\u7834(\u9ad8\u6ce2\u52d5)",
+      "type": "bb_breakout",
+      "vol_mode": "high"
+    }
+  ]
+}

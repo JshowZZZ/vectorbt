@@ -2,6 +2,9 @@
 
 # Re-exported helpers used to build encoded label maps
 
+from scripts.autowfo import strategy_schema as autowfo_strategy_schema
+
+
 def _u(text):
     return text.encode("ascii").decode("unicode_escape")
 
@@ -145,37 +148,12 @@ FILTER_NAME_MAP = {
     "none": _html_entity(_u("\\u7121\\u984d\\u5916\\u6ffe\\u7db2")),
 }
 
-INDICATOR_LABELS = {
-    "volume_z": _html_entity(_u("\\u91cf\\u80fdZ")),
-    "obv_roc": _html_entity(_u("OBV \\u8da8\\u52e2")),
-    "cmf": _html_entity(_u("\\u8cc7\\u91d1\\u6d41\\u5411(CMF)")),
-    "mfi": _html_entity(_u("\\u8cc7\\u91d1\\u6d41\\u6307\\u6a19(MFI)")),
-    "vroc": _html_entity(_u("\\u91cf\\u80fd\\u8b8a\\u5316\\u7387")),
-    "ad": _html_entity(_u("A/D \\u8da8\\u52e2")),
-    "rsi": _html_entity(_u("RSI")),
-    "roc": _html_entity(_u("ROC")),
-    "macd_hist": _html_entity(_u("MACD \\u67f1\\u72c0")),
-    "stoch": _html_entity(_u("KD")),
-    "bb_width": _html_entity(_u("\\u5e03\\u6797\\u5e36\\u5bec\\u5ea6")),
-    "atr_ratio": _html_entity(_u("ATR/\\u50f9\\u683c")),
-    "ma_trend": _html_entity(_u("MA \\u8da8\\u52e2")),
-}
-
-INDICATOR_META = {
-    "volume_z": {"label": INDICATOR_LABELS["volume_z"], "category": "volume"},
-    "obv_roc": {"label": INDICATOR_LABELS["obv_roc"], "category": "volume"},
-    "cmf": {"label": INDICATOR_LABELS["cmf"], "category": "volume"},
-    "mfi": {"label": INDICATOR_LABELS["mfi"], "category": "volume"},
-    "vroc": {"label": INDICATOR_LABELS["vroc"], "category": "volume"},
-    "ad": {"label": INDICATOR_LABELS["ad"], "category": "volume"},
-    "rsi": {"label": INDICATOR_LABELS["rsi"], "category": "momentum"},
-    "roc": {"label": INDICATOR_LABELS["roc"], "category": "momentum"},
-    "macd_hist": {"label": INDICATOR_LABELS["macd_hist"], "category": "momentum"},
-    "stoch": {"label": INDICATOR_LABELS["stoch"], "category": "momentum"},
-    "bb_width": {"label": INDICATOR_LABELS["bb_width"], "category": "volatility"},
-    "atr_ratio": {"label": INDICATOR_LABELS["atr_ratio"], "category": "volatility"},
-    "ma_trend": {"label": INDICATOR_LABELS["ma_trend"], "category": "volatility"},
-}
+STRATEGY_SCHEMA = autowfo_strategy_schema.load_strategy_schema()
+INDICATOR_META = autowfo_strategy_schema.build_indicator_meta(
+    STRATEGY_SCHEMA,
+    label_transform=_html_entity,
+)
+INDICATOR_LABELS = {key: value["label"] for key, value in INDICATOR_META.items()}
 
 INDICATOR_PARAM_FIELDS = [
     "rsi_long",
@@ -202,20 +180,11 @@ INDICATOR_PARAM_FIELDS = [
 ]
 
 
-REGIME_NAME_MAP = {
-    "trend_high": _html_entity(_u("\\u8da8\\u52e2(\\u9ad8\\u6ce2\\u52d5)")),
-    "trend_low": _html_entity(_u("\\u8da8\\u52e2(\\u4f4e\\u6ce2\\u52d5)")),
-    "trend_any": _html_entity(_u("\\u8da8\\u52e2(\\u4e0d\\u9650\\u6ce2\\u52d5)")),
-    "rsi_revert_low": _html_entity(_u("RSI \\u56de\\u6b78(\\u4f4e\\u6ce2\\u52d5)")),
-    "rsi_revert_high": _html_entity(_u("RSI \\u56de\\u6b78(\\u9ad8\\u6ce2\\u52d5)")),
-    "bb_revert_low": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78(\\u4f4e\\u6ce2\\u52d5)")),
-    "bb_revert_high": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78(\\u9ad8\\u6ce2\\u52d5)")),
-    "bb_breakout_high": _html_entity(_u("\\u5e03\\u6797\\u7a81\\u7834(\\u9ad8\\u6ce2\\u52d5)")),
-}
-
-REGIME_TYPE_MAP = {
-    "trend": _html_entity(_u("\\u8da8\\u52e2")),
-    "rsi_revert": _html_entity(_u("RSI \\u56de\\u6b78")),
-    "bb_revert": _html_entity(_u("\\u5e03\\u6797\\u56de\\u6b78")),
-    "bb_breakout": _html_entity(_u("\\u5e03\\u6797\\u7a81\\u7834")),
-}
+REGIME_NAME_MAP = autowfo_strategy_schema.build_regime_name_map(
+    STRATEGY_SCHEMA,
+    label_transform=_html_entity,
+)
+REGIME_TYPE_MAP = autowfo_strategy_schema.build_regime_type_map(
+    STRATEGY_SCHEMA,
+    label_transform=_html_entity,
+)
