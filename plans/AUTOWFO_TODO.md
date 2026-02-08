@@ -81,7 +81,7 @@
 ## Current Focus Window
 - Active phase: **Phase 1 complete; Phase 2 deferred**
 - Decision: Anti-over-engineering — protocol freeze (AWF-001~004) deferred until proven necessary
-- Next action: Continue end-to-end baselines on additional windows with non-zero refine candidates; calibrate activity floor to avoid low-trade saturation before final AWF-002b/AWF-006 trigger decision
+- Next action: Continue one more non-zero-refine baseline window and compare D3 persistence under a stricter activity floor (for example `min_avg_daily_trades_target=0.5~1.0`) before final AWF-002b/AWF-006 trigger decision
 - Allowed implementation now: Bug fixes, end-to-end validation
 - Blocked: AWF-001~004 deferred; AWF-005+ still blocked
 
@@ -120,3 +120,4 @@
 | 2026-02-07 | AWF-008 | baseline_guard | Added baseline run guardrail: pass snapshots now include `run_total/run_done/run_skipped/run_stage` from `run_status.json`, and refine `run_total=0` emits a warning in stdout + manifest. | Use this signal to reject non-informative refine runs when evaluating AWF-002b/AWF-006 trigger evidence | pending |
 | 2026-02-08 | AWF-008 | refine_candidate_fix | Fixed refine candidate starvation on low-frequency windows: refine path now reuses activity fallback logic, and `min_avg_daily_trades_target` / `min_oos_trades_target` are configurable from `sweep_config.json` (defaults unchanged). | Run baseline with lowered activity floor to verify refine executes non-zero candidates and compare trigger outcome | pending |
 | 2026-02-08 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window4 | Executed baseline under `artifacts/runs/20260208_034213` (temporary config: `1h/300d`, `combo_segment_size=20`, `top_n_refine=20`, `min_avg_daily_trades_target=0.1`, restored afterward). Refine executed `486/486` (non-zero), comparison became informative, and trigger stayed `false` (D1=false, D2=false, D3=true). | Add one more non-zero-refine window to confirm trigger stability before enabling AWF-002b/AWF-006 | pending |
+| 2026-02-08 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window5 | Executed baseline under `artifacts/runs/20260208_055709` (temporary config: `4h/365d`, `combo_segment_size=10`, `top_n_refine=20`, `min_avg_daily_trades_target=0.1`, restored afterward). Refine executed `1107/1107` (non-zero), comparison remained informative (`delta_avg_oos_return_pct=+0.2482`), and trigger stayed `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). | Run one more non-zero-refine window with stricter activity floor to test whether persistent D3 is data-regime noise or ranking-quality signal before AWF-002b/AWF-006 decision | pending |
