@@ -1,0 +1,148 @@
+{
+  "contract_version": "1.0.0",
+  "description": "AUTOWFO metric contract extracted from _calc_pf_series/_aggregate_*",
+  "is_series_metrics": [
+    {
+      "name": "total_return_pct",
+      "formula": "as_series(pf.total_return(group_by=false) * 100)"
+    },
+    {
+      "name": "total_profit",
+      "formula": "as_series(pf.total_profit(group_by=false))"
+    },
+    {
+      "name": "total_trades",
+      "formula": "as_series(pf.trades.count(group_by=false))"
+    },
+    {
+      "name": "win_rate_pct",
+      "formula": "as_series(pf.trades.win_rate(group_by=false) * 100)"
+    },
+    {
+      "name": "avg_trade_pct",
+      "formula": "as_series(pf.trades.returns.mean(group_by=false) * 100)"
+    },
+    {
+      "name": "max_drawdown_pct",
+      "formula": "as_series(pf.drawdowns.max_drawdown(group_by=false) * -100)"
+    },
+    {
+      "name": "position_coverage_pct",
+      "formula": "as_series(pf.position_coverage(group_by=false) * 100)"
+    },
+    {
+      "name": "avg_hold_hours",
+      "formula": "as_series(pf.trades.duration.mean(group_by=false)) * bar_hours"
+    }
+  ],
+  "combo_metrics": [
+    {
+      "name": "total_return_pct",
+      "formula": "as_scalar(pf.total_return(group_by=true)) * 100"
+    },
+    {
+      "name": "total_profit",
+      "formula": "as_scalar(pf.total_profit(group_by=true))"
+    },
+    {
+      "name": "total_trades",
+      "formula": "as_scalar(pf.trades.count(group_by=true))"
+    },
+    {
+      "name": "win_rate_pct",
+      "formula": "as_scalar(pf.trades.win_rate(group_by=true)) * 100"
+    },
+    {
+      "name": "avg_trade_pct",
+      "formula": "as_scalar(pf.trades.returns.mean(group_by=true)) * 100"
+    },
+    {
+      "name": "max_drawdown_pct",
+      "formula": "as_scalar(pf.drawdowns.max_drawdown(group_by=true) fallback drawdowns.from_ts(value)) * -100"
+    },
+    {
+      "name": "position_coverage_pct",
+      "formula": "as_scalar(pf.position_coverage(group_by=true)) * 100"
+    },
+    {
+      "name": "avg_hold_hours",
+      "formula": "as_scalar(pf.trades.duration.mean(group_by=true)) * bar_hours"
+    }
+  ],
+  "is_aggregate_metrics": [
+    {
+      "name": "avg_total_return_pct",
+      "formula": "mean(total_return_pct)"
+    },
+    {
+      "name": "avg_win_rate_pct",
+      "formula": "mean(win_rate_pct)"
+    },
+    {
+      "name": "avg_avg_trade_pct",
+      "formula": "mean(avg_trade_pct)"
+    },
+    {
+      "name": "avg_max_drawdown_pct",
+      "formula": "mean(max_drawdown_pct)"
+    },
+    {
+      "name": "avg_position_coverage_pct",
+      "formula": "mean(position_coverage_pct)"
+    },
+    {
+      "name": "avg_total_trades",
+      "formula": "mean(total_trades)"
+    },
+    {
+      "name": "min_total_trades",
+      "formula": "min(total_trades)"
+    },
+    {
+      "name": "avg_hold_hours",
+      "formula": "mean(avg_hold_hours)"
+    }
+  ],
+  "oos_aggregate_metrics": [
+    {
+      "name": "oos_avg_total_return_pct",
+      "formula": "safe_nanmean(segment.avg_total_return_pct)"
+    },
+    {
+      "name": "oos_avg_win_rate_pct",
+      "formula": "safe_nanmean(segment.avg_win_rate_pct)"
+    },
+    {
+      "name": "oos_avg_avg_trade_pct",
+      "formula": "safe_nanmean(segment.avg_avg_trade_pct)"
+    },
+    {
+      "name": "oos_avg_max_drawdown_pct",
+      "formula": "safe_nanmean(segment.avg_max_drawdown_pct)"
+    },
+    {
+      "name": "oos_avg_position_coverage_pct",
+      "formula": "safe_nanmean(segment.avg_position_coverage_pct)"
+    },
+    {
+      "name": "oos_avg_total_trades",
+      "formula": "safe_nanmean(segment.avg_total_trades)"
+    },
+    {
+      "name": "oos_min_total_trades",
+      "formula": "safe_nanmin(segment.min_total_trades)"
+    },
+    {
+      "name": "oos_avg_daily_trades",
+      "formula": "safe_nanmean(segment.avg_daily_trades)"
+    },
+    {
+      "name": "oos_avg_hold_hours",
+      "formula": "safe_nanmean(segment.avg_hold_hours)"
+    },
+    {
+      "name": "oos_segments",
+      "formula": "len(segments)"
+    }
+  ]
+}

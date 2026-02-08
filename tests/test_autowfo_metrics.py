@@ -44,6 +44,13 @@ def test_aggregate_oos_metrics_characterization():
     assert got["oos_segments"] == 2
 
 
+def test_aggregate_oos_metrics_empty_includes_contract_fields():
+    got = m._aggregate_oos_metrics([])
+    assert set(got.keys()) == set(m.OOS_AGGREGATE_METRIC_FIELDS)
+    assert np.isnan(got["oos_avg_daily_trades"])
+    assert got["oos_segments"] == 0
+
+
 def test_calc_pf_combo_metrics_characterization():
     index = pd.date_range("2024-01-01", periods=30, freq="h")
     trade_close = pd.DataFrame({"ETH/BTC": np.linspace(1.0, 2.0, len(index))}, index=index)
@@ -72,3 +79,39 @@ def test_calc_pf_combo_metrics_characterization():
     metrics = m._calc_pf_combo_metrics(pf, bar_hours=1.0)
     assert metrics["total_trades"] > 0
     assert np.isfinite(metrics["total_return_pct"])
+
+
+def test_metric_field_constants_loaded_from_contract():
+    assert m.IS_SERIES_METRIC_FIELDS == (
+        "total_return_pct",
+        "total_profit",
+        "total_trades",
+        "win_rate_pct",
+        "avg_trade_pct",
+        "max_drawdown_pct",
+        "position_coverage_pct",
+        "avg_hold_hours",
+    )
+    assert m.COMBO_METRIC_FIELDS == m.IS_SERIES_METRIC_FIELDS
+    assert m.IS_AGGREGATE_METRIC_FIELDS == (
+        "avg_total_return_pct",
+        "avg_win_rate_pct",
+        "avg_avg_trade_pct",
+        "avg_max_drawdown_pct",
+        "avg_position_coverage_pct",
+        "avg_total_trades",
+        "min_total_trades",
+        "avg_hold_hours",
+    )
+    assert m.OOS_AGGREGATE_METRIC_FIELDS == (
+        "oos_avg_total_return_pct",
+        "oos_avg_win_rate_pct",
+        "oos_avg_avg_trade_pct",
+        "oos_avg_max_drawdown_pct",
+        "oos_avg_position_coverage_pct",
+        "oos_avg_total_trades",
+        "oos_min_total_trades",
+        "oos_avg_daily_trades",
+        "oos_avg_hold_hours",
+        "oos_segments",
+    )

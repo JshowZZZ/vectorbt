@@ -4,6 +4,30 @@ import numpy as np
 import pandas as pd
 import vectorbt as vbt
 
+from scripts.autowfo import metric_contract as autowfo_metric_contract
+
+
+METRIC_CONTRACT = autowfo_metric_contract.load_metric_contract()
+IS_SERIES_METRIC_FIELDS = tuple(
+    autowfo_metric_contract.build_metric_name_list(METRIC_CONTRACT, "is_series_metrics")
+)
+COMBO_METRIC_FIELDS = tuple(
+    autowfo_metric_contract.build_metric_name_list(METRIC_CONTRACT, "combo_metrics")
+)
+IS_AGGREGATE_METRIC_FIELDS = tuple(
+    autowfo_metric_contract.build_metric_name_list(METRIC_CONTRACT, "is_aggregate_metrics")
+)
+OOS_AGGREGATE_METRIC_FIELDS = tuple(
+    autowfo_metric_contract.build_metric_name_list(METRIC_CONTRACT, "oos_aggregate_metrics")
+)
+
+
+def _assert_metric_keys(metrics_dict, expected_keys, scope):
+    actual = tuple(metrics_dict.keys())
+    expected = tuple(expected_keys)
+    if actual != expected:
+        raise ValueError(f"{scope} metric keys mismatch: expected={expected}, actual={actual}")
+
 
 def _timeframe_to_hours(timeframe):
     tf = str(timeframe).strip().lower()
@@ -51,7 +75,7 @@ def _as_scalar(value):
 def _calc_pf_series(pf, symbols, bar_hours):
     avg_hold_bars = pf.trades.duration.mean(group_by=False)
     avg_hold_hours = _as_series(avg_hold_bars, symbols) * bar_hours
-    return {
+    metrics = {
         "total_return_pct": _as_series(pf.total_return(group_by=False) * 100, symbols),
         "total_profit": _as_series(pf.total_profit(group_by=False), symbols),
         "total_trades": _as_series(pf.trades.count(group_by=False), symbols),
@@ -61,6 +85,8 @@ def _calc_pf_series(pf, symbols, bar_hours):
         "position_coverage_pct": _as_series(pf.position_coverage(group_by=False) * 100, symbols),
         "avg_hold_hours": avg_hold_hours,
     }
+    _assert_metric_keys(metrics, IS_SERIES_METRIC_FIELDS, "is_series")
+    return metrics
 
 
 def _calc_pf_combo_metrics(pf, bar_hours):
@@ -74,7 +100,7 @@ def _calc_pf_combo_metrics(pf, bar_hours):
             max_drawdown = _as_scalar(vbt.Drawdowns.from_ts(combo_value).max_drawdown())
         except Exception:
             max_drawdown = np.nan
-    return {
+    metrics = {
         "total_return_pct": _as_scalar(pf.total_return(group_by=True)) * 100,
         "total_profit": _as_scalar(pf.total_profit(group_by=True)),
         "total_trades": _as_scalar(pf.trades.count(group_by=True)),
@@ -84,10 +110,12 @@ def _calc_pf_combo_metrics(pf, bar_hours):
         "position_coverage_pct": _as_scalar(pf.position_coverage(group_by=True)) * 100,
         "avg_hold_hours": avg_hold_bars * bar_hours if avg_hold_bars is not None else np.nan,
     }
+    _assert_metric_keys(metrics, COMBO_METRIC_FIELDS, "combo")
+    return metrics
 
 
 def _aggregate_metrics(series_metrics):
-    return {
+    metrics = {
         "avg_total_return_pct": float(series_metrics["total_return_pct"].mean()),
         "avg_win_rate_pct": float(series_metrics["win_rate_pct"].mean()),
         "avg_avg_trade_pct": float(series_metrics["avg_trade_pct"].mean()),
@@ -97,11 +125,13 @@ def _aggregate_metrics(series_metrics):
         "min_total_trades": float(series_metrics["total_trades"].min()),
         "avg_hold_hours": float(series_metrics["avg_hold_hours"].mean()),
     }
+    _assert_metric_keys(metrics, IS_AGGREGATE_METRIC_FIELDS, "is_aggregate")
+    return metrics
 
 
 def _aggregate_oos_metrics(oos_rows):
     if not oos_rows:
-        return {
+        metrics = {
             "oos_avg_total_return_pct": np.nan,
             "oos_avg_win_rate_pct": np.nan,
             "oos_avg_avg_trade_pct": np.nan,
@@ -109,9 +139,12 @@ def _aggregate_oos_metrics(oos_rows):
             "oos_avg_position_coverage_pct": np.nan,
             "oos_avg_total_trades": np.nan,
             "oos_min_total_trades": np.nan,
+            "oos_avg_daily_trades": np.nan,
             "oos_avg_hold_hours": np.nan,
             "oos_segments": 0,
         }
+        _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
+        return metrics
 
     def safe_nanmean(values):
         arr = np.asarray(values, dtype="float64")
@@ -125,7 +158,7 @@ def _aggregate_oos_metrics(oos_rows):
             return np.nan
         return float(np.nanmin(arr))
 
-    return {
+    metrics = {
         "oos_avg_total_return_pct": safe_nanmean([row["avg_total_return_pct"] for row in oos_rows]),
         "oos_avg_win_rate_pct": safe_nanmean([row["avg_win_rate_pct"] for row in oos_rows]),
         "oos_avg_avg_trade_pct": safe_nanmean([row["avg_avg_trade_pct"] for row in oos_rows]),
@@ -137,3 +170,5 @@ def _aggregate_oos_metrics(oos_rows):
         "oos_avg_hold_hours": safe_nanmean([row["avg_hold_hours"] for row in oos_rows]),
         "oos_segments": len(oos_rows),
     }
+    _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
+    return metrics
