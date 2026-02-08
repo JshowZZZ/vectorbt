@@ -27,11 +27,16 @@ def _run_combo_tasks(tasks, runtime, max_workers):
             yield autowfo_evaluator.evaluate_combo_task(task, runtime)
         return
 
+    task_count = len(tasks) if hasattr(tasks, "__len__") else None
+    chunksize = 1
+    if task_count and task_count > 0:
+        chunksize = max(1, task_count // (max_workers * 8))
+
     with ProcessPoolExecutor(
         max_workers=max_workers,
         initializer=_init_combo_worker,
         initargs=(runtime,),
     ) as executor:
         # executor.map preserves input order, so downstream rows stay deterministic.
-        for result in executor.map(_evaluate_combo_task_in_worker, tasks, chunksize=1):
+        for result in executor.map(_evaluate_combo_task_in_worker, tasks, chunksize=chunksize):
             yield result
