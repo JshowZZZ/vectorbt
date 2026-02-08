@@ -1,0 +1,32 @@
+{
+  "protocol_version": "1.0.0",
+  "default_mode": "anchored",
+  "supported_modes": [
+    "anchored"
+  ],
+  "time_units": "days",
+  "segments": {
+    "train": {
+      "required": true,
+      "min_days": 1
+    },
+    "valid": {
+      "required": false,
+      "min_days": 0
+    },
+    "test": {
+      "required": true,
+      "min_days": 1
+    }
+  },
+  "constraints": {
+    "step_days_min_equals_test_days": true,
+    "allow_oos_overlap": false
+  },
+  "output_schema": {
+    "slice_tuple": [
+      "train_end",
+      "test_end"
+    ]
+  }
+}

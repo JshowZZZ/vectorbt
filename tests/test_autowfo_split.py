@@ -22,3 +22,15 @@ def test_build_walk_forward_slices_step_lt_test_raises():
     index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
     with pytest.raises(ValueError, match="step_days.*must be.*test_days"):
         s._build_walk_forward_slices(index, train_days=5, test_days=3, step_days=2)
+
+
+def test_build_walk_forward_slices_rejects_invalid_mode():
+    index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
+    with pytest.raises(ValueError, match="unsupported split mode"):
+        s._build_walk_forward_slices(index, train_days=5, test_days=2, step_days=2, mode="rolling")
+
+
+def test_build_walk_forward_slices_rejects_non_positive_days():
+    index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
+    with pytest.raises(ValueError, match="train_days must be > 0"):
+        s._build_walk_forward_slices(index, train_days=0, test_days=2, step_days=2)

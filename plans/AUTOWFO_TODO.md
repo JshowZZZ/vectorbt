@@ -34,7 +34,7 @@
 | AWF-003 | P0 | done | JshowZZZ + AI | Extract + freeze strategy spec schema from `INDICATOR_META/REGIME_NAME_MAP` | `plans/protocols/strategy_schema.json` + JSON Schema validator | Invalid specs fail fast; all 13 indicators + 8 regimes representable; adding a new indicator only requires config change |
 | AWF-002 | P0 | done | JshowZZZ + AI | Extract + freeze metric contract from `_calc_pf_series/_aggregate_*` | `plans/protocols/metric_contract.yaml` + `metrics.py` module + tests | All IS/OOS metric names and formulas frozen; cross-run comparability guaranteed |
 | AWF-004 | P0 | done | JshowZZZ + AI | Extract + freeze artifact schema; add config hash + data fingerprint | `plans/protocols/artifact_contract.yaml` + artifact writer module | Every run emits config SHA256, data range hash, reproducible metadata |
-| AWF-001 | P0 | todo | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
+| AWF-001 | P0 | done | JshowZZZ + AI | Extract + freeze split protocol from `_build_walk_forward_slices()` | `plans/protocols/split_protocol.yaml` + `split.py` module + unit tests | Schema covers train/valid/test, horizons, overlap, anchored vs rolling modes |
 | AWF-005 | P1 | blocked | JshowZZZ + AI | Refactor orchestration pipeline into modular AUTOWFO engine | `scripts/autowfo/engine.py` using frozen protocol modules | End-to-end run from spec to leaderboard using modular pipeline |
 | AWF-002b | P1 | blocked | JshowZZZ + AI | Add Sharpe ratio + stability scoring to metric module | Extended `metrics.py`: per-segment Sharpe, cross-segment stddev, drawdown penalty weight | Stability metrics computable, compared side-by-side with old ranking |
 | AWF-006 | P1 | blocked | JshowZZZ + AI | Implement stability-first ranking function using AWF-002b metrics | `ranking.py` module + before/after comparison artifacts | Top-N selection uses composite score (OOS return + Sharpe + consistency - drawdown penalty) |
@@ -94,7 +94,7 @@
 - Active phase: **Phase 2 — Foundation (Protocol Freeze)**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
 - Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
-- Next action: Start AWF-001 (freeze split protocol from `_build_walk_forward_slices`)
+- Next action: Run Gate A protocol-freeze checklist and record freeze commit hash
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - AWF-013 (parallelization): starts after Phase 2 Gate A passes
 
@@ -139,3 +139,4 @@
 | 2026-02-08 | AWF-003 | done | Completed strategy schema freeze: added `plans/protocols/strategy_schema.json`, added `scripts/autowfo/strategy_schema.py` validator/loader, and switched constants to schema-backed metadata maps with fail-fast validation on invalid specs. Added schema tests including invalid-spec rejection and module fail-fast behavior. | Move to AWF-002 metric-contract extraction and freeze | pending |
 | 2026-02-08 | AWF-002 | done | Completed metric contract freeze: added `plans/protocols/metric_contract.yaml` and `scripts/autowfo/metric_contract.py`, wired `metrics.py` to load/validate frozen metric sections, and added fail-fast + contract coverage tests. Also fixed empty-OOS output consistency by always emitting `oos_avg_daily_trades`. | Move to AWF-004 artifact contract extraction and reproducibility metadata freeze | pending |
 | 2026-02-08 | AWF-004 | done | Completed artifact contract freeze: added `plans/protocols/artifact_contract.yaml` and `scripts/autowfo/artifact_contract.py`, wired `artifacts.py` to enforce required run-metadata fields, and added deterministic config/data hash helpers. Sweep now emits `config_sha256` + `data_fingerprint` into combo/symbol/leaderboard outputs and writes `run_metadata.json` plus run-scoped metadata snapshot. | Move to AWF-001 split protocol extraction and freeze | pending |
+| 2026-02-08 | AWF-001 | done | Completed split protocol freeze: added `plans/protocols/split_protocol.yaml` and `scripts/autowfo/split_protocol.py`, wired `split.py` to load/validate supported mode and positive horizon constraints, and added fail-fast/contract tests. Existing walk-forward slice outputs remain behavior-compatible for default anchored mode. | Run Gate A checklist and record protocol freeze commit hash | pending |

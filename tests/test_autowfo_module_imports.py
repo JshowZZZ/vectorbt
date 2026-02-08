@@ -8,6 +8,7 @@ def test_autowfo_modules_importable_with_expected_symbols():
         "scripts.autowfo.metric_contract": ["load_metric_contract", "validate_metric_contract"],
         "scripts.autowfo.artifact_contract": ["load_artifact_contract", "validate_artifact_contract"],
         "scripts.autowfo.data": ["_prepare_timeframe_context", "_load_or_update_symbol"],
+        "scripts.autowfo.split_protocol": ["load_split_protocol", "validate_split_protocol"],
         "scripts.autowfo.split": ["_build_walk_forward_slices"],
         "scripts.autowfo.metrics": ["_calc_pf_series", "_aggregate_oos_metrics"],
         "scripts.autowfo.artifacts": ["_ensure_csv_schema", "_append_db_rows"],
