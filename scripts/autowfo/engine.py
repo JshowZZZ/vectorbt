@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "search_mode": "combo",
     "combo_sizes": [2, 3, 4],
     "combo_seed": 42,
+    "max_workers": 1,
     "combo_segment_start": 0,
     "combo_segment_size": None,
     "timeframes": [{"timeframe": "3m", "days": 60}],

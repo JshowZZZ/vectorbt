@@ -8,7 +8,9 @@ import pandas as pd
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
 from scripts.autowfo import engine as autowfo_engine
+from scripts.autowfo import evaluator as autowfo_evaluator
 from scripts.autowfo import metrics as autowfo_metrics
+from scripts.autowfo import parallel as autowfo_parallel
 from scripts.autowfo import portfolio as autowfo_portfolio
 from scripts.autowfo import ranking as autowfo_ranking
 from scripts.autowfo import report as autowfo_report
@@ -277,6 +279,7 @@ def main():
     timeframe_configs = default_config["timeframes"]
     combo_sizes = default_config["combo_sizes"]
     combo_seed = int(default_config.get("combo_seed", 42))
+    max_workers = max(int(default_config.get("max_workers", 1) or 1), 1)
     combo_segment_start = int(default_config.get("combo_segment_start", 0))
     combo_segment_size = default_config.get("combo_segment_size")
     combo_group_fields = default_config.get("combo_group_fields", ["indicator_list", "regime_name", "vol_mode"])
@@ -577,7 +580,32 @@ def main():
                 "OOS metrics will be empty."
             )
 
-        def eval_combo(
+        runtime_eval = {
+            "ctx": ctx,
+            "trade_symbols_tf": trade_symbols_tf,
+            "timeframe": timeframe,
+            "data_days": data_days,
+            "exchange": exchange,
+            "base_symbol": base_symbol,
+            "capital_mode": capital_mode,
+            "fees": fees,
+            "slippage_bps": slippage_bps,
+            "spread_bps": spread_bps,
+            "funding_rate_daily": funding_rate_daily,
+            "order_size_pct": order_size_pct,
+            "max_concurrent_positions": max_concurrent_positions,
+            "init_cash_usdt": init_cash_usdt,
+            "wf_train_days": wf_train_days,
+            "wf_test_days": wf_test_days,
+            "wf_step_days": wf_step_days,
+            "rsi_window": rsi_window,
+            "bar_hours": bar_hours,
+            "wf_slices": wf_slices,
+            "config_sha256": config_sha256,
+            "data_fingerprint": timeframe_data_fingerprint,
+        }
+
+        def _build_combo_task(
             regime,
             indicator_combo,
             combo_params,
@@ -588,10 +616,9 @@ def main():
             tp_stop,
             sl_stop,
             max_hold,
-            stage,
         ):
-            nonlocal done, skipped
-            _wait_if_paused(stage)
+            indicator_combo = tuple(indicator_combo)
+            combo_params = dict(combo_params)
             indicator_list = ",".join(indicator_combo)
             filter_name = _indicator_combo_label(indicator_combo)
             param_payload = {field: combo_params.get(field) for field in INDICATOR_PARAM_FIELDS}
@@ -629,214 +656,42 @@ def main():
                 param_payload=param_payload,
             )
             combo_key = _combo_key_from_dict(combo_key_values)
-            if combo_key in seen_keys:
-                skipped += 1
-                done += 1
-                emit_progress(stage=stage)
-                return
+            task_payload = {
+                "combo_key": combo_key,
+                "regime": regime,
+                "indicator_combo": indicator_combo,
+                "combo_params": combo_params,
+                "filter_name": filter_name,
+                "indicator_list": indicator_list,
+                "vol_lookback": vol_lookback,
+                "vol_z": vol_z,
+                "mom_lookback": mom_lookback,
+                "trade_mom_lookback": trade_mom_lookback,
+                "tp_stop": tp_stop,
+                "sl_stop": sl_stop,
+                "max_hold": max_hold,
+            }
+            return combo_key, task_payload
 
-            vol_zscore = ctx["vol_zscore_by_lb"][vol_lookback]
-            if regime["vol_mode"] == "high":
-                vol_cond = vol_zscore > vol_z
-            elif regime["vol_mode"] == "low":
-                vol_cond = vol_zscore < -vol_z
-            else:
-                vol_cond = pd.Series(True, index=vol_zscore.index)
-
-            long_regime, short_regime, regime_rsi_long, regime_rsi_short = (
-                autowfo_engine._resolve_regime_signals(
-                    regime=regime,
-                    vol_cond=vol_cond,
-                    ctx=ctx,
-                    mom_lookback=mom_lookback,
-                )
-            )
-
-            trade_mom = ctx["trade_mom_by_lb"][trade_mom_lookback]
-            long_filter, short_filter = autowfo_engine._build_trade_mom_filters(trade_mom)
-            effective_fees, effective_slippage = autowfo_engine._compute_effective_costs(
-                fees=fees,
-                slippage_bps=slippage_bps,
-                spread_bps=spread_bps,
-                funding_rate_daily=funding_rate_daily,
-                max_hold=max_hold,
-                bar_hours=bar_hours,
-            )
-
-            long_regime_final, short_regime_final, variant_params = autowfo_strategy._apply_indicator_combo(
-                long_regime,
-                short_regime,
-                indicator_combo,
-                combo_params,
-                ctx,
-            )
-
-            pf = autowfo_portfolio._run_pf(
-                ctx["trade_close"],
-                long_regime_final,
-                short_regime_final,
-                max_hold,
-                effective_fees,
-                sl_stop,
-                tp_stop,
-                freq=timeframe,
-                long_filter=long_filter,
-                short_filter=short_filter,
-                init_cash=ctx["init_cash_btc"],
-                size=order_size_pct,
-                size_type="percent",
-                cash_sharing=(capital_mode == "shared"),
-                lock_cash=True,
-                allow_partial=False,
-                max_positions=(max_concurrent_positions if capital_mode == "shared" else None),
-                long_scores=trade_mom,
-                short_scores=-trade_mom,
-                slippage=effective_slippage,
-            )
-
-            metrics = autowfo_metrics._calc_pf_series(pf, trade_symbols_tf, bar_hours)
-            sym_metrics = autowfo_metrics._aggregate_metrics(metrics)
-            if capital_mode == "shared":
-                combo_metrics = autowfo_metrics._calc_pf_combo_metrics(pf, bar_hours)
-            else:
-                combo_metrics = {
-                    "total_return_pct": sym_metrics["avg_total_return_pct"],
-                    "total_profit": np.nan,
-                    "total_trades": sym_metrics["avg_total_trades"],
-                    "win_rate_pct": sym_metrics["avg_win_rate_pct"],
-                    "avg_trade_pct": sym_metrics["avg_avg_trade_pct"],
-                    "max_drawdown_pct": sym_metrics["avg_max_drawdown_pct"],
-                    "position_coverage_pct": sym_metrics["avg_position_coverage_pct"],
-                    "avg_hold_hours": sym_metrics["avg_hold_hours"],
-                }
-
-            oos_rows = []
-            for test_start, test_end in wf_slices:
-                segment_close = ctx["trade_close"].loc[test_start:test_end]
-                if segment_close.empty:
-                    continue
-                segment_long = long_regime_final.loc[segment_close.index]
-                segment_short = short_regime_final.loc[segment_close.index]
-                segment_trade_mom = trade_mom.loc[segment_close.index]
-                seg_long_filter, seg_short_filter = autowfo_engine._build_trade_mom_filters(
-                    segment_trade_mom
-                )
-                pf_test = autowfo_portfolio._run_pf(
-                    segment_close,
-                    segment_long,
-                    segment_short,
-                    max_hold,
-                    effective_fees,
-                    sl_stop,
-                    tp_stop,
-                    freq=timeframe,
-                    long_filter=seg_long_filter,
-                    short_filter=seg_short_filter,
-                    init_cash=ctx["init_cash_btc"],
-                    size=order_size_pct,
-                    size_type="percent",
-                    cash_sharing=(capital_mode == "shared"),
-                    lock_cash=True,
-                    allow_partial=False,
-                    max_positions=(max_concurrent_positions if capital_mode == "shared" else None),
-                    long_scores=segment_trade_mom,
-                    short_scores=-segment_trade_mom,
-                    slippage=effective_slippage,
-                )
-                if capital_mode == "shared":
-                    seg_combo_metrics = autowfo_metrics._calc_pf_combo_metrics(pf_test, bar_hours)
-                else:
-                    seg_series = autowfo_metrics._calc_pf_series(pf_test, trade_symbols_tf, bar_hours)
-                    seg_agg = autowfo_metrics._aggregate_metrics(seg_series)
-                    seg_combo_metrics = {
-                        "total_return_pct": seg_agg["avg_total_return_pct"],
-                        "total_profit": np.nan,
-                        "total_trades": seg_agg["avg_total_trades"],
-                        "win_rate_pct": seg_agg["avg_win_rate_pct"],
-                        "avg_trade_pct": seg_agg["avg_avg_trade_pct"],
-                        "max_drawdown_pct": seg_agg["avg_max_drawdown_pct"],
-                        "position_coverage_pct": seg_agg["avg_position_coverage_pct"],
-                        "avg_hold_hours": seg_agg["avg_hold_hours"],
-                    }
-                seg_row = {
-                    "avg_total_return_pct": seg_combo_metrics["total_return_pct"],
-                    "avg_win_rate_pct": seg_combo_metrics["win_rate_pct"],
-                    "avg_avg_trade_pct": seg_combo_metrics["avg_trade_pct"],
-                    "avg_max_drawdown_pct": seg_combo_metrics["max_drawdown_pct"],
-                    "avg_position_coverage_pct": seg_combo_metrics["position_coverage_pct"],
-                    "avg_total_trades": seg_combo_metrics["total_trades"],
-                    "min_total_trades": seg_combo_metrics["total_trades"],
-                    "avg_hold_hours": seg_combo_metrics["avg_hold_hours"],
-                }
-                segment_days = int(segment_close.index.normalize().nunique())
-                seg_row["avg_daily_trades"] = float(seg_combo_metrics["total_trades"]) / max(segment_days, 1)
-                oos_rows.append(seg_row)
-            oos_metrics = autowfo_metrics._aggregate_oos_metrics(oos_rows)
-
-            for symbol in trade_symbols_tf:
-                pending_symbol_rows.append(
-                    autowfo_engine._build_symbol_row(
-                        timeframe=timeframe,
-                        data_days=data_days,
-                        exchange=exchange,
-                        base_symbol=base_symbol,
-                        trade_symbols_tf=trade_symbols_tf,
-                        capital_mode=capital_mode,
-                        fees=fees,
-                        order_size_pct=order_size_pct,
-                        max_concurrent_positions=max_concurrent_positions,
-                        init_cash_usdt=init_cash_usdt,
-                        wf_train_days=wf_train_days,
-                        wf_test_days=wf_test_days,
-                        wf_step_days=wf_step_days,
-                        data_start=ctx["trade_close"].index[0],
-                        data_end=ctx["trade_close"].index[-1],
-                        symbol=symbol,
-                        regime=regime,
-                        regime_rsi_long=regime_rsi_long,
-                        regime_rsi_short=regime_rsi_short,
-                        filter_name=filter_name,
-                        indicator_list=indicator_list,
-                        indicator_combo=indicator_combo,
-                        vol_lookback=vol_lookback,
-                        vol_z=vol_z,
-                        mom_lookback=mom_lookback,
-                        trade_mom_lookback=trade_mom_lookback,
-                        tp_stop=tp_stop,
-                        sl_stop=sl_stop,
-                        max_hold=max_hold,
-                        rsi_window=rsi_window,
-                        variant_params=variant_params,
-                        metrics=metrics,
-                        config_sha256=config_sha256,
-                        data_fingerprint=timeframe_data_fingerprint,
-                    )
-                )
-
-            combo_row = autowfo_engine._build_combo_row(
-                timeframe=timeframe,
-                data_days=data_days,
-                exchange=exchange,
-                base_symbol=base_symbol,
-                trade_symbols_tf=trade_symbols_tf,
-                fees=fees,
-                slippage_bps=slippage_bps,
-                spread_bps=spread_bps,
-                funding_rate_daily=funding_rate_daily,
-                order_size_pct=order_size_pct,
-                max_concurrent_positions=max_concurrent_positions,
-                init_cash_usdt=init_cash_usdt,
-                wf_train_days=wf_train_days,
-                wf_test_days=wf_test_days,
-                wf_step_days=wf_step_days,
-                data_start=ctx["trade_close"].index[0],
-                data_end=ctx["trade_close"].index[-1],
+        def eval_combo(
+            regime,
+            indicator_combo,
+            combo_params,
+            vol_lookback,
+            vol_z,
+            mom_lookback,
+            trade_mom_lookback,
+            tp_stop,
+            sl_stop,
+            max_hold,
+            stage,
+        ):
+            nonlocal done, skipped
+            _wait_if_paused(stage)
+            combo_key, task_payload = _build_combo_task(
                 regime=regime,
-                regime_rsi_long=regime_rsi_long,
-                regime_rsi_short=regime_rsi_short,
-                filter_name=filter_name,
-                indicator_list=indicator_list,
                 indicator_combo=indicator_combo,
+                combo_params=combo_params,
                 vol_lookback=vol_lookback,
                 vol_z=vol_z,
                 mom_lookback=mom_lookback,
@@ -844,17 +699,16 @@ def main():
                 tp_stop=tp_stop,
                 sl_stop=sl_stop,
                 max_hold=max_hold,
-                rsi_window=rsi_window,
-                variant_params=variant_params,
-                combo_metrics=combo_metrics,
-                sym_metrics=sym_metrics,
-                metrics=metrics,
-                ctx_total_days=ctx["total_days"],
-                oos_metrics=oos_metrics,
-                config_sha256=config_sha256,
-                data_fingerprint=timeframe_data_fingerprint,
             )
-            pending_combo_rows.append(combo_row)
+            if combo_key in seen_keys:
+                skipped += 1
+                done += 1
+                emit_progress(stage=stage)
+                return
+
+            result = autowfo_evaluator.evaluate_combo_task(task_payload, runtime_eval)
+            pending_symbol_rows.extend(result["symbol_rows"])
+            pending_combo_rows.append(result["combo_row"])
             seen_keys.add(combo_key)
             done += 1
             emit_progress(stage=stage)
@@ -865,36 +719,96 @@ def main():
             total_combos += fine_total
             emit_progress(stage=stage, force=True)
 
-        autowfo_engine._run_search_for_timeframe(
-            search_mode=search_mode,
-            stage_prefix=stage_prefix,
-            timeframe=timeframe,
-            regime_variants=regime_variants,
-            regime_lookup=regime_lookup,
-            mom_lookbacks=mom_lookbacks,
-            vol_lookbacks=vol_lookbacks,
-            vol_zs=vol_zs,
-            trade_mom_lookbacks=trade_mom_lookbacks,
-            tp_stops=tp_stops,
-            sl_stops=sl_stops,
-            max_holds=max_holds,
-            combo_keys_all=combo_keys_all,
-            iter_indicator_param_combos_fn=autowfo_strategy._iter_indicator_param_combos,
-            indicator_param_options=indicator_param_options,
-            eval_combo_fn=eval_combo,
-            existing_combo_df=existing_combo_df,
-            apply_quality_filters_fn=apply_quality_filters,
-            sort_by_score_fn=autowfo_ranking._sort_by_score,
-            combo_group_fields=combo_group_fields,
-            top_n_fine=top_n_fine,
-            min_avg_daily_trades_target=min_avg_daily_trades_target,
-            indicator_defaults=indicator_defaults,
-            expand_float_fn=autowfo_strategy._expand_float,
-            safe_float_fn=_safe_float,
-            refine_indicator_params_fn=autowfo_strategy._refine_indicator_params,
-            safe_int_fn=_safe_int,
-            on_refine_plan_fn=_on_refine_plan,
-        )
+        if search_mode == "combo" and max_workers > 1:
+            stage = f"{stage_prefix} combo"
+            planned_keys = set()
+            combo_tasks = []
+            for (
+                regime,
+                combo_keys,
+                combo_params,
+                vol_lookback,
+                vol_z,
+                mom_lookback,
+                trade_mom_lookback,
+                tp_stop,
+                sl_stop,
+                max_hold,
+            ) in autowfo_engine._iter_coarse_plan(
+                regime_variants=regime_variants,
+                mom_lookbacks=mom_lookbacks,
+                vol_lookbacks=vol_lookbacks,
+                vol_zs=vol_zs,
+                trade_mom_lookbacks=trade_mom_lookbacks,
+                tp_stops=tp_stops,
+                sl_stops=sl_stops,
+                max_holds=max_holds,
+                combo_keys_all=combo_keys_all,
+                iter_indicator_param_combos_fn=autowfo_strategy._iter_indicator_param_combos,
+                indicator_param_options=indicator_param_options,
+            ):
+                combo_key, task_payload = _build_combo_task(
+                    regime=regime,
+                    indicator_combo=combo_keys,
+                    combo_params=combo_params,
+                    vol_lookback=vol_lookback,
+                    vol_z=vol_z,
+                    mom_lookback=mom_lookback,
+                    trade_mom_lookback=trade_mom_lookback,
+                    tp_stop=tp_stop,
+                    sl_stop=sl_stop,
+                    max_hold=max_hold,
+                )
+                if combo_key in seen_keys or combo_key in planned_keys:
+                    skipped += 1
+                    done += 1
+                    emit_progress(stage=stage)
+                    continue
+                planned_keys.add(combo_key)
+                combo_tasks.append(task_payload)
+
+            for result in autowfo_parallel._run_combo_tasks(
+                combo_tasks,
+                runtime_eval,
+                max_workers=max_workers,
+            ):
+                pending_symbol_rows.extend(result["symbol_rows"])
+                pending_combo_rows.append(result["combo_row"])
+                seen_keys.add(result["combo_key"])
+                done += 1
+                emit_progress(stage=stage)
+                _checkpoint()
+        else:
+            autowfo_engine._run_search_for_timeframe(
+                search_mode=search_mode,
+                stage_prefix=stage_prefix,
+                timeframe=timeframe,
+                regime_variants=regime_variants,
+                regime_lookup=regime_lookup,
+                mom_lookbacks=mom_lookbacks,
+                vol_lookbacks=vol_lookbacks,
+                vol_zs=vol_zs,
+                trade_mom_lookbacks=trade_mom_lookbacks,
+                tp_stops=tp_stops,
+                sl_stops=sl_stops,
+                max_holds=max_holds,
+                combo_keys_all=combo_keys_all,
+                iter_indicator_param_combos_fn=autowfo_strategy._iter_indicator_param_combos,
+                indicator_param_options=indicator_param_options,
+                eval_combo_fn=eval_combo,
+                existing_combo_df=existing_combo_df,
+                apply_quality_filters_fn=apply_quality_filters,
+                sort_by_score_fn=autowfo_ranking._sort_by_score,
+                combo_group_fields=combo_group_fields,
+                top_n_fine=top_n_fine,
+                min_avg_daily_trades_target=min_avg_daily_trades_target,
+                indicator_defaults=indicator_defaults,
+                expand_float_fn=autowfo_strategy._expand_float,
+                safe_float_fn=_safe_float,
+                refine_indicator_params_fn=autowfo_strategy._refine_indicator_params,
+                safe_int_fn=_safe_int,
+                on_refine_plan_fn=_on_refine_plan,
+            )
 
     _checkpoint(force=True)
 
