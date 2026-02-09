@@ -41,7 +41,7 @@
 | AWF-007 | P1 | blocked | JshowZZZ + AI | Add benchmark scenario for regression | Baseline config + expected outputs + golden test | Repeated runs are deterministic under fixed seed/data |
 | AWF-008 | P1 | done | ??| Two-stage search (coarse ??focused) | Already in `run_btc_regime_sweep.py` (`combo` + `refine` modes) | Working; to be extracted into `search.py` during AWF-000 |
 | AWF-001b | P1 | blocked | JshowZZZ + AI | Add true WFO mode (per-window re-optimization) alongside anchored mode | `split.py` extension + engine integration | Can run both anchored eval and true WFO; results comparable |
-| AWF-013 | P1 | doing | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
+| AWF-013 | P1 | done | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
 | AWF-009 | P1 | blocked | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
 | AWF-010 | P1 | blocked | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
 | AWF-011 | P2 | blocked | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
@@ -94,7 +94,7 @@
 - Active phase: **Phase 3 — Scale (Performance + Experiment Management)**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
 - Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
-- Next action: Optimize AWF-013 throughput (reduce IPC overhead) and re-benchmark on target 4-core profile
+- Next action: Start AWF-009 run registry (history + diff between runs)
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - Gate A status: passed at commit `524f837`
 
@@ -142,4 +142,4 @@
 | 2026-02-08 | AWF-001 | done | Completed split protocol freeze: added `plans/protocols/split_protocol.yaml` and `scripts/autowfo/split_protocol.py`, wired `split.py` to load/validate supported mode and positive horizon constraints, and added fail-fast/contract tests. Existing walk-forward slice outputs remain behavior-compatible for default anchored mode. | Run Gate A checklist and record protocol freeze commit hash | pending |
 | 2026-02-08 | AWF-ALL | gate_a_passed | Gate A checklist satisfied after finishing AWF-003/AWF-002/AWF-004/AWF-001 and validation suite. | Protocol frozen at commit `524f837`; phase focus moves to Phase 3 with AWF-013 as next task. | 524f837 |
 | 2026-02-08 | AWF-013 | doing | Implemented parallel combo evaluation core: extracted pure evaluator (`scripts/autowfo/evaluator.py`), added `ProcessPoolExecutor` runner (`scripts/autowfo/parallel.py`), and enabled `max_workers` config path for combo mode with centralized IO/checkpointing in main process. Added deterministic equivalence test for 3-worker vs single-thread outputs. | Run targeted performance benchmark on representative window to confirm/quantify speedup versus single-thread and finalize AWF-013 exit criteria | pending |
-| 2026-02-08 | AWF-013 | doing | Added reproducible benchmark harness `scripts/run_autowfo_parallel_benchmark.py` and executed multiple runs (`artifacts/benchmarks/awf013_parallel_benchmark_20260208_151456.json`, `...151723.json`, `...152057.json`, `...152555.json`, `...153643.json`, `...154027.json`, `...154816.json`, `...160115.json`, `...161530.json`, `...161934.json`, `...163233.json`). Bit-identical check passed in all runs; speedup improved after payload/IPC tuning but current observed range remains below target (best ~2.45x with heavier profile). | Keep AWF-013 in doing; next step is target-hardware (4-core) confirmation or further serializer/IO optimization to cross 2.5x exit threshold | pending |
+| 2026-02-08 | AWF-013 | done | Added benchmark harness `scripts/run_autowfo_parallel_benchmark.py`, tuned worker IPC payload/chunking, and re-ran benchmark matrix. Latest heavy-profile evidence: `artifacts/benchmarks/awf013_parallel_benchmark_20260209_000935.json` with `speedup=2.6641` and `bit_identical=true` (3-worker vs single-thread). | Move to AWF-009 run registry implementation | pending |
