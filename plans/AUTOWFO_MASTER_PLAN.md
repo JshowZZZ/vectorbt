@@ -135,9 +135,9 @@ Gate C (Reproducibility Check) owner: Maintainer + AI agent pair sign-off
 - [ ] `Change Log` entry added with `Reproducibility verified at commit <hash>`.
 
 Gate D (Regression Green) owner: Maintainer + AI agent pair sign-off
-- [ ] Regression suite green (split and ranking invariants).
+- [x] Regression suite green (split and ranking invariants).
 - [ ] No unresolved critical drift issues in latest session log.
-- [ ] Runbook updated for any operator-impacting change.
+- [x] Runbook updated for any operator-impacting change.
 - [ ] `Change Log` entry added with `Regression gate passed at commit <hash>`.
 
 ## Anti-Drift Rules
@@ -197,3 +197,4 @@ Each experiment should record:
 - 2026-02-09: After the lookback-coercion fix, high-frequency rerun (`python -m autowfo baseline --config artifacts/sweep_config_window9_hf.json`) completed successfully and was archived at `artifacts/runs/20260209_145335` (`combo=9600`, `refine=5481`). Trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`) while comparison deltas were informative (`delta_avg_oos_return_pct=+1.5771`), so AWF-002b/AWF-006 continue to be deferred.
 - 2026-02-09: Longer-horizon high-frequency evidence window (`python -m autowfo baseline --config artifacts/sweep_config_window10_hf_long.json`) archived at `artifacts/runs/20260209_160500` also remained non-trigger (`D1=false`, `D2=false`, `D3=true`) despite non-zero refine workload (`5508/5508`) and positive refine uplift (`delta_avg_oos_return_pct=+0.2722`). This reinforces that ranking-upgrade trigger conditions are still unmet; AWF-002b/AWF-006 stay deferred.
 - 2026-02-09: AWF-011 implemented: added regression-invariant tests for split and ranking modules (`tests/test_autowfo_split.py`, `tests/test_autowfo_ranking.py`) covering split mode equivalence, horizon-based slice count, monotonic boundaries, non-int horizon rejection, ranking fallback score-column selection (missing/all-NaN preferred metric), tie-break resilience when hold-hour field is absent, and Top-N fallback ordering behavior.
+- 2026-02-09: AWF-012 implemented: added notebook-free operational playbook `plans/AUTOWFO_RUNBOOK.md` (preflight checks, `python -m autowfo run/baseline` command patterns, artifact map, trigger interpretation, failure handling, and post-run checklist). Verified AUTOWFO regression subset remains green (`33 passed`) after runbook integration.
