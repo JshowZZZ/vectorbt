@@ -70,6 +70,10 @@ def evaluate_combo_task(task, runtime):
     config_sha256 = runtime["config_sha256"]
     data_fingerprint = runtime["data_fingerprint"]
 
+    # Refine expansion may generate lookbacks outside precomputed indicator maps;
+    # coerce to nearest available keys before applying indicator logic.
+    combo_params = autowfo_strategy._coerce_indicator_params(indicator_combo, combo_params, ctx)
+
     vol_zscore = ctx["vol_zscore_by_lb"][vol_lookback]
     if regime["vol_mode"] == "high":
         vol_cond = vol_zscore > vol_z
