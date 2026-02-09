@@ -44,7 +44,7 @@
 | AWF-013 | P1 | done | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
 | AWF-009 | P1 | done | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
 | AWF-010 | P1 | done | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
-| AWF-011 | P2 | blocked | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
+| AWF-011 | P2 | done | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
 | AWF-012 | P2 | blocked | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
 
 ## Execution Phases
@@ -91,10 +91,10 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 4 — Ranking Upgrade (Evidence-Driven)**
+- Active phase: **Phase 6 — Operationalize**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
 - Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
-- Next action: Keep AWF-002b/AWF-006 deferred (D1/D2 still unmet) and start AWF-011 split/ranking invariants regression suite to strengthen long-term guardrails
+- Next action: Keep AWF-002b/AWF-006 deferred (D1/D2 still unmet) and start AWF-012 operational playbook
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - Gate A status: passed at commit `524f837`
 
@@ -151,3 +151,4 @@
 | 2026-02-09 | AWF-008 | bugfix_refine_lookback_coercion | Fixed refine lookback overflow by coercing indicator params in evaluator before applying combo logic; added regression test `tests/test_autowfo_evaluator.py` validating `volume_lookback 32 -> 28` nearest-key fallback. | Re-run failed high-frequency baseline window to validate end-to-end stability | cf56d0a |
 | 2026-02-09 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window9_hf_rerun | Re-ran `python -m autowfo baseline --config artifacts/sweep_config_window9_hf.json` after bugfix. Both passes succeeded with non-zero workloads (`combo=9600`, `refine=5481`), comparison remained informative (`delta_avg_oos_return_pct=+1.5771`, `delta_avg_oos_segments=+0.5`), and trigger still remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260209_145335`. | Keep AWF-002b/AWF-006 deferred; run one longer-horizon high-frequency window to determine whether D3 persistence is horizon-driven | pending |
 | 2026-02-09 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window10_hf_long | Executed longer-horizon high-frequency baseline using `python -m autowfo baseline --config artifacts/sweep_config_window10_hf_long.json` (temporary config: `1h/300d`, USDT symbol mix). Both passes remained non-zero (`combo=9600`, `refine=5508`), comparison stayed informative (`delta_avg_oos_return_pct=+0.2722`, `delta_avg_oos_min_total_trades=+1.97`), and trigger still remained `false` with persistent D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260209_160500`. | Treat D3 persistence as non-trigger evidence (D1/D2 unchanged); keep AWF-002b/AWF-006 deferred and move next effort to AWF-011 regression guardrails | pending |
+| 2026-02-09 | AWF-011 | done | Added split/ranking regression invariants: split default-vs-explicit mode equivalence, slice-count horizon formula, monotonic boundary checks, non-int horizon rejection, ranking fallback score selection when preferred metric missing/NaN, ranking sort without hold-hour tie-break field, and Top-N fallback ordering checks. | Move to AWF-012 operational playbook while keeping AWF-002b/AWF-006 evidence-gated | pending |
