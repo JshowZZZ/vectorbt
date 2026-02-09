@@ -14,6 +14,7 @@ def test_autowfo_modules_importable_with_expected_symbols():
         "scripts.autowfo.evaluator": ["evaluate_combo_task"],
         "scripts.autowfo.artifacts": ["_ensure_csv_schema", "_append_db_rows"],
         "scripts.autowfo.parallel": ["_run_combo_tasks"],
+        "scripts.autowfo.registry": ["_update_run_registry"],
         "scripts.autowfo.strategy": ["_build_indicator_param_options_coarse", "_apply_indicator_combo"],
         "scripts.autowfo.search": ["_normalize_key_value", "_combo_key_from_dict"],
         "scripts.autowfo.ranking": ["_top_by_score", "_sort_by_score"],

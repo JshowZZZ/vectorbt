@@ -60,6 +60,7 @@ def _copy_run_outputs(artifacts_dir: Path, target_dir: Path, run_id: str) -> Dic
         "param_sweep_combo_summary.csv",
         "param_sweep_symbol_summary.csv",
         "leaderboard.csv",
+        "run_registry.json",
         "results.db",
         "run_status.json",
         "run_status.html",

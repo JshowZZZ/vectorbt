@@ -252,7 +252,9 @@ def test_main_smoke_integration(tmp_path, monkeypatch):
     sweep.main()
 
     combo_path = artifacts / "param_sweep_combo_summary.csv"
+    registry_path = artifacts / "run_registry.json"
     assert combo_path.exists()
+    assert registry_path.exists()
     df = pd.read_csv(combo_path)
     assert len(df) >= 1
 

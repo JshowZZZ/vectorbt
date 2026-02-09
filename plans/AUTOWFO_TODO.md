@@ -42,7 +42,7 @@
 | AWF-008 | P1 | done | ??| Two-stage search (coarse ??focused) | Already in `run_btc_regime_sweep.py` (`combo` + `refine` modes) | Working; to be extracted into `search.py` during AWF-000 |
 | AWF-001b | P1 | blocked | JshowZZZ + AI | Add true WFO mode (per-window re-optimization) alongside anchored mode | `split.py` extension + engine integration | Can run both anchored eval and true WFO; results comparable |
 | AWF-013 | P1 | done | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
-| AWF-009 | P1 | blocked | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
+| AWF-009 | P1 | done | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
 | AWF-010 | P1 | blocked | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
 | AWF-011 | P2 | blocked | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
 | AWF-012 | P2 | blocked | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
@@ -94,7 +94,7 @@
 - Active phase: **Phase 3 — Scale (Performance + Experiment Management)**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
 - Execution order: AWF-003 → AWF-002 → AWF-004 → AWF-001
-- Next action: Start AWF-009 run registry (history + diff between runs)
+- Next action: Start AWF-010 one-command execution entrypoint
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - Gate A status: passed at commit `524f837`
 
@@ -143,3 +143,4 @@
 | 2026-02-08 | AWF-ALL | gate_a_passed | Gate A checklist satisfied after finishing AWF-003/AWF-002/AWF-004/AWF-001 and validation suite. | Protocol frozen at commit `524f837`; phase focus moves to Phase 3 with AWF-013 as next task. | 524f837 |
 | 2026-02-08 | AWF-013 | doing | Implemented parallel combo evaluation core: extracted pure evaluator (`scripts/autowfo/evaluator.py`), added `ProcessPoolExecutor` runner (`scripts/autowfo/parallel.py`), and enabled `max_workers` config path for combo mode with centralized IO/checkpointing in main process. Added deterministic equivalence test for 3-worker vs single-thread outputs. | Run targeted performance benchmark on representative window to confirm/quantify speedup versus single-thread and finalize AWF-013 exit criteria | pending |
 | 2026-02-08 | AWF-013 | done | Added benchmark harness `scripts/run_autowfo_parallel_benchmark.py`, tuned worker IPC payload/chunking, and re-ran benchmark matrix. Latest heavy-profile evidence: `artifacts/benchmarks/awf013_parallel_benchmark_20260209_000935.json` with `speedup=2.6641` and `bit_identical=true` (3-worker vs single-thread). | Move to AWF-009 run registry implementation | pending |
+| 2026-02-09 | AWF-009 | done | Implemented run registry module `scripts/autowfo/registry.py` and integrated it into sweep finalize flow. Each run now updates `artifacts/run_registry.json` with run index and coverage map including `tested_pairs` and `untested_pairs` across timeframe×symbol space. Baseline archiving now copies `run_registry.json`. | Move to AWF-010 one-command execution entrypoint | pending |

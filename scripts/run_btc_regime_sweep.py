@@ -13,6 +13,7 @@ from scripts.autowfo import metrics as autowfo_metrics
 from scripts.autowfo import parallel as autowfo_parallel
 from scripts.autowfo import portfolio as autowfo_portfolio
 from scripts.autowfo import ranking as autowfo_ranking
+from scripts.autowfo import registry as autowfo_registry
 from scripts.autowfo import report as autowfo_report
 from scripts.autowfo import search as autowfo_search
 from scripts.autowfo import split as autowfo_split
@@ -345,6 +346,7 @@ def main():
     top_n_fine = int(default_config.get("top_n_refine", 50))
     history_rows = 20
     leaderboard_path = os.path.join(out_dir, "leaderboard.csv")
+    registry_path = os.path.join(out_dir, "run_registry.json")
     status_json_path = os.path.join(out_dir, "run_status.json")
     status_html_path = os.path.join(out_dir, "run_status.html")
     run_metadata_path = os.path.join(out_dir, "run_metadata.json")
@@ -1463,6 +1465,13 @@ def main():
     }
     autowfo_artifacts._write_run_metadata(run_metadata_path, run_metadata_payload)
     autowfo_artifacts._write_run_metadata(run_metadata_path_run, run_metadata_payload)
+    autowfo_registry._update_run_registry(
+        registry_path=registry_path,
+        run_metadata=run_metadata_payload,
+        best_row=leaderboard_row,
+        per_symbol_df=per_symbol_df,
+        updated_utc=timestamp_utc,
+    )
 
     emit_progress(stage="complete", force=True)
 
@@ -1470,6 +1479,7 @@ def main():
     print("per_symbol_summary", per_symbol_path)
     print("top10", top10_path)
     print("leaderboard", leaderboard_path)
+    print("run_registry", registry_path)
     print("run_metadata", run_metadata_path)
     print("run_metadata_run", run_metadata_path_run)
     print("report_latest", report_path_latest)
