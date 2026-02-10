@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from autowfo import cli
 
 
@@ -74,3 +76,196 @@ def test_cli_baseline_writes_runtime_config_and_invokes_baseline(tmp_path, monke
     payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
     assert payload["max_workers"] == 2
     assert calls[0]["cmd"] == [cli.sys.executable, "-m", "scripts.run_autowfo_baseline"]
+
+
+def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
+    cfg_a = tmp_path / "cfg_a.json"
+    cfg_b = tmp_path / "cfg_b.json"
+    cfg_a.write_text(json.dumps({"combo_sizes": [1]}), encoding="utf-8")
+    cfg_b.write_text(json.dumps({"combo_sizes": [2]}), encoding="utf-8")
+
+    plan_path = tmp_path / "batch_plan.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {
+                        "name": "combo-a",
+                        "workflow": "run",
+                        "mode": "combo",
+                        "workers": 2,
+                        "config": "cfg_a.json",
+                    },
+                    {
+                        "name": "baseline-b",
+                        "workflow": "baseline",
+                        "workers": 1,
+                        "config": "cfg_b.json",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
+        calls.append(
+            {
+                "cwd": cwd,
+                "config_path": config_path,
+                "workflow": workflow,
+                "mode": mode,
+                "workers": workers,
+            }
+        )
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+
+    code = cli.main(
+        [
+            "batch",
+            "--plan",
+            str(plan_path),
+            "--cwd",
+            str(tmp_path),
+            "--state",
+            "artifacts/batch_state.json",
+            "--workers",
+            "7",
+            "--min-free-gb",
+            "0",
+        ]
+    )
+    assert code == 0
+    assert [call["workflow"] for call in calls] == ["run", "baseline"]
+    assert all(call["workers"] == 7 for call in calls)
+
+    state_path = tmp_path / "artifacts" / "batch_state.json"
+    state_payload = json.loads(state_path.read_text(encoding="utf-8"))
+    assert len(state_payload["seen_keys"]) == 2
+    assert [item["status"] for item in state_payload["history"]] == [
+        "running",
+        "done",
+        "running",
+        "done",
+    ]
+
+
+def test_cli_batch_second_run_skips_seen_jobs(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg.json"
+    cfg.write_text(json.dumps({"combo_sizes": [1]}), encoding="utf-8")
+    plan_path = tmp_path / "batch_plan.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {"name": "combo", "workflow": "run", "mode": "refine", "config": "cfg.json"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
+        calls.append((str(cwd), str(config_path), workflow, mode, workers))
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+
+    argv = [
+        "batch",
+        "--plan",
+        str(plan_path),
+        "--cwd",
+        str(tmp_path),
+        "--state",
+        "artifacts/batch_state.json",
+        "--min-free-gb",
+        "0",
+    ]
+    assert cli.main(argv) == 0
+    assert cli.main(argv) == 0
+    assert len(calls) == 1
+
+    state_payload = json.loads((tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8"))
+    assert len(state_payload["seen_keys"]) == 1
+    assert any(item["status"] == "skipped_seen_key" for item in state_payload["history"])
+
+
+def test_cli_batch_preflight_missing_config_fails(tmp_path):
+    plan_path = tmp_path / "batch_plan.json"
+    plan_path.write_text(
+        json.dumps({"jobs": [{"name": "missing", "workflow": "baseline", "config": "missing.json"}]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileNotFoundError, match="missing config files"):
+        cli.main(
+            [
+                "batch",
+                "--plan",
+                str(plan_path),
+                "--cwd",
+                str(tmp_path),
+                "--min-free-gb",
+                "0",
+            ]
+        )
+
+
+def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
+    good_cfg = tmp_path / "good.json"
+    bad_cfg = tmp_path / "bad.json"
+    good_cfg.write_text(json.dumps({"combo_sizes": [1]}), encoding="utf-8")
+    bad_cfg.write_text(json.dumps({"combo_sizes": [2]}), encoding="utf-8")
+
+    plan_path = tmp_path / "batch_plan.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {"name": "bad", "workflow": "run", "mode": "combo", "config": "bad.json"},
+                    {"name": "good", "workflow": "baseline", "config": "good.json"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
+        calls.append((str(config_path), workflow))
+        if config_path.name == "bad.json":
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+
+    code = cli.main(
+        [
+            "batch",
+            "--plan",
+            str(plan_path),
+            "--cwd",
+            str(tmp_path),
+            "--state",
+            "artifacts/batch_state.json",
+            "--min-free-gb",
+            "0",
+            "--continue-on-error",
+        ]
+    )
+    assert code == 0
+    assert calls == [
+        (str(bad_cfg), "run"),
+        (str(good_cfg), "baseline"),
+    ]
+
+    state_payload = json.loads((tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8"))
+    assert len(state_payload["seen_keys"]) == 1
+    statuses = [item["status"] for item in state_payload["history"]]
+    assert "failed" in statuses
+    assert "done" in statuses

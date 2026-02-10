@@ -18,6 +18,7 @@
 3. Check the target config parses:
    - `python -m autowfo run --help`
    - `python -m autowfo baseline --help`
+   - `python -m autowfo batch --help`
 4. Check disk headroom before long sweeps:
    - Windows: `Get-PSDrive -Name E | Select-Object Name,Free,Used`
    - Recommended: keep at least `20GB` free before baseline.
@@ -31,6 +32,10 @@
    - `python -m autowfo baseline --config artifacts/sweep_config.json --cwd .`
 3. Override workers for heavy runs:
    - `python -m autowfo baseline --config artifacts/sweep_config.json --workers 3 --cwd .`
+4. Unattended multi-config batch run:
+   - `python -m autowfo batch --plan artifacts/batch_plan.json --cwd .`
+5. Resume-safe batch run with explicit state file:
+   - `python -m autowfo batch --plan artifacts/batch_plan.json --state artifacts/batch_state.json --cwd .`
 
 ## Output Locations
 - Latest sweep artifacts:
@@ -45,6 +50,8 @@
 - Baseline archive root:
   - `artifacts/runs/<run_label>/`
   - Includes `combo/`, `refine/`, `comparison.json`, `trigger_decision.json`, `manifest.json`
+- Batch state:
+  - `artifacts/batch_state.json` (seen-keys + job history for crash-safe resume)
 
 ## Evidence Gate Interpretation
 - Ranking-upgrade trigger file:
@@ -73,6 +80,11 @@
    - Delete or archive old run outputs under `artifacts/runs/`.
    - Remove stale large snapshots in `artifacts/` (`param_sweep_*`, `results.db`) if needed.
    - Re-run the same baseline config after free space is restored.
+6. Batch interrupted or host restarted:
+   - Re-run the same batch command with the same `--state` path.
+   - Completed jobs are skipped using `seen_keys`; unfinished jobs continue.
+7. Batch should continue despite a failed job:
+   - Add `--continue-on-error` and inspect failed entries in `artifacts/batch_state.json`.
 
 ## Post-Run Checklist
 1. Confirm pass completion in `manifest.json` (`run_done == run_total`).
