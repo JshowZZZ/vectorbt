@@ -30,89 +30,95 @@ indicators, symbols, and time windows to discover robust combinations.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Modules live in `scripts/autowfo/`.
 
 ## Current Implementation Reality
-> The following already exists (as of 2026-02-06) but is embedded in a monolithic script.
-> The first milestone is to extract, not to build from scratch.
+> Updated 2026-02-10. Modules extracted into `scripts/autowfo/`, protocols frozen, Gates A+D passed.
 
-| Component | Exists? | Quality | Key Gap |
+| Component | Status | Quality | Key Gap |
 |---|---|---|---|
-| Walk-forward eval | Yes (anchored mode) | Working | Not true per-window WFO; no validation set |
-| IS/OOS metrics (8+10) | Yes | Working | No Sharpe, no stability score |
-| Indicator framework (13) | Yes | Working | Hard-coded dicts, no schema |
-| Regime logic (8 types) | Yes | Working | Hard-coded, no external spec |
-| Combo search (1079+) | Yes | Working | No intelligent pruning |
-| Two-stage search | Yes (combo→refine) | Working | AWF-008 effectively done |
-| Ranking | Yes | Simplistic | Single sort by OOS return |
-| Artifacts (CSV/DB/HTML) | Yes | Working | No config hash, no data fingerprint, TEXT-only DB |
-| Web control panel | Yes (8787) | Working | Tightly coupled to monolith |
+| Walk-forward eval | ✅ Modular (`split.py` + protocol) | Frozen | Not true per-window WFO; no validation set |
+| IS/OOS metrics (8+10) | ✅ Modular (`metrics.py` + contract) | Frozen | No Sharpe, no stability score (deferred to AWF-002b) |
+| Indicator framework (13) | ✅ Schema-backed (`strategy_schema.py`) | Frozen | Adding indicators is config-only |
+| Regime logic (8 types) | ✅ Schema-backed | Frozen | Adding regimes is config-only |
+| Combo search (1079+) | ✅ Modular (`search.py`) | Working | No intelligent pruning |
+| Two-stage search | ✅ combo→refine modes | Working | AWF-008 done |
+| Ranking | ✅ Modular (`ranking.py`) | Simplistic | Single sort by OOS return (AWF-006 deferred) |
+| Artifacts (CSV/DB/HTML) | ✅ Reproducible (`artifacts.py` + contract) | Frozen | Config hash + data fingerprint included |
+| Parallel evaluation | ✅ 3-worker (`parallel.py`) | ×2.66 speedup | Bit-identical verified |
+| Run registry | ✅ (`registry.py`) | Working | Coverage map across timeframe×symbol |
+| CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` subcommands |
+| Regression tests | ✅ 87 tests / 18 files | Green | Split + ranking invariants covered |
+| Operational runbook | ✅ `AUTOWFO_RUNBOOK.md` | Complete | Preflight→run→post-run checklist |
+| Web control panel | ⚠️ 2250-line monolith | Working | No batch/coverage/dashboard; needs refactor (AWF-017a) |
 
 ## Milestones
 
-0. Monolith Decomposition (Prerequisite)
-- Extract `run_btc_regime_sweep.py` core logic into importable, testable modules.
-- Confirm identical output before and after decomposition.
-- Exit criteria: each module importable independently; sweep script produces same results.
-- Linked TODO IDs: `AWF-000`.
+### Phase 1: Decompose (AWF-000) ✅
+- Extracted 10 modules from 3000-line monolith into `scripts/autowfo/`.
+- Bit-identical artifact output verified.
+- Linked TODO: `AWF-000`.
 
-1. Protocol and Constraints
-- Extract and freeze split protocol from existing `_build_walk_forward_slices()` into versioned spec.
-- Extract and freeze metric contract from existing `_calc_pf_series/_aggregate_*` functions.
-- Extract and freeze strategy spec schema from existing `INDICATOR_META/REGIME_NAME_MAP`.
-- Extract and freeze artifact schema; add config hash and data fingerprint.
-- Exit criteria: protocol docs committed with schema validation tests passing.
-- Linked TODO IDs: `AWF-003`, `AWF-002`, `AWF-004`, `AWF-001` (execution order).
+### Phase 2: Protocol Freeze (AWF-003/002/004/001) ✅
+- Strategy schema, metric contract, artifact contract, split protocol frozen with JSON/YAML specs.
+- Gate A passed at commit `524f837`.
+- Linked TODO: `AWF-003`, `AWF-002`, `AWF-004`, `AWF-001`.
 
-2. Search Space and Strategy Spec
-- Define strategy spec schema:
-  - indicator blocks
-  - signal logic
-  - risk controls (SL/TP/trailing/size policy)
-- Add validation for invalid combinations before simulation.
-- Exit criteria: strategy specs can be linted and normalized deterministically.
-- Linked TODO IDs: `AWF-003` (primary), `AWF-005` (consumer).
+### Phase 3: Scale & Experiment Management (AWF-013/009/010) ✅
+- Multi-process parallelization (×2.66 speedup, bit-identical).
+- Run registry with timeframe×symbol coverage map.
+- CLI entrypoint (`python -m autowfo run|baseline`).
+- Linked TODO: `AWF-013`, `AWF-009`, `AWF-010`.
 
-3. Engine MVP (Batch + Walk-Forward)
-- Implement orchestration pipeline:
-  - generate candidates
-  - run backtests by split
-  - compute IS/OOS metrics
-  - produce ranked leaderboard
-- Exit criteria: end-to-end run on at least one known benchmark strategy.
-- Linked TODO IDs: `AWF-005`, `AWF-007`.
+### Phase 4: Quality Guardrails (AWF-011/012) ✅
+- Regression test suite (87 tests, 18 files).
+- Operational runbook (`plans/AUTOWFO_RUNBOOK.md`).
+- Gate D passed at commit `a147972`.
+- Linked TODO: `AWF-011`, `AWF-012`.
 
-4. Stability-First Selection
-- Add Sharpe ratio and stability scoring to metric module (prerequisite for ranking upgrade).
-- Add ranking models beyond single metric max:
-  - median OOS performance
-  - per-segment Sharpe ratio
-  - cross-segment dispersion penalty
-  - drawdown penalty weight
-  - split-consistency score
-- Add true WFO mode (per-window re-optimization) alongside existing anchored eval.
-- Exit criteria: same config reruns produce stable top-N under fixed seed/data.
-- Linked TODO IDs: `AWF-002b`, `AWF-006`, `AWF-001b`, `AWF-011`.
+---
 
-5. Scale and Performance
-- Two-stage search (coarse then focused): **already implemented** (`combo` → `refine` modes).
-- Add multi-process parallelization (ProcessPoolExecutor, centralized IO) for combo evaluation.
-- Add caching and duplicate elimination (basic `seen_keys` dedup exists).
-- Add run registry and one-command execution entrypoint.
-- Add runtime and memory profiling baselines.
-- Exit criteria: meaningful speedup vs brute-force baseline; coverage tracking operational.
-- Linked TODO IDs: `AWF-008` (done), `AWF-013`, `AWF-009`, `AWF-010`.
+### Phase 5: Control Panel Architecture Refactor (AWF-017a)
+- Restructure 2250-line single-file control panel into maintainable architecture.
+- Front/back separation: Python API backend + `static/` HTML/JS/CSS assets.
+- Tab-based navigation (控制台 / 結果 / 覆蓋 / 儀表板 / 歷史).
+- Lightweight CSS framework for consistent styling.
+- Prerequisite for all Phase 6-8 UI work.
+- Linked TODO: `AWF-017a`.
 
-6. Automation and Governance
-- Add CLI or script entrypoint for scheduled runs.
-- Persist experiment records and diffs between runs.
-- Add regression tests for ranking and split correctness.
-- Exit criteria: one-command reproducible run and report.
-- Linked TODO IDs: `AWF-010`, `AWF-011`, `AWF-012`.
+### Phase 6: Batch Execution (AWF-014 + AWF-017b)
+- Batch runner backend: `autowfo batch --plan batch_plan.json`, preflight checks, crash-safe resume.
+- Batch queue UI: enqueue/start/cancel buttons, per-job status/progress, live refresh.
+- Exit criteria: queue 3 configs from browser → batch runs unattended → registry accumulates.
+- Linked TODO: `AWF-014`, `AWF-017b`.
+
+### Phase 7: Coverage Intelligence (AWF-015 + AWF-017c)
+- Coverage planner backend: `autowfo plan` reads registry gaps, generates batch plan.
+- Coverage map UI: color-coded timeframe×symbol matrix, click-to-enqueue.
+- Exit criteria: planner output feeds directly into batch queue; visual gap identification.
+- Linked TODO: `AWF-015`, `AWF-017c`.
+
+### Phase 8: Cross-Run Insight (AWF-016 + AWF-017d)
+- Cross-run dashboard backend: `autowfo report` producing aggregate analysis.
+- Dashboard UI: run history table, combo stability timeline, global leaderboard.
+- Exit criteria: ≥3 runs produce meaningful stability trend visualization from browser.
+- Linked TODO: `AWF-016`, `AWF-017d`.
+
+### Phase 9: Ranking Upgrade — Evidence-Gated (AWF-002b/006/007)
+- Sharpe + stability scoring, composite ranking function, benchmark scenario.
+- Trigger: only activated when baseline runs show D1 or D2 pass.
+- Current evidence: 11 baseline windows all D3-only; deferred.
+- Linked TODO: `AWF-002b`, `AWF-006`, `AWF-007`.
+
+### Phase 10: Advanced Modes (AWF-001b/005)
+- True WFO mode (per-window re-optimization).
+- Full engine refactor using modular pipeline.
+- Gate C reproducibility checks.
+- Linked TODO: `AWF-001b`, `AWF-005`.
 
 ## Stage Gates (Do Not Skip)
-- Gate 0: Monolith decomposed before protocol freeze work begins.
-- Gate A: Protocol freeze before writing search logic.
-- Gate B: Ranking rule freeze before tuning performance.
-- Gate C: Reproducibility checks before adding new features.
-- Gate D: Regression suite green before broadening strategy universe.
+- Gate 0: Monolith decomposed before protocol freeze (Phase 1). **✅ Passed.**
+- Gate A: Protocol freeze before scale/automation work (Phase 2→3). **✅ Passed at `524f837`.**
+- Gate D: Regression suite green before automation expansion (Phase 4→5). **✅ Passed at `a147972`.**
+- Gate B: Ranking rule freeze before advanced modes (Phase 9→10). Pending D1/D2 trigger.
+- Gate C: Reproducibility checks before broadening strategy universe (Phase 10). Pending.
 
 ## Gate Checklists
 Gate A (Protocol Freeze) owner: Maintainer + AI agent pair sign-off
@@ -201,3 +207,4 @@ Each experiment should record:
 - 2026-02-10: Regression gate passed at commit `a147972` (Gate D): regression checks green, runbook available, and latest session-log review shows no unresolved critical drift issues.
 - 2026-02-10: Additional evidence window executed (`python -m autowfo baseline --config artifacts/sweep_config_window11_quick.json`) and archived at `artifacts/runs/20260210_013015` with non-zero workloads (`combo=3840`, `refine=702`), positive refine uplift (`delta_avg_oos_return_pct=+1.2267`), and non-trigger result (`D1=false`, `D2=false`, `D3=true`), so AWF-002b/AWF-006 remain deferred.
 - 2026-02-10: Operational hardening after runtime incident: disk-space exhaustion (`OSError: [Errno 28] No space left on device`) was handled by artifact cleanup and runbook update to require pre-run disk headroom checks plus recovery steps.
+- 2026-02-10: Added AWF-017a/b/c/d (control panel enhancement) to backlog — architecture refactor, batch queue UI, coverage map UI, cross-run dashboard UI. Restructured TODO from 6+3.5 phases into clean 10-phase roadmap: Phases 1-4 completed, Phase 5 (panel refactor) as current focus, Phases 6-8 pair backend+frontend per feature, Phases 9-10 remain evidence-gated. Updated milestones and stage gates in this file to match.
