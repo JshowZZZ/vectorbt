@@ -76,3 +76,26 @@
   font-size: 12px;
 }
 
+.cp-batch-card {
+  margin-bottom: 16px;
+}
+
+.cp-batch-form label {
+  min-width: 160px;
+}
+
+.cp-batch-table {
+  width: 100%;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.cp-batch-table th,
+.cp-batch-table td {
+  white-space: nowrap;
+}
+
+.cp-batch-log {
+  margin-top: 8px;
+  max-height: 180px;
+}

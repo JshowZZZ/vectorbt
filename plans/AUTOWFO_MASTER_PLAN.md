@@ -47,7 +47,7 @@ indicators, symbols, and time windows to discover robust combinations.
 | CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` + `batch` subcommands |
 | Regression tests | ✅ 87 tests / 18 files | Green | Split + ranking invariants covered |
 | Operational runbook | `AUTOWFO_RUNBOOK.md` | Complete | Preflight/run/post-run checklist |
-| Web control panel | Static shell + modular tabs | Refactored | Batch/coverage/dashboard business logic pending (AWF-014~017d) |
+| Web control panel | Static tabs + batch queue | Partially complete | Coverage planner/map + cross-run dashboard pending (AWF-015~017d) |
 
 ## Milestones
 
@@ -210,3 +210,4 @@ Each experiment should record:
 - 2026-02-10: Added AWF-017a/b/c/d (control panel enhancement) to backlog — architecture refactor, batch queue UI, coverage map UI, cross-run dashboard UI. Restructured TODO from 6+3.5 phases into clean 10-phase roadmap: Phases 1-4 completed, Phase 5 (panel refactor) as current focus, Phases 6-8 pair backend+frontend per feature, Phases 9-10 remain evidence-gated. Updated milestones and stage gates in this file to match.
 - 2026-02-10: AWF-017a implemented: control panel frontend moved to file-based static assets under scripts/control_panel/static (index.html, css/app.css, modular JS app.js plus tabs.js/batch.js/coverage.js/dashboard.js), backend retains existing API contracts while serving /static/*, and tab navigation scaffolding is now decoupled from Python source edits.
 - 2026-02-10: AWF-014 implemented: added `python -m autowfo batch --plan <file>` backend with structured plan parsing, preflight checks (config/cwd/disk), crash-safe resume state (`artifacts/batch_state.json`, seen-key dedup), and `--continue-on-error` behavior. Added CLI regression coverage for success, resume-skip, missing-config preflight, and partial-failure continuation paths.
+- 2026-02-10: AWF-017b implemented: control panel now exposes batch queue APIs (`/batch/queue.json`, `/batch/enqueue`, `/batch/start`, `/batch/cancel`, `/batch/clear`, `/batch/remove`) and frontend batch tab actions (enqueue/start/cancel/clear + live queue/log refresh) wired to `autowfo batch` and `artifacts/batch_state.json`. Added queue lifecycle tests in `tests/test_control_panel.py`.
