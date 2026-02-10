@@ -91,13 +91,13 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 6 — Operationalize**
+- Active phase: **Phase 4 — Ranking Upgrade (Evidence-Gated)**
 - Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
-- Execution order: AWF-011 → AWF-012 → Gate D
-- Next action: Run Gate D checklist (regression green + runbook availability), then continue evidence windows with AWF-002b/AWF-006 still trigger-gated
+- Execution order: baseline evidence windows → trigger decision (D1/D2) → AWF-002b/AWF-006 (only if triggered)
+- Next action: Continue cross-window baseline evidence collection and keep AWF-002b/AWF-006 deferred unless D1 or D2 threshold is met
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - Gate A status: passed at commit `524f837`
-- Gate D status: in progress (AWF-011 and AWF-012 completed; awaiting gate sign-off record)
+- Gate D status: passed at commit `a147972`
 
 ## Session Log
 | Date | Task IDs | Status Change | Decision | Next Action | Commit/Ref |
@@ -154,3 +154,5 @@
 | 2026-02-09 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window10_hf_long | Executed longer-horizon high-frequency baseline using `python -m autowfo baseline --config artifacts/sweep_config_window10_hf_long.json` (temporary config: `1h/300d`, USDT symbol mix). Both passes remained non-zero (`combo=9600`, `refine=5508`), comparison stayed informative (`delta_avg_oos_return_pct=+0.2722`, `delta_avg_oos_min_total_trades=+1.97`), and trigger still remained `false` with persistent D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260209_160500`. | Treat D3 persistence as non-trigger evidence (D1/D2 unchanged); keep AWF-002b/AWF-006 deferred and move next effort to AWF-011 regression guardrails | pending |
 | 2026-02-09 | AWF-011 | done | Added split/ranking regression invariants: split default-vs-explicit mode equivalence, slice-count horizon formula, monotonic boundary checks, non-int horizon rejection, ranking fallback score selection when preferred metric missing/NaN, ranking sort without hold-hour tie-break field, and Top-N fallback ordering checks. | Move to AWF-012 operational playbook while keeping AWF-002b/AWF-006 evidence-gated | pending |
 | 2026-02-09 | AWF-012 | done | Added notebook-free operational playbook `plans/AUTOWFO_RUNBOOK.md` covering preflight checks, CLI run patterns (`python -m autowfo run` / `baseline`), artifact map, trigger interpretation, failure handling, and post-run checklist. | Execute Gate D checklist and keep AWF-002b/AWF-006 deferred until D1/D2 trigger conditions are met | pending |
+| 2026-02-10 | AWF-ALL | gate_d_passed | Completed Gate D sign-off: regression suite green and runbook available; no unresolved critical drift issues identified in latest session log review. | Continue evidence-window collection and keep AWF-002b/AWF-006 trigger-gated on D1/D2 thresholds | a147972 |
+| 2026-02-10 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window11_quick | Executed quick baseline using `python -m autowfo baseline --config artifacts/sweep_config_window11_quick.json` (`4h/180d`, `ETH/USDT+SOL/USDT`, `combo_segment_size=8`, `top_n_refine=12`). Both passes were non-zero (`combo=3840`, `refine=702`), comparison remained informative (`delta_avg_oos_return_pct=+1.2267`, `delta_avg_oos_drawdown_pct=-0.0734`, `delta_avg_oos_min_total_trades=+0.85`), and trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260210_013015`. | Keep AWF-002b/AWF-006 deferred and continue cross-window evidence collection focused on D1/D2 emergence | pending |

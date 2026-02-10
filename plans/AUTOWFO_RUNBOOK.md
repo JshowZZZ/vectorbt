@@ -18,7 +18,10 @@
 3. Check the target config parses:
    - `python -m autowfo run --help`
    - `python -m autowfo baseline --help`
-4. Confirm the task aligns to TODO:
+4. Check disk headroom before long sweeps:
+   - Windows: `Get-PSDrive -Name E | Select-Object Name,Free,Used`
+   - Recommended: keep at least `20GB` free before baseline.
+5. Confirm the task aligns to TODO:
    - `plans/AUTOWFO_TODO.md`
 
 ## Standard Commands
@@ -66,6 +69,10 @@
 4. Indicator lookback/key mismatch errors:
    - Ensure current code includes evaluator coercion fix (`cf56d0a` or later).
    - Re-run the same baseline config to validate recovery.
+5. `OSError: [Errno 28] No space left on device`:
+   - Delete or archive old run outputs under `artifacts/runs/`.
+   - Remove stale large snapshots in `artifacts/` (`param_sweep_*`, `results.db`) if needed.
+   - Re-run the same baseline config after free space is restored.
 
 ## Post-Run Checklist
 1. Confirm pass completion in `manifest.json` (`run_done == run_total`).
