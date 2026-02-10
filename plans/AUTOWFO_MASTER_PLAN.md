@@ -46,28 +46,28 @@ indicators, symbols, and time windows to discover robust combinations.
 | Run registry | ✅ (`registry.py`) | Working | Coverage map across timeframe×symbol |
 | CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` subcommands |
 | Regression tests | ✅ 87 tests / 18 files | Green | Split + ranking invariants covered |
-| Operational runbook | ✅ `AUTOWFO_RUNBOOK.md` | Complete | Preflight→run→post-run checklist |
-| Web control panel | ⚠️ 2250-line monolith | Working | No batch/coverage/dashboard; needs refactor (AWF-017a) |
+| Operational runbook | `AUTOWFO_RUNBOOK.md` | Complete | Preflight/run/post-run checklist |
+| Web control panel | Static shell + modular tabs | Refactored | Batch/coverage/dashboard business logic pending (AWF-014~017d) |
 
 ## Milestones
 
-### Phase 1: Decompose (AWF-000) ✅
+### Phase 1: Decompose (AWF-000) [Done]
 - Extracted 10 modules from 3000-line monolith into `scripts/autowfo/`.
 - Bit-identical artifact output verified.
 - Linked TODO: `AWF-000`.
 
-### Phase 2: Protocol Freeze (AWF-003/002/004/001) ✅
+### Phase 2: Protocol Freeze (AWF-003/002/004/001) [Done]
 - Strategy schema, metric contract, artifact contract, split protocol frozen with JSON/YAML specs.
 - Gate A passed at commit `524f837`.
 - Linked TODO: `AWF-003`, `AWF-002`, `AWF-004`, `AWF-001`.
 
-### Phase 3: Scale & Experiment Management (AWF-013/009/010) ✅
-- Multi-process parallelization (×2.66 speedup, bit-identical).
-- Run registry with timeframe×symbol coverage map.
+### Phase 3: Scale & Experiment Management (AWF-013/009/010) [Done]
+- Multi-process parallelization (x2.66 speedup, bit-identical).
+- Run registry with timeframe/symbol coverage map.
 - CLI entrypoint (`python -m autowfo run|baseline`).
 - Linked TODO: `AWF-013`, `AWF-009`, `AWF-010`.
 
-### Phase 4: Quality Guardrails (AWF-011/012) ✅
+### Phase 4: Quality Guardrails (AWF-011/012) [Done]
 - Regression test suite (87 tests, 18 files).
 - Operational runbook (`plans/AUTOWFO_RUNBOOK.md`).
 - Gate D passed at commit `a147972`.
@@ -75,10 +75,10 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ---
 
-### Phase 5: Control Panel Architecture Refactor (AWF-017a)
+### Phase 5: Control Panel Architecture Refactor (AWF-017a) [Done]
 - Restructure 2250-line single-file control panel into maintainable architecture.
 - Front/back separation: Python API backend + `static/` HTML/JS/CSS assets.
-- Tab-based navigation (控制台 / 結果 / 覆蓋 / 儀表板 / 歷史).
+- Tab-based navigation (??? / ?? / ?? / ??? / ??).
 - Lightweight CSS framework for consistent styling.
 - Prerequisite for all Phase 6-8 UI work.
 - Linked TODO: `AWF-017a`.
@@ -86,22 +86,22 @@ indicators, symbols, and time windows to discover robust combinations.
 ### Phase 6: Batch Execution (AWF-014 + AWF-017b)
 - Batch runner backend: `autowfo batch --plan batch_plan.json`, preflight checks, crash-safe resume.
 - Batch queue UI: enqueue/start/cancel buttons, per-job status/progress, live refresh.
-- Exit criteria: queue 3 configs from browser → batch runs unattended → registry accumulates.
+- Exit criteria: queue 3 configs from browser -> batch runs unattended -> registry accumulates.
 - Linked TODO: `AWF-014`, `AWF-017b`.
 
 ### Phase 7: Coverage Intelligence (AWF-015 + AWF-017c)
 - Coverage planner backend: `autowfo plan` reads registry gaps, generates batch plan.
-- Coverage map UI: color-coded timeframe×symbol matrix, click-to-enqueue.
+- Coverage map UI: color-coded timeframe/symbol matrix, click-to-enqueue.
 - Exit criteria: planner output feeds directly into batch queue; visual gap identification.
 - Linked TODO: `AWF-015`, `AWF-017c`.
 
 ### Phase 8: Cross-Run Insight (AWF-016 + AWF-017d)
 - Cross-run dashboard backend: `autowfo report` producing aggregate analysis.
 - Dashboard UI: run history table, combo stability timeline, global leaderboard.
-- Exit criteria: ≥3 runs produce meaningful stability trend visualization from browser.
+- Exit criteria: >=3 runs produce meaningful stability trend visualization from browser.
 - Linked TODO: `AWF-016`, `AWF-017d`.
 
-### Phase 9: Ranking Upgrade — Evidence-Gated (AWF-002b/006/007)
+### Phase 9: Ranking Upgrade - Evidence-Gated (AWF-002b/006/007)
 - Sharpe + stability scoring, composite ranking function, benchmark scenario.
 - Trigger: only activated when baseline runs show D1 or D2 pass.
 - Current evidence: 11 baseline windows all D3-only; deferred.
@@ -208,3 +208,4 @@ Each experiment should record:
 - 2026-02-10: Additional evidence window executed (`python -m autowfo baseline --config artifacts/sweep_config_window11_quick.json`) and archived at `artifacts/runs/20260210_013015` with non-zero workloads (`combo=3840`, `refine=702`), positive refine uplift (`delta_avg_oos_return_pct=+1.2267`), and non-trigger result (`D1=false`, `D2=false`, `D3=true`), so AWF-002b/AWF-006 remain deferred.
 - 2026-02-10: Operational hardening after runtime incident: disk-space exhaustion (`OSError: [Errno 28] No space left on device`) was handled by artifact cleanup and runbook update to require pre-run disk headroom checks plus recovery steps.
 - 2026-02-10: Added AWF-017a/b/c/d (control panel enhancement) to backlog — architecture refactor, batch queue UI, coverage map UI, cross-run dashboard UI. Restructured TODO from 6+3.5 phases into clean 10-phase roadmap: Phases 1-4 completed, Phase 5 (panel refactor) as current focus, Phases 6-8 pair backend+frontend per feature, Phases 9-10 remain evidence-gated. Updated milestones and stage gates in this file to match.
+- 2026-02-10: AWF-017a implemented: control panel frontend moved to file-based static assets under scripts/control_panel/static (index.html, css/app.css, modular JS app.js plus tabs.js/batch.js/coverage.js/dashboard.js), backend retains existing API contracts while serving /static/*, and tab navigation scaffolding is now decoupled from Python source edits.

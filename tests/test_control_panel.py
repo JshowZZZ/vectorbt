@@ -64,3 +64,27 @@ def test_sanitize_config_walk_forward_fields_min_value():
     assert cfg["wf_train_days"] >= 1
     assert cfg["wf_test_days"] >= 1
     assert cfg["wf_step_days"] >= 1
+
+
+def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
+    static_dir = tmp_path / "scripts" / "control_panel" / "static"
+    js_dir = static_dir / "js"
+    js_dir.mkdir(parents=True)
+    app_js = js_dir / "app.js"
+    app_js.write_text("console.log('ok');", encoding="utf-8")
+
+    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+
+    assert cp._resolve_static_path("/static/js/app.js") == app_js.resolve()
+    assert cp._resolve_static_path("/static/../control_panel.py") is None
+    assert cp._resolve_static_path("/status.json") is None
+
+
+def test_read_static_text_fallback(tmp_path, monkeypatch):
+    static_dir = tmp_path / "scripts" / "control_panel" / "static"
+    static_dir.mkdir(parents=True)
+    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+
+    assert cp._read_static_text("index.html", fallback="fallback") == "fallback"
+    (static_dir / "index.html").write_text("hello", encoding="utf-8")
+    assert cp._read_static_text("index.html", fallback="fallback") == "hello"
