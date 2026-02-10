@@ -44,6 +44,9 @@
 | AWF-013 | P1 | done | JshowZZZ + AI | Multi-process parallelization for combo evaluation | `eval_combo` extracted to pure function + `ProcessPoolExecutor` with centralized IO | 3-worker parallel run produces bit-identical results to single-thread; ×2.5 speedup measured |
 | AWF-009 | P1 | done | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
 | AWF-010 | P1 | done | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
+| AWF-014 | P1 | todo | JshowZZZ + AI | Batch runner — sequential multi-config execution with preflight checks | `autowfo batch --plan batch_plan.json` CLI subcommand + batch orchestrator | 3-config batch completes unattended; registry accumulates; crash-restart skips completed jobs via seen_keys |
+| AWF-015 | P1 | blocked | JshowZZZ + AI | Coverage planner — auto-generate batch plan from untested pairs | `autowfo plan` CLI subcommand reading `run_registry.json` coverage gaps | Planner output feeds directly into `autowfo batch`; `--max-jobs N` limits scope |
+| AWF-016 | P1 | blocked | JshowZZZ + AI | Cross-run dashboard — aggregate analysis across accumulated runs | `autowfo report` CLI subcommand producing `artifacts/cross_run_report.html` | Coverage matrix + combo stability + global leaderboard from ≥3 runs |
 | AWF-011 | P2 | done | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
 | AWF-012 | P2 | done | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
 
@@ -71,6 +74,13 @@
 - AWF-009: Run registry to see coverage across symbols/timeframes.
 - AWF-010: Single-command execution for operational ease.
 
+### Phase 3.5: Automation Loop (AWF-014 → AWF-015 → AWF-016)
+> Goal: Enable unattended batch execution, coverage-driven expansion, and cross-run insight accumulation.
+- AWF-014: Batch runner — queue multiple configs, preflight disk check, sequential execution, crash-safe resume.
+- AWF-015: Coverage planner — read `run_registry.json` gaps, auto-generate next batch plan.
+- AWF-016: Cross-run dashboard — aggregate combo stability, coverage matrix, global leaderboard.
+- No gate required; each task independently usable once completed.
+
 ### Phase 4: Ranking Upgrade — Evidence-Driven (AWF-002b → AWF-006 → AWF-007, then Gate B)
 > Goal: Replace simple sort-by-return with composite robustness scoring.
 > Trigger: only activated when baseline runs show D1 or D2 pass (ranking quality is the bottleneck).
@@ -91,10 +101,10 @@
 - Gate D regression green.
 
 ## Current Focus Window
-- Active phase: **Phase 4 — Ranking Upgrade (Evidence-Gated)**
-- Decision: Platform mindset — correctness and extensibility before speed; AUTOWFO is a long-term strategy-exploration tool
-- Execution order: baseline evidence windows → trigger decision (D1/D2) → AWF-002b/AWF-006 (only if triggered)
-- Next action: Continue cross-window baseline evidence collection and keep AWF-002b/AWF-006 deferred unless D1 or D2 threshold is met
+- Active phase: **Phase 3.5 — Automation Loop**
+- Decision: System automation and accumulation capability before strategy exploration; build the factory before mass-producing experiments
+- Execution order: AWF-014 (batch runner) → AWF-015 (coverage planner) → AWF-016 (cross-run dashboard)
+- Next action: Start AWF-014 — implement `autowfo batch` CLI subcommand
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
 - Gate A status: passed at commit `524f837`
 - Gate D status: passed at commit `a147972`
@@ -156,3 +166,4 @@
 | 2026-02-09 | AWF-012 | done | Added notebook-free operational playbook `plans/AUTOWFO_RUNBOOK.md` covering preflight checks, CLI run patterns (`python -m autowfo run` / `baseline`), artifact map, trigger interpretation, failure handling, and post-run checklist. | Execute Gate D checklist and keep AWF-002b/AWF-006 deferred until D1/D2 trigger conditions are met | pending |
 | 2026-02-10 | AWF-ALL | gate_d_passed | Completed Gate D sign-off: regression suite green and runbook available; no unresolved critical drift issues identified in latest session log review. | Continue evidence-window collection and keep AWF-002b/AWF-006 trigger-gated on D1/D2 thresholds | a147972 |
 | 2026-02-10 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window11_quick | Executed quick baseline using `python -m autowfo baseline --config artifacts/sweep_config_window11_quick.json` (`4h/180d`, `ETH/USDT+SOL/USDT`, `combo_segment_size=8`, `top_n_refine=12`). Both passes were non-zero (`combo=3840`, `refine=702`), comparison remained informative (`delta_avg_oos_return_pct=+1.2267`, `delta_avg_oos_drawdown_pct=-0.0734`, `delta_avg_oos_min_total_trades=+0.85`), and trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260210_013015`. | Keep AWF-002b/AWF-006 deferred and continue cross-window evidence collection focused on D1/D2 emergence | pending |
+| 2026-02-10 | AWF-014, AWF-015, AWF-016 | plan_revised | Added Automation Loop phase (Phase 3.5): AWF-014 batch runner, AWF-015 coverage planner, AWF-016 cross-run dashboard. Focus shifted from passive evidence collection to building automation infrastructure for unattended batch execution and systematic coverage expansion. | Start AWF-014 batch runner implementation | pending |
