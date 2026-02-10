@@ -45,7 +45,7 @@
 | AWF-009 | P1 | done | JshowZZZ + AI | Add run registry (history + diff between runs) | Experiment index + coverage map across symbols/timeframes | Can see which symbol/timeframe combinations have been tested and which remain |
 | AWF-010 | P1 | done | JshowZZZ + AI | Add one-command execution entrypoint | CLI command wrapping full pipeline | `python -m autowfo run --config experiment.yaml` works end-to-end |
 | AWF-014 | P1 | done | JshowZZZ + AI | Batch runner — sequential multi-config execution with preflight checks | `autowfo batch --plan batch_plan.json` CLI subcommand + batch orchestrator | 3-config batch completes unattended; registry accumulates; crash-restart skips completed jobs via seen_keys |
-| AWF-015 | P1 | blocked | JshowZZZ + AI | Coverage planner — auto-generate batch plan from untested pairs | `autowfo plan` CLI subcommand reading `run_registry.json` coverage gaps | Planner output feeds directly into `autowfo batch`; `--max-jobs N` limits scope |
+| AWF-015 | P1 | done | JshowZZZ + AI | Coverage planner — auto-generate batch plan from untested pairs | `autowfo plan` CLI subcommand reading `run_registry.json` coverage gaps | Planner output feeds directly into `autowfo batch`; `--max-jobs N` limits scope |
 | AWF-016 | P1 | blocked | JshowZZZ + AI | Cross-run dashboard — aggregate analysis across accumulated runs | `autowfo report` CLI subcommand producing `artifacts/cross_run_report.html` | Coverage matrix + combo stability + global leaderboard from ≥3 runs |
 | AWF-017a | P1 | done | JshowZZZ + AI | Control panel architecture refactor — front/back separation, Tab navigation, CSS upgrade | `scripts/control_panel/` with `static/` assets, modular JS, Tab-based layout | Panel serves from file-based static assets; new tab addable without touching Python |
 | AWF-017b | P1 | done | JshowZZZ + AI | Batch queue UI — queue table, progress display, cancel buttons | Batch panel in control panel with enqueue/start/cancel/clear actions | Queue table live-refreshes; can enqueue config and start batch from browser |
@@ -122,9 +122,9 @@
 
 ## Current Focus Window
 - Active phase: **Phase 7 — Coverage Intelligence**
-- Decision: AWF-017b 已完成（batch queue UI + backend API wiring），下一步進入 coverage planner + coverage map
-- Execution order: (AWF-015 + AWF-017c) → (AWF-016 + AWF-017d)
-- Next action: Start AWF-015 planner backend (`autowfo plan`) and connect AWF-017c coverage matrix enqueue flow
+- Decision: AWF-015 planner backend 已完成，下一步聚焦 AWF-017c coverage map UI（click-to-enqueue）
+- Execution order: AWF-017c → (AWF-016 + AWF-017d)
+- Next action: Implement coverage matrix UI with tested/untested states and one-click enqueue to batch queue
 - AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass (11 windows all D3-only)
 - Gate A status: passed at commit `524f837`
 - Gate D status: passed at commit `a147972`
@@ -191,3 +191,4 @@
 | 2026-02-10 | AWF-017a | done | Implemented control panel architecture refactor: added file-based static frontend assets under `scripts/control_panel/static/` (`index.html`, `css/app.css`, modular JS `app.js` + `tabs.js`/`batch.js`/`coverage.js`/`dashboard.js`), switched backend `/` and `/static/*` to serve static files, and introduced Tab-based navigation scaffolding (`控制台/結果/覆蓋/儀表板/歷史`) without changing existing API endpoints. | Move to AWF-014 backend batch runner and AWF-017b queue UI implementation | pending |
 | 2026-02-10 | AWF-014 | done | Implemented `autowfo batch` backend in `autowfo/cli.py`: plan parsing, preflight checks (config/cwd/disk), crash-safe resume via `artifacts/batch_state.json` seen-keys, and `--continue-on-error` flow. Added CLI tests for run/skip/preflight/error-continue paths (`tests/test_autowfo_cli.py`). | Start AWF-017b batch queue UI and API wiring on top of stable batch backend | pending |
 | 2026-02-10 | AWF-017b | done | Implemented control-panel batch queue flow: backend APIs (`/batch/queue.json`, `/batch/enqueue`, `/batch/start`, `/batch/cancel`, `/batch/clear`, `/batch/remove`) wired to `autowfo batch` + `artifacts/batch_state.json`; frontend batch tab now provides enqueue/start/cancel/clear, live queue table, and log tail refresh. Added queue backend tests in `tests/test_control_panel.py`. | Move to AWF-015 planner backend and AWF-017c coverage map scheduling UI | pending |
+| 2026-02-10 | AWF-015 | done | Implemented coverage planner backend in `autowfo plan`: reads `run_registry.json` untested pairs, generates per-gap config files, and writes executable batch plan (`--max-jobs`, `--workflow`, `--mode`, `--workers`) for direct `autowfo batch` consumption. Added CLI tests for plan generation and empty-gap behavior. | Move to AWF-017c coverage map UI with click-to-enqueue integration | pending |

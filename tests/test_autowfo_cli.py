@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -269,3 +270,119 @@ def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
     statuses = [item["status"] for item in state_payload["history"]]
     assert "failed" in statuses
     assert "done" in statuses
+
+
+def test_cli_plan_generates_batch_plan_from_untested_pairs(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "run_id": "r1",
+                        "timeframes": [
+                            {"timeframe": "1h", "days": 120},
+                            {"timeframe": "4h", "days": 240},
+                        ],
+                    }
+                ],
+                "coverage": {
+                    "untested_pairs": [
+                        {"timeframe": "1h", "symbol": "ETH/USDT"},
+                        {"timeframe": "4h", "symbol": "BNB/USDT"},
+                        {"timeframe": "1h", "symbol": "SOL/USDT"},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    template_path = artifacts_dir / "sweep_config.json"
+    template_path.write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "timeframes": [{"timeframe": "15m", "days": 60}],
+                "trade_symbols": ["ETH/USDT", "BNB/USDT"],
+                "combo_sizes": [2, 3],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_plan = artifacts_dir / "batch_plan.auto.json"
+    out_cfg_dir = artifacts_dir / "planned_configs"
+    code = cli.main(
+        [
+            "plan",
+            "--registry",
+            str(registry_path),
+            "--template-config",
+            str(template_path),
+            "--out-plan",
+            str(out_plan),
+            "--out-config-dir",
+            str(out_cfg_dir),
+            "--max-jobs",
+            "2",
+            "--workflow",
+            "run",
+            "--mode",
+            "combo",
+            "--workers",
+            "3",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    assert out_plan.exists()
+
+    plan_payload = json.loads(out_plan.read_text(encoding="utf-8"))
+    assert plan_payload["job_count"] == 2
+    assert len(plan_payload["jobs"]) == 2
+    assert all(job["workflow"] == "run" for job in plan_payload["jobs"])
+    assert all(job["mode"] == "combo" for job in plan_payload["jobs"])
+    assert all(job["workers"] == 3 for job in plan_payload["jobs"])
+
+    for job in plan_payload["jobs"]:
+        cfg_path = Path(job["config"])
+        assert cfg_path.exists()
+        payload = json.loads(cfg_path.read_text(encoding="utf-8"))
+        assert len(payload["timeframes"]) == 1
+        assert len(payload["trade_symbols"]) == 1
+
+
+def test_cli_plan_generates_empty_jobs_when_no_gaps(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(json.dumps({"coverage": {"untested_pairs": []}}), encoding="utf-8")
+    template_path = artifacts_dir / "sweep_config.json"
+    template_path.write_text(
+        json.dumps({"timeframes": [{"timeframe": "1h", "days": 60}], "trade_symbols": ["ETH/USDT"]}),
+        encoding="utf-8",
+    )
+
+    out_plan = artifacts_dir / "batch_plan.auto.json"
+    code = cli.main(
+        [
+            "plan",
+            "--registry",
+            str(registry_path),
+            "--template-config",
+            str(template_path),
+            "--out-plan",
+            str(out_plan),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    payload = json.loads(out_plan.read_text(encoding="utf-8"))
+    assert payload["job_count"] == 0
+    assert payload["jobs"] == []

@@ -19,6 +19,7 @@
    - `python -m autowfo run --help`
    - `python -m autowfo baseline --help`
    - `python -m autowfo batch --help`
+   - `python -m autowfo plan --help`
 4. Check disk headroom before long sweeps:
    - Windows: `Get-PSDrive -Name E | Select-Object Name,Free,Used`
    - Recommended: keep at least `20GB` free before baseline.
@@ -36,6 +37,8 @@
    - `python -m autowfo batch --plan artifacts/batch_plan.json --cwd .`
 5. Resume-safe batch run with explicit state file:
    - `python -m autowfo batch --plan artifacts/batch_plan.json --state artifacts/batch_state.json --cwd .`
+6. Generate batch plan from registry coverage gaps:
+   - `python -m autowfo plan --registry artifacts/run_registry.json --template-config artifacts/sweep_config.json --out-plan artifacts/batch_plan.auto.json --out-config-dir artifacts/planned_configs --max-jobs 20 --cwd .`
 
 ## Output Locations
 - Latest sweep artifacts:

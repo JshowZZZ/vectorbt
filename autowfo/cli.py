@@ -392,6 +392,193 @@ def _cmd_batch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _slug_text(value: str) -> str:
+    text = str(value).strip()
+    if not text:
+        return "unknown"
+    out_chars = []
+    for ch in text:
+        if ch.isalnum() or ch in {"-", "_"}:
+            out_chars.append(ch)
+        else:
+            out_chars.append("-")
+    slug = "".join(out_chars)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-") or "unknown"
+
+
+def _extract_registry_untested_pairs(registry_payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    coverage = registry_payload.get("coverage")
+    if not isinstance(coverage, dict):
+        return []
+    pairs = coverage.get("untested_pairs")
+    if not isinstance(pairs, list):
+        return []
+
+    output: List[Dict[str, str]] = []
+    seen = set()
+    for raw in pairs:
+        if not isinstance(raw, dict):
+            continue
+        timeframe = str(raw.get("timeframe", "")).strip()
+        symbol = str(raw.get("symbol", "")).strip()
+        if not timeframe or not symbol:
+            continue
+        key = (timeframe, symbol)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append({"timeframe": timeframe, "symbol": symbol})
+    return output
+
+
+def _build_timeframe_days_map(
+    registry_payload: Dict[str, Any],
+    template_config: Dict[str, Any],
+) -> Dict[str, int]:
+    mapping: Dict[str, int] = {}
+
+    runs = registry_payload.get("runs")
+    if isinstance(runs, list):
+        for entry in runs:
+            if not isinstance(entry, dict):
+                continue
+            timeframes = entry.get("timeframes")
+            if not isinstance(timeframes, list):
+                continue
+            for item in timeframes:
+                if not isinstance(item, dict):
+                    continue
+                timeframe = str(item.get("timeframe", "")).strip()
+                if not timeframe:
+                    continue
+                try:
+                    days = int(item.get("days"))
+                except Exception:
+                    continue
+                if days <= 0:
+                    continue
+                if timeframe not in mapping:
+                    mapping[timeframe] = days
+
+    template_timeframes = template_config.get("timeframes")
+    if isinstance(template_timeframes, list):
+        for item in template_timeframes:
+            if not isinstance(item, dict):
+                continue
+            timeframe = str(item.get("timeframe", "")).strip()
+            if not timeframe:
+                continue
+            try:
+                days = int(item.get("days"))
+            except Exception:
+                continue
+            if days <= 0:
+                continue
+            if timeframe not in mapping:
+                mapping[timeframe] = days
+
+    return mapping
+
+
+def _cmd_plan(args: argparse.Namespace) -> int:
+    cwd = Path(args.cwd).resolve()
+    registry_path = _resolve_path(cwd, args.registry)
+    template_config_path = _resolve_path(cwd, args.template_config)
+    out_plan_path = _resolve_path(cwd, args.out_plan)
+    out_config_dir = _resolve_path(cwd, args.out_config_dir)
+
+    if not registry_path.exists():
+        raise FileNotFoundError(f"registry not found: {registry_path}")
+    if not template_config_path.exists():
+        raise FileNotFoundError(f"template config not found: {template_config_path}")
+
+    registry_payload = _load_config(registry_path)
+    template_config = _load_config(template_config_path)
+    pairs = _extract_registry_untested_pairs(registry_payload)
+
+    max_jobs = None if args.max_jobs in (None, 0) else int(args.max_jobs)
+    if max_jobs is not None and max_jobs < 0:
+        raise ValueError("max-jobs must be >= 0")
+    if max_jobs is not None:
+        pairs = pairs[:max_jobs]
+
+    workflow = str(args.workflow).strip().lower()
+    mode = None if args.mode in (None, "") else str(args.mode).strip().lower()
+    if workflow not in {"run", "baseline"}:
+        raise ValueError("workflow must be run or baseline")
+    if workflow == "baseline" and mode is not None:
+        raise ValueError("mode is only valid when workflow=run")
+    if workflow == "run" and mode not in {None, "combo", "refine"}:
+        raise ValueError("mode must be combo/refine when provided")
+
+    workers = None
+    if args.workers is not None:
+        workers = int(args.workers)
+        if workers <= 0:
+            raise ValueError("workers must be > 0")
+
+    timeframe_days = _build_timeframe_days_map(registry_payload, template_config)
+    default_days = 60
+    template_timeframes = template_config.get("timeframes")
+    if isinstance(template_timeframes, list):
+        for item in template_timeframes:
+            if not isinstance(item, dict):
+                continue
+            try:
+                d = int(item.get("days"))
+            except Exception:
+                continue
+            if d > 0:
+                default_days = d
+                break
+
+    out_config_dir.mkdir(parents=True, exist_ok=True)
+    jobs = []
+    for idx, pair in enumerate(pairs, start=1):
+        timeframe = pair["timeframe"]
+        symbol = pair["symbol"]
+        days = int(timeframe_days.get(timeframe, default_days))
+
+        cfg_payload = json.loads(json.dumps(template_config, ensure_ascii=False))
+        cfg_payload["timeframes"] = [{"timeframe": timeframe, "days": days}]
+        cfg_payload["trade_symbols"] = [symbol]
+
+        cfg_name = f"{idx:03d}_{_slug_text(timeframe)}_{_slug_text(symbol)}.json"
+        cfg_path = out_config_dir / cfg_name
+        cfg_path.write_text(json.dumps(cfg_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        job = {
+            "name": f"gap-{idx:03d}-{_slug_text(timeframe)}-{_slug_text(symbol)}",
+            "workflow": workflow,
+            "config": str(cfg_path),
+        }
+        if workflow == "run" and mode is not None:
+            job["mode"] = mode
+        if workers is not None:
+            job["workers"] = workers
+        jobs.append(job)
+
+    out_plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_payload = {
+        "generated_utc": _utc_now_iso(),
+        "source_registry": str(registry_path),
+        "source_template_config": str(template_config_path),
+        "job_count": len(jobs),
+        "jobs": jobs,
+    }
+    out_plan_path.write_text(json.dumps(plan_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(f"[plan] registry={registry_path}")
+    print(f"[plan] template_config={template_config_path}")
+    print(f"[plan] out_plan={out_plan_path}")
+    print(f"[plan] out_config_dir={out_config_dir} jobs={len(jobs)}")
+    if not jobs:
+        print("[plan] no untested pairs found")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -435,6 +622,49 @@ def build_parser() -> argparse.ArgumentParser:
         help="Continue remaining jobs if one job fails",
     )
     batch_parser.set_defaults(handler=_cmd_batch)
+
+    plan_parser = subparsers.add_parser("plan", help="Generate batch plan from run registry coverage gaps")
+    plan_parser.add_argument(
+        "--registry",
+        default="artifacts/run_registry.json",
+        help="Path to run registry JSON",
+    )
+    plan_parser.add_argument(
+        "--template-config",
+        default="artifacts/sweep_config.json",
+        help="Template config used to build per-gap configs",
+    )
+    plan_parser.add_argument(
+        "--out-plan",
+        default="artifacts/batch_plan.auto.json",
+        help="Output path for generated batch plan JSON",
+    )
+    plan_parser.add_argument(
+        "--out-config-dir",
+        default="artifacts/planned_configs",
+        help="Output directory for generated per-job config JSON files",
+    )
+    plan_parser.add_argument(
+        "--max-jobs",
+        type=int,
+        default=0,
+        help="Limit number of planned jobs (0 means no limit)",
+    )
+    plan_parser.add_argument(
+        "--workflow",
+        choices=["run", "baseline"],
+        default="baseline",
+        help="Workflow type to use in generated batch jobs",
+    )
+    plan_parser.add_argument(
+        "--mode",
+        choices=["combo", "refine"],
+        default=None,
+        help="Mode for workflow=run",
+    )
+    plan_parser.add_argument("--workers", type=int, default=None, help="Optional workers value for each generated job")
+    plan_parser.add_argument("--cwd", default=".", help="Working directory")
+    plan_parser.set_defaults(handler=_cmd_plan)
 
     return parser
 
