@@ -47,65 +47,85 @@
 | AWF-014 | P1 | todo | JshowZZZ + AI | Batch runner — sequential multi-config execution with preflight checks | `autowfo batch --plan batch_plan.json` CLI subcommand + batch orchestrator | 3-config batch completes unattended; registry accumulates; crash-restart skips completed jobs via seen_keys |
 | AWF-015 | P1 | blocked | JshowZZZ + AI | Coverage planner — auto-generate batch plan from untested pairs | `autowfo plan` CLI subcommand reading `run_registry.json` coverage gaps | Planner output feeds directly into `autowfo batch`; `--max-jobs N` limits scope |
 | AWF-016 | P1 | blocked | JshowZZZ + AI | Cross-run dashboard — aggregate analysis across accumulated runs | `autowfo report` CLI subcommand producing `artifacts/cross_run_report.html` | Coverage matrix + combo stability + global leaderboard from ≥3 runs |
-| AWF-011 | P2 | done | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
-| AWF-012 | P2 | done | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
+| AWF-017a | P1 | todo | JshowZZZ + AI | Control panel architecture refactor — front/back separation, Tab navigation, CSS upgrade | `scripts/control_panel/` with `static/` assets, modular JS, Tab-based layout | Panel serves from file-based static assets; new tab addable without touching Python |
+| AWF-017b | P1 | blocked | JshowZZZ + AI | Batch queue UI — queue table, progress display, cancel buttons | Batch panel in control panel with enqueue/start/cancel/clear actions | Queue table live-refreshes; can enqueue config and start batch from browser |
+| AWF-017c | P1 | blocked | JshowZZZ + AI | Coverage map UI — timeframe×symbol matrix, one-click scheduling | Coverage tab with color-coded grid and click-to-enqueue interaction | Matrix shows tested/untested/queued; click adds to batch queue |
+| AWF-017d | P1 | blocked | JshowZZZ + AI | Cross-run dashboard UI + run history — timeline, global leaderboard | Dashboard tab with run history table, combo stability chart, aggregated KPIs | Registry data browsable; ≥3 runs produce stability trend visualization |
+| AWF-011 | P1 | done | JshowZZZ + AI | Add regression tests for split and ranking invariants | Test suite additions | CI/local tests catch protocol regressions |
+| AWF-012 | P1 | done | JshowZZZ + AI | Add operational playbook | Runbook doc | New run can be operated without notebook |
 
 ## Execution Phases
 
-### Phase 1: Decompose (AWF-000)
+### Phase 1: Decompose (AWF-000) ✅
 > Goal: Break the monolith so individual protocols can be frozen and tested independently.
-- Map every function in `run_btc_regime_sweep.py` to its target module.
-- Extract with zero behavior change ??old script output must be identical.
-- Add import bridge so `control_panel.py` continues to work.
-- **Must complete before any Gate A work begins.**
+- Extracted 10 modules from 3000-line monolith into `scripts/autowfo/`.
+- Zero behavior change verified via bit-identical artifact tests.
+- Status: **Complete**.
 
-### Phase 2: Foundation — Protocol Freeze (AWF-003 → AWF-002 → AWF-004 → AWF-001, then Gate A)
+### Phase 2: Foundation — Protocol Freeze (AWF-003 → AWF-002 → AWF-004 → AWF-001) ✅
 > Goal: Make the system trustworthy and extensible for repeated use as a strategy-exploration platform.
-- Order rationale: AWF-003 first (strategy spec externalization enables adding indicators via config),
-  then AWF-002 (metric contract ensures cross-run comparability),
-  then AWF-004 (config hash + data fingerprint for run traceability),
-  then AWF-001 (split protocol documentation).
-- Each task = read existing hard-coded logic → write explicit spec → add schema validation → add unit tests.
-- Gate A checklist must all pass before moving to Phase 3.
+- Strategy schema, metric contract, artifact contract, split protocol all frozen with JSON/YAML specs + validation.
+- Status: **Complete**. Gate A passed at commit `524f837`.
 
-### Phase 3: Scale — Performance + Experiment Management (AWF-013, AWF-009, AWF-010)
+### Phase 3: Scale & Experiment Management (AWF-013, AWF-009, AWF-010) ✅
 > Goal: Run faster, track what's been tested, lower operational cost.
-- AWF-013: Multi-process parallelization (×2.5-3 speedup on 4-core machine).
-- AWF-009: Run registry to see coverage across symbols/timeframes.
-- AWF-010: Single-command execution for operational ease.
+- Multi-process parallelization (×2.66 speedup), run registry, CLI entrypoint.
+- Status: **Complete**.
 
-### Phase 3.5: Automation Loop (AWF-014 → AWF-015 → AWF-016)
-> Goal: Enable unattended batch execution, coverage-driven expansion, and cross-run insight accumulation.
-- AWF-014: Batch runner — queue multiple configs, preflight disk check, sequential execution, crash-safe resume.
-- AWF-015: Coverage planner — read `run_registry.json` gaps, auto-generate next batch plan.
-- AWF-016: Cross-run dashboard — aggregate combo stability, coverage matrix, global leaderboard.
-- No gate required; each task independently usable once completed.
+### Phase 4: Quality Guardrails (AWF-011, AWF-012) ✅
+> Goal: Production-ready testing and operational documentation.
+- Regression test suite (87 tests, 18 files), operational runbook.
+- Status: **Complete**. Gate D passed at commit `a147972`.
 
-### Phase 4: Ranking Upgrade — Evidence-Driven (AWF-002b → AWF-006 → AWF-007, then Gate B)
+---
+
+### Phase 5: Control Panel Architecture Refactor (AWF-017a)
+> Goal: Restructure the 2250-line single-file control panel into a maintainable, extensible architecture.
+- Separate Python API backend from HTML/JS/CSS frontend assets.
+- Introduce Tab-based navigation (控制台 / 結果 / 覆蓋 / 儀表板 / 歷史).
+- Adopt lightweight CSS framework for consistent button/card/form styling.
+- Modular JS files per tab (batch.js, coverage.js, dashboard.js).
+- **Must complete before Phase 6-8 UI work begins.**
+
+### Phase 6: Batch Execution (AWF-014 + AWF-017b)
+> Goal: Enable unattended multi-config execution with browser-based control.
+- AWF-014: Batch runner backend — `autowfo batch --plan batch_plan.json`, preflight checks, crash-safe resume via `seen_keys`.
+- AWF-017b: Batch queue UI — enqueue/start/cancel buttons, queue table with per-job status/progress, live refresh.
+- Deliverable: Queue 3 configs from browser → batch runs unattended → registry accumulates.
+
+### Phase 7: Coverage Intelligence (AWF-015 + AWF-017c)
+> Goal: Auto-detect untested timeframe×symbol pairs and schedule them.
+- AWF-015: Coverage planner backend — `autowfo plan` reads `run_registry.json` gaps, generates batch plan, `--max-jobs N` limits scope.
+- AWF-017c: Coverage map UI — color-coded matrix (🟢tested / 🟡queued / ⬜untested), click-to-enqueue, coverage % progress bar.
+- Deliverable: Planner output feeds directly into batch queue; visual coverage gap identification.
+
+### Phase 8: Cross-Run Insight (AWF-016 + AWF-017d)
+> Goal: Aggregate analysis across accumulated runs for combo stability and trend detection.
+- AWF-016: Cross-run dashboard backend — `autowfo report` producing `cross_run_report.html`, combo appearance frequency, stability scoring.
+- AWF-017d: Dashboard UI — run history DataTable, combo stability timeline chart, global leaderboard, aggregated KPIs.
+- Deliverable: ≥3 runs produce meaningful stability trend visualization from browser.
+
+### Phase 9: Ranking Upgrade — Evidence-Driven (AWF-002b → AWF-006 → AWF-007, then Gate B)
 > Goal: Replace simple sort-by-return with composite robustness scoring.
 > Trigger: only activated when baseline runs show D1 or D2 pass (ranking quality is the bottleneck).
+> Current evidence: 11 baseline windows all show D3-only; AWF-002b/AWF-006 remain deferred.
 - AWF-002b: Add Sharpe + stability metrics to the metric module.
 - AWF-006: New ranking function using composite score.
 - AWF-007: Benchmark scenario to lock down deterministic results.
-- Gate B checklist must pass before Phase 5.
+- Gate B checklist must pass before Phase 10.
 
-### Phase 5: Advanced Modes (AWF-001b → AWF-005, then Gate C)
+### Phase 10: Advanced Modes (AWF-001b → AWF-005, then Gate C)
 > Goal: Add true WFO and refactor engine for modularity.
 - AWF-001b: Per-window re-optimization mode.
 - AWF-005: Full engine refactor using modular pipeline.
 - Gate C reproducibility checks.
 
-### Phase 6: Operationalize (AWF-011, AWF-012, then Gate D)
-> Goal: Production-ready automation.
-- Regression suite, runbook.
-- Gate D regression green.
-
 ## Current Focus Window
-- Active phase: **Phase 3.5 — Automation Loop**
-- Decision: System automation and accumulation capability before strategy exploration; build the factory before mass-producing experiments
-- Execution order: AWF-014 (batch runner) → AWF-015 (coverage planner) → AWF-016 (cross-run dashboard)
-- Next action: Start AWF-014 — implement `autowfo batch` CLI subcommand
-- AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass
+- Active phase: **Phase 5 — Control Panel Architecture Refactor**
+- Decision: UI 架構先行 → 確立可擴展的前端基礎，再逐步疊加批次/覆蓋/儀表板功能
+- Execution order: AWF-017a → (AWF-014 + AWF-017b) → (AWF-015 + AWF-017c) → (AWF-016 + AWF-017d)
+- Next action: Start AWF-017a — front/back separation, Tab navigation, CSS upgrade
+- AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass (11 windows all D3-only)
 - Gate A status: passed at commit `524f837`
 - Gate D status: passed at commit `a147972`
 
@@ -167,3 +187,4 @@
 | 2026-02-10 | AWF-ALL | gate_d_passed | Completed Gate D sign-off: regression suite green and runbook available; no unresolved critical drift issues identified in latest session log review. | Continue evidence-window collection and keep AWF-002b/AWF-006 trigger-gated on D1/D2 thresholds | a147972 |
 | 2026-02-10 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window11_quick | Executed quick baseline using `python -m autowfo baseline --config artifacts/sweep_config_window11_quick.json` (`4h/180d`, `ETH/USDT+SOL/USDT`, `combo_segment_size=8`, `top_n_refine=12`). Both passes were non-zero (`combo=3840`, `refine=702`), comparison remained informative (`delta_avg_oos_return_pct=+1.2267`, `delta_avg_oos_drawdown_pct=-0.0734`, `delta_avg_oos_min_total_trades=+0.85`), and trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260210_013015`. | Keep AWF-002b/AWF-006 deferred and continue cross-window evidence collection focused on D1/D2 emergence | pending |
 | 2026-02-10 | AWF-014, AWF-015, AWF-016 | plan_revised | Added Automation Loop phase (Phase 3.5): AWF-014 batch runner, AWF-015 coverage planner, AWF-016 cross-run dashboard. Focus shifted from passive evidence collection to building automation infrastructure for unattended batch execution and systematic coverage expansion. | Start AWF-014 batch runner implementation | pending |
+| 2026-02-10 | AWF-017a/b/c/d | plan_restructured | Full TODO restructure: (1) Consolidated 6+3.5 phases into clean 10-phase sequence, (2) Phases 1-4 marked complete with gate refs, (3) Added AWF-017a/b/c/d for control panel enhancement (architecture refactor + batch UI + coverage map UI + dashboard UI), (4) Phase 5 = panel refactor (prerequisite for all new UI), Phase 6-8 = backend+frontend paired delivery, Phase 9-10 = evidence-gated ranking/WFO, (5) Updated focus window to Phase 5. | Start AWF-017a — front/back separation, Tab navigation, CSS upgrade | 8eb4e90 |
