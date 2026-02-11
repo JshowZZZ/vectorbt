@@ -855,6 +855,33 @@ def _coverage_enqueue_pair(payload):
         return False, msg, None
     return True, "pair enqueued", {"job": job, "config_path": str(cfg_path)}
 
+
+def _cross_run_payload(top_n=20):
+    from scripts.autowfo import cross_run
+
+    registry_path = _coverage_registry_path()
+    return cross_run.build_cross_run_payload(
+        artifacts_dir=ARTIFACTS,
+        registry_path=registry_path,
+        top_n=int(top_n),
+    )
+
+
+def _cross_run_generate_report(top_n=20):
+    from scripts.autowfo import cross_run
+
+    registry_path = _coverage_registry_path()
+    out_html = ARTIFACTS / "cross_run_report.html"
+    out_json = ARTIFACTS / "cross_run_report.json"
+    payload = cross_run.write_cross_run_reports(
+        artifacts_dir=ARTIFACTS,
+        registry_path=registry_path,
+        out_html_path=out_html,
+        out_json_path=out_json,
+        top_n=int(top_n),
+    )
+    return payload, out_html
+
 def _write_status(payload):
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with STATUS_JSON.open("w", encoding="utf-8") as f:
@@ -2914,6 +2941,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(_read_batch_log_tail(), "text/plain; charset=utf-8")
         if path == "/coverage/matrix.json":
             return self._send(json.dumps(_coverage_matrix_payload(), ensure_ascii=False), "application/json; charset=utf-8")
+        if path == "/dashboard/cross_run.json":
+            query = parse_qs(parsed.query)
+            top_n = 20
+            try:
+                top_n = int(query.get("top_n", ["20"])[0])
+            except Exception:
+                top_n = 20
+            payload = _cross_run_payload(top_n=max(1, top_n))
+            return self._send(json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8")
+        if path == "/dashboard/report":
+            report_path = ARTIFACTS / "cross_run_report.html"
+            if report_path.exists():
+                return self._send(report_path.read_text(encoding="utf-8"))
+            try:
+                _payload, generated_path = _cross_run_generate_report(top_n=20)
+                if generated_path.exists():
+                    return self._send(generated_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                return self._send(f"Generate report failed: {exc}", status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return self._send("Cross-run report unavailable", status=HTTPStatus.NOT_FOUND)
         if path == "/results.json":
             query = parse_qs(parsed.query)
             timeframe = query.get("timeframe", [None])[0]
@@ -3039,6 +3086,34 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 return self._send(
                     json.dumps({"ok": False, "message": f"coverage enqueue failed: {exc}"}, ensure_ascii=False),
+                    "application/json; charset=utf-8",
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+        if parsed.path == "/dashboard/report/generate":
+            try:
+                payload = self._read_json_payload()
+                top_n = int(payload.get("top_n", 20))
+                if top_n <= 0:
+                    top_n = 20
+            except Exception:
+                top_n = 20
+            try:
+                report_payload, report_path = _cross_run_generate_report(top_n=top_n)
+                return self._send(
+                    json.dumps(
+                        {
+                            "ok": True,
+                            "message": "cross-run report generated",
+                            "report_path": str(report_path.relative_to(ROOT)),
+                            "summary": report_payload.get("summary", {}),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "application/json; charset=utf-8",
+                )
+            except Exception as exc:
+                return self._send(
+                    json.dumps({"ok": False, "message": f"report generation failed: {exc}"}, ensure_ascii=False),
                     "application/json; charset=utf-8",
                     status=HTTPStatus.INTERNAL_SERVER_ERROR,
                 )

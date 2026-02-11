@@ -386,3 +386,61 @@ def test_cli_plan_generates_empty_jobs_when_no_gaps(tmp_path):
     payload = json.loads(out_plan.read_text(encoding="utf-8"))
     assert payload["job_count"] == 0
     assert payload["jobs"] == []
+
+
+def test_cli_report_generates_cross_run_outputs(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "run_id": "r1",
+                        "timestamp_utc": "2026-02-10T01:00:00Z",
+                        "search_mode": "combo",
+                        "timeframes": [{"timeframe": "1h", "days": 60}],
+                        "trade_symbols": ["ETH/USDT"],
+                        "oos_avg_total_return_pct": 1.1,
+                        "avg_total_return_pct": 0.8,
+                    }
+                ],
+                "coverage": {
+                    "tested_pairs": [{"timeframe": "1h", "symbol": "ETH/USDT"}],
+                    "untested_pairs": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    run_dir = artifacts_dir / "runs" / "run_a" / "refine"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "param_sweep_top10_r1.csv").write_text(
+        "indicator_list,regime_name,vol_mode,oos_avg_total_return_pct\n"
+        "rsi,trend,normal,1.1\n",
+        encoding="utf-8",
+    )
+
+    out_html = artifacts_dir / "cross_run_report.html"
+    out_json = artifacts_dir / "cross_run_report.json"
+    code = cli.main(
+        [
+            "report",
+            "--registry",
+            str(registry_path),
+            "--artifacts-dir",
+            str(artifacts_dir),
+            "--out-html",
+            str(out_html),
+            "--out-json",
+            str(out_json),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    assert out_html.exists()
+    assert out_json.exists()
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["summary"]["total_runs"] == 1

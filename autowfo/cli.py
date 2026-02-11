@@ -579,6 +579,44 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    from scripts.autowfo import cross_run
+
+    cwd = Path(args.cwd).resolve()
+    artifacts_dir = _resolve_path(cwd, args.artifacts_dir)
+    registry_path = _resolve_path(cwd, args.registry)
+    out_html_path = _resolve_path(cwd, args.out_html)
+    out_json_path = _resolve_path(cwd, args.out_json) if args.out_json else None
+
+    if not registry_path.exists():
+        raise FileNotFoundError(f"registry not found: {registry_path}")
+    if not artifacts_dir.exists():
+        raise FileNotFoundError(f"artifacts dir not found: {artifacts_dir}")
+
+    payload = cross_run.write_cross_run_reports(
+        artifacts_dir=artifacts_dir,
+        registry_path=registry_path,
+        out_html_path=out_html_path,
+        out_json_path=out_json_path,
+        top_n=int(args.top_n),
+    )
+    summary = payload.get("summary", {})
+    print(f"[report] registry={registry_path}")
+    print(f"[report] artifacts={artifacts_dir}")
+    print(f"[report] out_html={out_html_path}")
+    if out_json_path is not None:
+        print(f"[report] out_json={out_json_path}")
+    print(
+        "[report] runs={runs} symbols={symbols} timeframes={timeframes} coverage_pct={coverage}".format(
+            runs=summary.get("total_runs", 0),
+            symbols=summary.get("unique_symbols", 0),
+            timeframes=summary.get("unique_timeframes", 0),
+            coverage=summary.get("coverage_pct", 0),
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -665,6 +703,36 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--workers", type=int, default=None, help="Optional workers value for each generated job")
     plan_parser.add_argument("--cwd", default=".", help="Working directory")
     plan_parser.set_defaults(handler=_cmd_plan)
+
+    report_parser = subparsers.add_parser("report", help="Generate cross-run dashboard report from run registry")
+    report_parser.add_argument(
+        "--registry",
+        default="artifacts/run_registry.json",
+        help="Path to run registry JSON",
+    )
+    report_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory",
+    )
+    report_parser.add_argument(
+        "--out-html",
+        default="artifacts/cross_run_report.html",
+        help="Output path for cross-run HTML report",
+    )
+    report_parser.add_argument(
+        "--out-json",
+        default="artifacts/cross_run_report.json",
+        help="Output path for cross-run JSON payload (set empty to disable)",
+    )
+    report_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=20,
+        help="Top-N rows for leaderboard and combo-stability views",
+    )
+    report_parser.add_argument("--cwd", default=".", help="Working directory")
+    report_parser.set_defaults(handler=_cmd_report)
 
     return parser
 

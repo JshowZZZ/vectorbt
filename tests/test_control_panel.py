@@ -366,3 +366,46 @@ def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatc
     assert not ok
     assert "already queued" in msg
     assert details is None
+
+
+def test_cross_run_payload_and_report_generation(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "run_registry.json").write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "run_id": "r100",
+                        "timestamp_utc": "2026-02-10T09:00:00Z",
+                        "search_mode": "baseline",
+                        "timeframes": [{"timeframe": "2h", "days": 120}],
+                        "trade_symbols": ["ETH/USDT", "BNB/USDT"],
+                        "oos_avg_total_return_pct": 1.7,
+                        "avg_total_return_pct": 1.1,
+                    }
+                ],
+                "coverage": {
+                    "tested_pairs": [{"timeframe": "2h", "symbol": "ETH/USDT"}],
+                    "untested_pairs": [{"timeframe": "2h", "symbol": "BNB/USDT"}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    top10_dir = artifacts / "runs" / "pack1" / "refine"
+    top10_dir.mkdir(parents=True, exist_ok=True)
+    (top10_dir / "param_sweep_top10_r100.csv").write_text(
+        "indicator_list,regime_name,vol_mode,oos_avg_total_return_pct,oos_avg_max_drawdown_pct\n"
+        "rsi,trend,normal,1.7,-3.2\n",
+        encoding="utf-8",
+    )
+
+    payload = cp._cross_run_payload(top_n=10)
+    assert payload["summary"]["total_runs"] == 1
+    assert payload["summary"]["coverage_pct"] == 50.0
+    assert len(payload["combo_stability"]) == 1
+
+    report_payload, report_path = cp._cross_run_generate_report(top_n=10)
+    assert report_payload["summary"]["total_runs"] == 1
+    assert report_path.exists()
+    assert "AUTOWFO Cross-Run Report" in report_path.read_text(encoding="utf-8")

@@ -44,10 +44,10 @@ indicators, symbols, and time windows to discover robust combinations.
 | Artifacts (CSV/DB/HTML) | ✅ Reproducible (`artifacts.py` + contract) | Frozen | Config hash + data fingerprint included |
 | Parallel evaluation | ✅ 3-worker (`parallel.py`) | ×2.66 speedup | Bit-identical verified |
 | Run registry | ✅ (`registry.py`) | Working | Coverage map across timeframe×symbol |
-| CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` + `batch` + `plan` subcommands |
+| CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` + `batch` + `plan` + `report` subcommands |
 | Regression tests | ✅ 87 tests / 18 files | Green | Split + ranking invariants covered |
 | Operational runbook | `AUTOWFO_RUNBOOK.md` | Complete | Preflight/run/post-run checklist |
-| Web control panel | Static tabs + batch + coverage | Partially complete | Cross-run dashboard/history pending (AWF-016/017d) |
+| Web control panel | Static tabs + batch + coverage + dashboard/history | Complete (Phase 8) | Next gap is ranking-quality upgrades (AWF-002b/006) pending trigger evidence |
 
 ## Milestones
 
@@ -64,7 +64,7 @@ indicators, symbols, and time windows to discover robust combinations.
 ### Phase 3: Scale & Experiment Management (AWF-013/009/010) [Done]
 - Multi-process parallelization (x2.66 speedup, bit-identical).
 - Run registry with timeframe/symbol coverage map.
-- CLI entrypoint (`python -m autowfo run|baseline`).
+- CLI entrypoint (`python -m autowfo run|baseline|batch|plan|report`).
 - Linked TODO: `AWF-013`, `AWF-009`, `AWF-010`.
 
 ### Phase 4: Quality Guardrails (AWF-011/012) [Done]
@@ -83,19 +83,19 @@ indicators, symbols, and time windows to discover robust combinations.
 - Prerequisite for all Phase 6-8 UI work.
 - Linked TODO: `AWF-017a`.
 
-### Phase 6: Batch Execution (AWF-014 + AWF-017b)
+### Phase 6: Batch Execution (AWF-014 + AWF-017b) [Done]
 - Batch runner backend: `autowfo batch --plan batch_plan.json`, preflight checks, crash-safe resume.
 - Batch queue UI: enqueue/start/cancel buttons, per-job status/progress, live refresh.
 - Exit criteria: queue 3 configs from browser -> batch runs unattended -> registry accumulates.
 - Linked TODO: `AWF-014`, `AWF-017b`.
 
-### Phase 7: Coverage Intelligence (AWF-015 + AWF-017c)
+### Phase 7: Coverage Intelligence (AWF-015 + AWF-017c) [Done]
 - Coverage planner backend: `autowfo plan` reads registry gaps, generates batch plan.
 - Coverage map UI: color-coded timeframe/symbol matrix, click-to-enqueue.
 - Exit criteria: planner output feeds directly into batch queue; visual gap identification.
 - Linked TODO: `AWF-015`, `AWF-017c`.
 
-### Phase 8: Cross-Run Insight (AWF-016 + AWF-017d)
+### Phase 8: Cross-Run Insight (AWF-016 + AWF-017d) [Done]
 - Cross-run dashboard backend: `autowfo report` producing aggregate analysis.
 - Dashboard UI: run history table, combo stability timeline, global leaderboard.
 - Exit criteria: >=3 runs produce meaningful stability trend visualization from browser.
@@ -213,3 +213,4 @@ Each experiment should record:
 - 2026-02-10: AWF-017b implemented: control panel now exposes batch queue APIs (`/batch/queue.json`, `/batch/enqueue`, `/batch/start`, `/batch/cancel`, `/batch/clear`, `/batch/remove`) and frontend batch tab actions (enqueue/start/cancel/clear + live queue/log refresh) wired to `autowfo batch` and `artifacts/batch_state.json`. Added queue lifecycle tests in `tests/test_control_panel.py`.
 - 2026-02-10: AWF-015 implemented: added `python -m autowfo plan` coverage planner to generate executable batch plans from `run_registry.json` `untested_pairs`, including per-gap config generation and controls for `--max-jobs`, `--workflow`, `--mode`, and `--workers`. Added CLI tests for both populated and empty-gap planning paths.
 - 2026-02-10: AWF-017c implemented: control panel coverage tab now renders timeframe×symbol matrix from `/coverage/matrix.json` with tested/queued/untested states and supports one-click scheduling through `/coverage/enqueue` (per-pair config generation + batch queue insertion). Added regression tests for coverage matrix classification and enqueue behavior.
+- 2026-02-11: AWF-016 and AWF-017d implemented and marked done. Added `scripts/autowfo/cross_run.py`, CLI subcommand `python -m autowfo report`, dashboard report endpoints (`/dashboard/cross_run.json`, `/dashboard/report`, `/dashboard/report/generate`), and live dashboard/history UI rendering for summary KPI, global leaderboard, combo stability, and run timeline. Focused regression suite covering aggregation, CLI, and control-panel hooks passed (`22 passed`).
