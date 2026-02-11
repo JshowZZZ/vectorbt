@@ -99,3 +99,70 @@
   margin-top: 8px;
   max-height: 180px;
 }
+
+.cp-coverage-card {
+  margin-bottom: 16px;
+}
+
+.cp-coverage-form label {
+  min-width: 140px;
+}
+
+.cp-coverage-legend {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.cp-cov-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--cp-border);
+}
+
+.cp-coverage-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.cp-coverage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cp-coverage-table th,
+.cp-coverage-table td {
+  border: 1px solid #d9dde6;
+  padding: 6px;
+  text-align: center;
+}
+
+.cp-cov-cell {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  padding: 6px 8px;
+  text-transform: uppercase;
+}
+
+.cp-cov-tested {
+  background: #dff5e4;
+  color: #1f6132;
+  border-color: #9fd3ab;
+}
+
+.cp-cov-queued {
+  background: #fff3d8;
+  color: #865c00;
+  border-color: #e6c477;
+}
+
+.cp-cov-untested {
+  background: #f1f3f7;
+  color: #344255;
+  border-color: #c8d0dd;
+}

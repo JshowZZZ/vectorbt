@@ -1,4 +1,6 @@
 import sqlite3
+import json
+from pathlib import Path
 
 from scripts import control_panel as cp
 
@@ -95,6 +97,7 @@ def _setup_batch_env(tmp_path, monkeypatch):
     artifacts.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(cp, "ROOT", tmp_path)
     monkeypatch.setattr(cp, "ARTIFACTS", artifacts)
+    monkeypatch.setattr(cp, "CONFIG_JSON", artifacts / "sweep_config.json")
     cp.BATCH_PROCESS = None
     cp.PROCESS = None
     return artifacts
@@ -236,3 +239,130 @@ def test_batch_cancel_marks_active_jobs(tmp_path, monkeypatch):
     assert ok, msg
     payload = cp._batch_status_payload()
     assert payload["jobs"][0]["status"] == "cancelled"
+
+
+def test_coverage_matrix_payload_marks_tested_and_queued(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "sweep_config.json").write_text(
+        json.dumps(
+            {
+                "timeframes": [{"timeframe": "1h", "days": 120}],
+                "trade_symbols": ["ETH/USDT", "SOL/USDT"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "run_registry.json").write_text(
+        json.dumps(
+            {
+                "coverage": {
+                    "timeframes": ["1h"],
+                    "symbols": ["ETH/USDT", "SOL/USDT"],
+                    "tested_pairs": [{"timeframe": "1h", "symbol": "ETH/USDT"}],
+                    "untested_pairs": [{"timeframe": "1h", "symbol": "SOL/USDT"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    queued_cfg = tmp_path / "queued.json"
+    queued_cfg.write_text(
+        json.dumps(
+            {
+                "timeframes": [{"timeframe": "1h", "days": 120}],
+                "trade_symbols": ["SOL/USDT"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "batch_queue.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "next_id": 2,
+                "jobs": [
+                    {
+                        "id": 1,
+                        "name": "q1",
+                        "status": "queued",
+                        "workflow": "baseline",
+                        "config": str(queued_cfg),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = cp._coverage_matrix_payload()
+    assert payload["summary"]["total"] == 2
+    assert payload["summary"]["tested"] == 1
+    assert payload["summary"]["queued"] == 1
+    assert payload["summary"]["untested"] == 0
+    assert payload["summary"]["coverage_pct"] == 50.0
+
+    cell_map = {(cell["timeframe"], cell["symbol"]): cell["status"] for cell in payload["cells"]}
+    assert cell_map[("1h", "ETH/USDT")] == "tested"
+    assert cell_map[("1h", "SOL/USDT")] == "queued"
+
+
+def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "sweep_config.json").write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "combo_sizes": [2],
+                "timeframes": [{"timeframe": "1h", "days": 100}],
+                "trade_symbols": ["ETH/USDT"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "run_registry.json").write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "timeframes": [
+                            {"timeframe": "4h", "days": 240},
+                        ]
+                    }
+                ],
+                "coverage": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ok, _msg, details = cp._coverage_enqueue_pair(
+        {
+            "timeframe": "4h",
+            "symbol": "BNB/USDT",
+            "workflow": "baseline",
+        }
+    )
+    assert ok
+    assert details is not None
+    assert details["job"]["status"] == "queued"
+
+    cfg_path = Path(details["config_path"])
+    assert cfg_path.exists()
+    cfg_payload = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg_payload["timeframes"] == [{"timeframe": "4h", "days": 240}]
+    assert cfg_payload["trade_symbols"] == ["BNB/USDT"]
+
+    queue_payload = cp._load_batch_queue()
+    assert len(queue_payload["jobs"]) == 1
+    assert queue_payload["jobs"][0]["status"] == "queued"
+
+    ok, msg, details = cp._coverage_enqueue_pair(
+        {
+            "timeframe": "4h",
+            "symbol": "BNB/USDT",
+            "workflow": "baseline",
+        }
+    )
+    assert not ok
+    assert "already queued" in msg
+    assert details is None

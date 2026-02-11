@@ -47,7 +47,7 @@ indicators, symbols, and time windows to discover robust combinations.
 | CLI entrypoint | ✅ `python -m autowfo` | Working | `run` + `baseline` + `batch` + `plan` subcommands |
 | Regression tests | ✅ 87 tests / 18 files | Green | Split + ranking invariants covered |
 | Operational runbook | `AUTOWFO_RUNBOOK.md` | Complete | Preflight/run/post-run checklist |
-| Web control panel | Static tabs + batch queue | Partially complete | Coverage map UI + cross-run dashboard pending (AWF-017c~017d) |
+| Web control panel | Static tabs + batch + coverage | Partially complete | Cross-run dashboard/history pending (AWF-016/017d) |
 
 ## Milestones
 
@@ -212,3 +212,4 @@ Each experiment should record:
 - 2026-02-10: AWF-014 implemented: added `python -m autowfo batch --plan <file>` backend with structured plan parsing, preflight checks (config/cwd/disk), crash-safe resume state (`artifacts/batch_state.json`, seen-key dedup), and `--continue-on-error` behavior. Added CLI regression coverage for success, resume-skip, missing-config preflight, and partial-failure continuation paths.
 - 2026-02-10: AWF-017b implemented: control panel now exposes batch queue APIs (`/batch/queue.json`, `/batch/enqueue`, `/batch/start`, `/batch/cancel`, `/batch/clear`, `/batch/remove`) and frontend batch tab actions (enqueue/start/cancel/clear + live queue/log refresh) wired to `autowfo batch` and `artifacts/batch_state.json`. Added queue lifecycle tests in `tests/test_control_panel.py`.
 - 2026-02-10: AWF-015 implemented: added `python -m autowfo plan` coverage planner to generate executable batch plans from `run_registry.json` `untested_pairs`, including per-gap config generation and controls for `--max-jobs`, `--workflow`, `--mode`, and `--workers`. Added CLI tests for both populated and empty-gap planning paths.
+- 2026-02-10: AWF-017c implemented: control panel coverage tab now renders timeframe×symbol matrix from `/coverage/matrix.json` with tested/queued/untested states and supports one-click scheduling through `/coverage/enqueue` (per-pair config generation + batch queue insertion). Added regression tests for coverage matrix classification and enqueue behavior.

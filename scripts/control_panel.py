@@ -543,6 +543,318 @@ def _batch_cancel():
         _write_batch_queue(queue)
     return True, "batch cancelled"
 
+
+def _coverage_registry_path():
+    return ARTIFACTS / "run_registry.json"
+
+
+def _coverage_slug_text(value):
+    text = str(value or "").strip()
+    if not text:
+        return "unknown"
+    out_chars = []
+    for ch in text:
+        if ch.isalnum() or ch in {"-", "_"}:
+            out_chars.append(ch)
+        else:
+            out_chars.append("-")
+    slug = "".join(out_chars)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-") or "unknown"
+
+
+def _coverage_pairs_to_set(raw_pairs):
+    pairs = set()
+    if not isinstance(raw_pairs, list):
+        return pairs
+    for item in raw_pairs:
+        if not isinstance(item, dict):
+            continue
+        timeframe = str(item.get("timeframe", "")).strip()
+        symbol = str(item.get("symbol", "")).strip()
+        if not timeframe or not symbol:
+            continue
+        pairs.add((timeframe, symbol))
+    return pairs
+
+
+def _coverage_set_to_pairs(pair_set):
+    return [
+        {"timeframe": timeframe, "symbol": symbol}
+        for timeframe, symbol in sorted(pair_set)
+    ]
+
+
+def _coverage_collect_queued_pairs(queue_payload):
+    queued_pairs = set()
+    jobs = queue_payload.get("jobs") if isinstance(queue_payload, dict) else []
+    if not isinstance(jobs, list):
+        return queued_pairs
+
+    active_statuses = {"queued", "submitted", "running"}
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        status = str(job.get("status", "")).strip()
+        if status not in active_statuses:
+            continue
+
+        config_raw = str(job.get("config", "")).strip()
+        if not config_raw:
+            continue
+        config_path = Path(config_raw)
+        if not config_path.is_absolute():
+            config_path = (ROOT / config_path).resolve()
+        if not config_path.exists():
+            continue
+
+        config_payload = _read_json_file(config_path, {})
+        if not isinstance(config_payload, dict):
+            continue
+
+        timeframes = []
+        raw_timeframes = config_payload.get("timeframes")
+        if isinstance(raw_timeframes, list):
+            for item in raw_timeframes:
+                if not isinstance(item, dict):
+                    continue
+                timeframe = str(item.get("timeframe", "")).strip()
+                if timeframe:
+                    timeframes.append(timeframe)
+        if not timeframes:
+            continue
+
+        symbols = []
+        raw_symbols = config_payload.get("trade_symbols")
+        if isinstance(raw_symbols, str):
+            raw_symbols = [s.strip() for s in raw_symbols.split(",") if s.strip()]
+        if isinstance(raw_symbols, list):
+            for symbol_raw in raw_symbols:
+                symbol = str(symbol_raw).strip()
+                if symbol:
+                    symbols.append(symbol)
+        if not symbols:
+            continue
+
+        for timeframe in timeframes:
+            for symbol in symbols:
+                queued_pairs.add((timeframe, symbol))
+
+    return queued_pairs
+
+
+def _coverage_build_days_map(registry_payload, template_config):
+    mapping = {}
+    runs = registry_payload.get("runs") if isinstance(registry_payload, dict) else None
+    if isinstance(runs, list):
+        for entry in runs:
+            if not isinstance(entry, dict):
+                continue
+            timeframes = entry.get("timeframes")
+            if not isinstance(timeframes, list):
+                continue
+            for item in timeframes:
+                if not isinstance(item, dict):
+                    continue
+                timeframe = str(item.get("timeframe", "")).strip()
+                if not timeframe:
+                    continue
+                try:
+                    days = int(item.get("days"))
+                except Exception:
+                    continue
+                if days <= 0:
+                    continue
+                if timeframe not in mapping:
+                    mapping[timeframe] = days
+
+    template_timeframes = template_config.get("timeframes") if isinstance(template_config, dict) else None
+    if isinstance(template_timeframes, list):
+        for item in template_timeframes:
+            if not isinstance(item, dict):
+                continue
+            timeframe = str(item.get("timeframe", "")).strip()
+            if not timeframe:
+                continue
+            try:
+                days = int(item.get("days"))
+            except Exception:
+                continue
+            if days <= 0:
+                continue
+            if timeframe not in mapping:
+                mapping[timeframe] = days
+
+    return mapping
+
+
+def _coverage_default_days(template_config):
+    timeframes = template_config.get("timeframes") if isinstance(template_config, dict) else None
+    if isinstance(timeframes, list):
+        for item in timeframes:
+            if not isinstance(item, dict):
+                continue
+            try:
+                days = int(item.get("days"))
+            except Exception:
+                continue
+            if days > 0:
+                return days
+    return 60
+
+
+def _coverage_matrix_payload():
+    registry_payload = _read_json_file(_coverage_registry_path(), {"runs": [], "coverage": {}})
+    coverage = registry_payload.get("coverage")
+    if not isinstance(coverage, dict):
+        coverage = {}
+
+    tested_pairs = _coverage_pairs_to_set(coverage.get("tested_pairs"))
+    untested_pairs = _coverage_pairs_to_set(coverage.get("untested_pairs"))
+    queued_pairs = _coverage_collect_queued_pairs(_load_batch_queue())
+
+    timeframe_values = set()
+    symbol_values = set()
+    for timeframe, symbol in tested_pairs | untested_pairs | queued_pairs:
+        timeframe_values.add(timeframe)
+        symbol_values.add(symbol)
+
+    raw_timeframes = coverage.get("timeframes")
+    if isinstance(raw_timeframes, list):
+        for raw in raw_timeframes:
+            val = str(raw).strip()
+            if val:
+                timeframe_values.add(val)
+
+    raw_symbols = coverage.get("symbols")
+    if isinstance(raw_symbols, list):
+        for raw in raw_symbols:
+            val = str(raw).strip()
+            if val:
+                symbol_values.add(val)
+
+    template_cfg = _read_config()
+    cfg_timeframes = template_cfg.get("timeframes")
+    if isinstance(cfg_timeframes, list):
+        for item in cfg_timeframes:
+            if not isinstance(item, dict):
+                continue
+            timeframe = str(item.get("timeframe", "")).strip()
+            if timeframe:
+                timeframe_values.add(timeframe)
+
+    cfg_symbols = template_cfg.get("trade_symbols")
+    if isinstance(cfg_symbols, list):
+        for raw in cfg_symbols:
+            symbol = str(raw).strip()
+            if symbol:
+                symbol_values.add(symbol)
+
+    timeframes = sorted(timeframe_values)
+    symbols = sorted(symbol_values)
+    cells = []
+    status_counts = {"tested": 0, "queued": 0, "untested": 0}
+
+    for symbol in symbols:
+        for timeframe in timeframes:
+            pair = (timeframe, symbol)
+            if pair in queued_pairs:
+                status = "queued"
+            elif pair in tested_pairs:
+                status = "tested"
+            else:
+                status = "untested"
+            status_counts[status] += 1
+            cells.append({"timeframe": timeframe, "symbol": symbol, "status": status})
+
+    total = len(timeframes) * len(symbols)
+    coverage_pct = 0.0 if total == 0 else (len(tested_pairs) / total) * 100.0
+
+    return {
+        "generated_utc": _now_iso(),
+        "timeframes": timeframes,
+        "symbols": symbols,
+        "cells": cells,
+        "tested_pairs": _coverage_set_to_pairs(tested_pairs),
+        "queued_pairs": _coverage_set_to_pairs(queued_pairs),
+        "untested_pairs": _coverage_set_to_pairs(untested_pairs),
+        "summary": {
+            "total": total,
+            "tested": status_counts["tested"],
+            "queued": status_counts["queued"],
+            "untested": status_counts["untested"],
+            "tested_pairs": len(tested_pairs),
+            "coverage_pct": round(coverage_pct, 2),
+        },
+    }
+
+
+def _coverage_enqueue_pair(payload):
+    if not isinstance(payload, dict):
+        return False, "invalid payload", None
+
+    timeframe = str(payload.get("timeframe", "")).strip()
+    symbol = str(payload.get("symbol", "")).strip()
+    if not timeframe or not symbol:
+        return False, "timeframe and symbol are required", None
+
+    workflow = str(payload.get("workflow", "baseline")).strip().lower()
+    if workflow not in {"run", "baseline"}:
+        return False, "workflow must be run or baseline", None
+
+    mode_raw = payload.get("mode")
+    mode = None if mode_raw in (None, "") else str(mode_raw).strip().lower()
+    if workflow == "baseline" and mode is not None:
+        return False, "mode is only valid for workflow=run", None
+    if workflow == "run" and mode not in {None, "combo", "refine"}:
+        return False, "mode must be combo or refine", None
+
+    workers = None
+    workers_raw = payload.get("workers")
+    if workers_raw not in (None, ""):
+        try:
+            workers = int(workers_raw)
+        except Exception:
+            return False, "workers must be integer", None
+        if workers <= 0:
+            return False, "workers must be > 0", None
+
+    active_pairs = _coverage_collect_queued_pairs(_load_batch_queue())
+    if (timeframe, symbol) in active_pairs:
+        return False, "pair is already queued", None
+
+    registry_payload = _read_json_file(_coverage_registry_path(), {"runs": [], "coverage": {}})
+    template_cfg = _read_config()
+    days_map = _coverage_build_days_map(registry_payload, template_cfg)
+    days = int(days_map.get(timeframe, _coverage_default_days(template_cfg)))
+
+    cfg_payload = json.loads(json.dumps(template_cfg, ensure_ascii=False))
+    cfg_payload["timeframes"] = [{"timeframe": timeframe, "days": days}]
+    cfg_payload["trade_symbols"] = [symbol]
+
+    planned_dir = ARTIFACTS / "planned_configs"
+    planned_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    cfg_name = f"ui_{_coverage_slug_text(timeframe)}_{_coverage_slug_text(symbol)}_{stamp}.json"
+    cfg_path = planned_dir / cfg_name
+    cfg_path.write_text(json.dumps(cfg_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    enqueue_payload = {
+        "name": str(payload.get("name") or f"cov-{_coverage_slug_text(timeframe)}-{_coverage_slug_text(symbol)}"),
+        "workflow": workflow,
+        "config": str(cfg_path),
+    }
+    if mode is not None:
+        enqueue_payload["mode"] = mode
+    if workers is not None:
+        enqueue_payload["workers"] = workers
+
+    ok, msg, job = _batch_enqueue(enqueue_payload)
+    if not ok:
+        return False, msg, None
+    return True, "pair enqueued", {"job": job, "config_path": str(cfg_path)}
+
 def _write_status(payload):
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with STATUS_JSON.open("w", encoding="utf-8") as f:
@@ -2600,6 +2912,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(json.dumps(_batch_status_payload(), ensure_ascii=False), "application/json; charset=utf-8")
         if path == "/batch/log-tail.txt":
             return self._send(_read_batch_log_tail(), "text/plain; charset=utf-8")
+        if path == "/coverage/matrix.json":
+            return self._send(json.dumps(_coverage_matrix_payload(), ensure_ascii=False), "application/json; charset=utf-8")
         if path == "/results.json":
             query = parse_qs(parsed.query)
             timeframe = query.get("timeframe", [None])[0]
@@ -2710,6 +3024,21 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 return self._send(
                     json.dumps({"ok": False, "message": f"remove failed: {exc}"}, ensure_ascii=False),
+                    "application/json; charset=utf-8",
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+        if parsed.path == "/coverage/enqueue":
+            try:
+                payload = self._read_json_payload()
+                ok, msg, details = _coverage_enqueue_pair(payload)
+                return self._send(
+                    json.dumps({"ok": ok, "message": msg, "details": details}, ensure_ascii=False),
+                    "application/json; charset=utf-8",
+                    status=HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST,
+                )
+            except Exception as exc:
+                return self._send(
+                    json.dumps({"ok": False, "message": f"coverage enqueue failed: {exc}"}, ensure_ascii=False),
                     "application/json; charset=utf-8",
                     status=HTTPStatus.INTERNAL_SERVER_ERROR,
                 )
