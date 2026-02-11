@@ -104,7 +104,7 @@ indicators, symbols, and time windows to discover robust combinations.
 ### Phase 9: Ranking Upgrade - Evidence-Gated (AWF-002b/006/007)
 - Sharpe + stability scoring, composite ranking function, benchmark scenario.
 - Trigger: only activated when baseline runs show D1 or D2 pass.
-- Current evidence: 11 baseline windows all D3-only; deferred.
+- Current evidence: 12 baseline windows all D3-only; deferred.
 - Linked TODO: `AWF-002b`, `AWF-006`, `AWF-007`.
 
 ### Phase 10: Advanced Modes (AWF-001b/005)
@@ -214,3 +214,4 @@ Each experiment should record:
 - 2026-02-10: AWF-015 implemented: added `python -m autowfo plan` coverage planner to generate executable batch plans from `run_registry.json` `untested_pairs`, including per-gap config generation and controls for `--max-jobs`, `--workflow`, `--mode`, and `--workers`. Added CLI tests for both populated and empty-gap planning paths.
 - 2026-02-10: AWF-017c implemented: control panel coverage tab now renders timeframe×symbol matrix from `/coverage/matrix.json` with tested/queued/untested states and supports one-click scheduling through `/coverage/enqueue` (per-pair config generation + batch queue insertion). Added regression tests for coverage matrix classification and enqueue behavior.
 - 2026-02-11: AWF-016 and AWF-017d implemented and marked done. Added `scripts/autowfo/cross_run.py`, CLI subcommand `python -m autowfo report`, dashboard report endpoints (`/dashboard/cross_run.json`, `/dashboard/report`, `/dashboard/report/generate`), and live dashboard/history UI rendering for summary KPI, global leaderboard, combo stability, and run timeline. Focused regression suite covering aggregation, CLI, and control-panel hooks passed (`22 passed`).
+- 2026-02-11: Additional evidence window executed (`python -m autowfo baseline --config artifacts/sweep_config_window12_symbols.json`) and archived at `artifacts/runs/20260211_103459` (`4h/180d`, `ETH/USDT+BNB/USDT`). Both passes were non-zero (`combo=3840`, `refine=1161`) and comparison remained informative (`delta_avg_oos_return_pct=+0.3130`, `delta_avg_oos_drawdown_pct=-0.2822`), while trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`), so AWF-002b/AWF-006 continue to stay deferred.

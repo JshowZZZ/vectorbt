@@ -108,7 +108,7 @@
 ### Phase 9: Ranking Upgrade — Evidence-Driven (AWF-002b → AWF-006 → AWF-007, then Gate B)
 > Goal: Replace simple sort-by-return with composite robustness scoring.
 > Trigger: only activated when baseline runs show D1 or D2 pass (ranking quality is the bottleneck).
-> Current evidence: 11 baseline windows all show D3-only; AWF-002b/AWF-006 remain deferred.
+> Current evidence: 12 baseline windows all show D3-only; AWF-002b/AWF-006 remain deferred.
 - AWF-002b: Add Sharpe + stability metrics to the metric module.
 - AWF-006: New ranking function using composite score.
 - AWF-007: Benchmark scenario to lock down deterministic results.
@@ -125,7 +125,7 @@
 - Decision: AWF-016 + AWF-017d 已完成，跨 run backend + dashboard/history UI 已打通
 - Execution order: Gate D complete → Phase 6/7/8 complete → keep ranking upgrades trigger-gated
 - Next action: 持續透過 `autowfo batch` + `autowfo plan` 累積跨市場窗證據；僅當 D1/D2 觸發時啟動 AWF-002b/AWF-006
-- AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass (11 windows all D3-only)
+- AWF-002b/AWF-006: deferred until baseline runs show D1 or D2 pass (12 windows all D3-only)
 - Gate A status: passed at commit `524f837`
 - Gate D status: passed at commit `a147972`
 
@@ -194,3 +194,4 @@
 | 2026-02-10 | AWF-015 | done | Implemented coverage planner backend in `autowfo plan`: reads `run_registry.json` untested pairs, generates per-gap config files, and writes executable batch plan (`--max-jobs`, `--workflow`, `--mode`, `--workers`) for direct `autowfo batch` consumption. Added CLI tests for plan generation and empty-gap behavior. | Move to AWF-017c coverage map UI with click-to-enqueue integration | pending |
 | 2026-02-10 | AWF-017c | done | Implemented coverage-map UI in control panel: backend exposes `/coverage/matrix.json` + `/coverage/enqueue`, matrix renders tested/queued/untested cells, and cell click enqueues timeframe×symbol into batch queue with generated per-pair config under `artifacts/planned_configs/`. Added coverage matrix/enqueue tests in `tests/test_control_panel.py`. | Move to AWF-016 backend report aggregation and AWF-017d dashboard/history UI | pending |
 | 2026-02-11 | AWF-016, AWF-017d | done | Implemented cross-run aggregation module (`scripts/autowfo/cross_run.py`) and `autowfo report` command; wired control panel dashboard/history endpoints (`/dashboard/cross_run.json`, `/dashboard/report`, `/dashboard/report/generate`) and replaced dashboard frontend scaffold with live KPI/leaderboard/combo-stability/history views (refresh + top-N + report generation). Added regression tests for aggregation payload/report output, CLI report command, and control-panel report hooks (22 tests passed). | Shift active focus to Phase 9 evidence-gated ranking work; keep AWF-002b/AWF-006 deferred until D1/D2 trigger | pending |
+| 2026-02-11 | AWF-008, AWF-002b, AWF-006 | e2e_baseline_window12_symbols | Executed additional symbol-mix baseline using `python -m autowfo baseline --config artifacts/sweep_config_window12_symbols.json` (`4h/180d`, `ETH/USDT+BNB/USDT`, `combo_segment_size=8`, `top_n_refine=12`). Both passes were non-zero (`combo=3840`, `refine=1161`), comparison remained informative (`delta_avg_oos_return_pct=+0.3130`, `delta_avg_oos_drawdown_pct=-0.2822`), and trigger remained `false` with D3-only (`D1=false`, `D2=false`, `D3=true`). Output archived at `artifacts/runs/20260211_103459`. | Keep AWF-002b/AWF-006 deferred and continue evidence accumulation with new timeframe windows to seek D1/D2 emergence | pending |
