@@ -27,7 +27,7 @@ def test_build_walk_forward_slices_step_lt_test_raises():
 def test_build_walk_forward_slices_rejects_invalid_mode():
     index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
     with pytest.raises(ValueError, match="unsupported split mode"):
-        s._build_walk_forward_slices(index, train_days=5, test_days=2, step_days=2, mode="rolling")
+        s._build_walk_forward_slices(index, train_days=5, test_days=2, step_days=2, mode="invalid_mode")
 
 
 def test_build_walk_forward_slices_rejects_non_positive_days():
@@ -82,3 +82,28 @@ def test_build_walk_forward_slices_rejects_non_int_days():
     index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
     with pytest.raises(ValueError, match="train_days must be int"):
         s._build_walk_forward_slices(index, train_days=5.0, test_days=2, step_days=2)
+
+
+def test_build_walk_forward_windows_anchored_keeps_train_start_fixed():
+    index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
+    got = s._build_walk_forward_windows(index, train_days=5, test_days=2, step_days=3, mode="anchored")
+
+    assert len(got) > 1
+    first_train_start = got[0][0]
+    for train_start, train_end, test_start, test_end in got:
+        assert train_start == first_train_start
+        assert test_start == train_end
+        assert test_end > test_start
+
+
+def test_build_walk_forward_windows_rolling_moves_train_start():
+    index = pd.date_range("2024-01-01", periods=24 * 20, freq="h")
+    got = s._build_walk_forward_windows(index, train_days=5, test_days=2, step_days=3, mode="rolling")
+
+    assert len(got) > 1
+    first_train_start, first_train_end, _, _ = got[0]
+    second_train_start, second_train_end, _, _ = got[1]
+    assert second_train_start > first_train_start
+    assert second_train_start - first_train_start == pd.Timedelta(days=3)
+    assert first_train_end - first_train_start == pd.Timedelta(days=5)
+    assert second_train_end - second_train_start == pd.Timedelta(days=5)

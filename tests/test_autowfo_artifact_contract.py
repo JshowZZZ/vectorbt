@@ -12,6 +12,7 @@ def test_default_artifact_contract_contains_expected_sections():
     assert "run_metadata.json" in contract["required_files"]
     assert contract["row_metadata_fields"] == ["config_sha256", "data_fingerprint"]
     assert "config_sha256" in contract["run_metadata_fields"]
+    assert "combo_seed" in contract["run_metadata_fields"]
 
 
 def test_validate_artifact_contract_rejects_duplicate_required_files(tmp_path):

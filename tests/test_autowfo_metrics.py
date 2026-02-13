@@ -41,6 +41,11 @@ def test_aggregate_oos_metrics_characterization():
     assert got["oos_avg_total_return_pct"] == 15.0
     assert got["oos_min_total_trades"] == 12.0
     assert got["oos_avg_daily_trades"] == 2.5
+    assert got["oos_return_std"] == 5.0
+    assert got["oos_positive_segment_ratio"] == 1.0
+    assert got["oos_sharpe_like"] == 3.0
+    assert got["oos_low_trade_segment_ratio"] == 1.0
+    assert np.isclose(got["oos_low_trade_penalty"], 0.55)
     assert got["oos_segments"] == 2
 
 
@@ -48,6 +53,7 @@ def test_aggregate_oos_metrics_empty_includes_contract_fields():
     got = m._aggregate_oos_metrics([])
     assert set(got.keys()) == set(m.OOS_AGGREGATE_METRIC_FIELDS)
     assert np.isnan(got["oos_avg_daily_trades"])
+    assert np.isnan(got["oos_sharpe_like"])
     assert got["oos_segments"] == 0
 
 
@@ -113,5 +119,10 @@ def test_metric_field_constants_loaded_from_contract():
         "oos_min_total_trades",
         "oos_avg_daily_trades",
         "oos_avg_hold_hours",
+        "oos_return_std",
+        "oos_positive_segment_ratio",
+        "oos_sharpe_like",
+        "oos_low_trade_segment_ratio",
+        "oos_low_trade_penalty",
         "oos_segments",
     )

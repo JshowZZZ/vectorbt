@@ -10,16 +10,16 @@ def test_default_split_protocol_contains_expected_fields():
     protocol = sp.load_split_protocol()
     assert protocol["protocol_version"] == "1.0.0"
     assert protocol["default_mode"] == "anchored"
-    assert protocol["supported_modes"] == ["anchored"]
+    assert protocol["supported_modes"] == ["anchored", "rolling"]
     assert protocol["constraints"]["allow_oos_overlap"] is False
 
 
 def test_validate_split_protocol_rejects_unknown_default_mode(tmp_path):
     protocol = sp.load_split_protocol()
-    protocol["default_mode"] = "rolling"
+    protocol["default_mode"] = "unsupported_mode"
     path = tmp_path / "invalid_split_protocol.yaml"
     path.write_text(json.dumps(protocol), encoding="utf-8")
-    with pytest.raises(ValueError, match="default_mode 'rolling'"):
+    with pytest.raises(ValueError, match="default_mode 'unsupported_mode'"):
         sp.load_split_protocol(str(path))
 
 

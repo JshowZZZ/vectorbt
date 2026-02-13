@@ -12,7 +12,7 @@ def test_default_metric_contract_contains_expected_sections_and_counts():
     assert len(contract["is_series_metrics"]) == 8
     assert len(contract["combo_metrics"]) == 8
     assert len(contract["is_aggregate_metrics"]) == 8
-    assert len(contract["oos_aggregate_metrics"]) == 10
+    assert len(contract["oos_aggregate_metrics"]) == 15
 
 
 def test_validate_metric_contract_rejects_duplicate_metric_names(tmp_path):

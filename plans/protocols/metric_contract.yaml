@@ -141,6 +141,26 @@
       "formula": "safe_nanmean(segment.avg_hold_hours)"
     },
     {
+      "name": "oos_return_std",
+      "formula": "safe_nanstd(segment.avg_total_return_pct)"
+    },
+    {
+      "name": "oos_positive_segment_ratio",
+      "formula": "safe_ratio(segment.avg_total_return_pct > 0)"
+    },
+    {
+      "name": "oos_sharpe_like",
+      "formula": "safe_nanmean(segment.avg_total_return_pct) / safe_nanstd(segment.avg_total_return_pct)"
+    },
+    {
+      "name": "oos_low_trade_segment_ratio",
+      "formula": "safe_ratio(segment.min_total_trades < 30)"
+    },
+    {
+      "name": "oos_low_trade_penalty",
+      "formula": "safe_nanmean(max(0, (30 - segment.min_total_trades) / 30))"
+    },
+    {
       "name": "oos_segments",
       "formula": "len(segments)"
     }

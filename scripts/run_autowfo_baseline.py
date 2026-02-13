@@ -22,6 +22,16 @@ def _utc_now_iso() -> str:
     return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
+def _load_config_payload(path: Path) -> Dict[str, object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return payload
+
+
 def _clean_temp_outputs(repo_root: Path) -> Dict[str, bool]:
     removed = {}
     for name in ("test_out.txt", "test_output.txt"):
@@ -72,6 +82,7 @@ def main() -> None:
     config_path = artifacts_dir / "sweep_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Missing config: {config_path}")
+    config_payload = _load_config_payload(config_path)
 
     run_label = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     run_root = artifacts_dir / "runs" / run_label
@@ -116,15 +127,37 @@ def main() -> None:
     trigger = autowfo_baseline._trigger_decision(refine_top10)
     autowfo_baseline._write_json(run_root / "trigger_decision.json", trigger)
 
+    refine_combo_df = autowfo_baseline._read_combo_summary_for_run(refine_dir, refine_run_id)
+    ranking_mode_comparison = autowfo_baseline._build_ranking_mode_comparison_report(
+        combo_df=refine_combo_df,
+        config_payload=config_payload,
+        run_label=run_label,
+        run_id=refine_run_id,
+        generated_utc=_utc_now_iso(),
+    )
+    ranking_mode_comparison_json = run_root / "ranking_mode_comparison.json"
+    ranking_mode_comparison_html = run_root / "ranking_mode_comparison.html"
+    autowfo_baseline._write_json(ranking_mode_comparison_json, ranking_mode_comparison)
+    ranking_mode_comparison_html.write_text(
+        autowfo_baseline._render_ranking_mode_comparison_html(ranking_mode_comparison),
+        encoding="utf-8",
+    )
+
     manifest["ended_utc"] = _utc_now_iso()
     manifest["comparison"] = comparison
     manifest["trigger_decision"] = trigger
+    manifest["ranking_mode_comparison"] = {
+        "json": str(ranking_mode_comparison_json.relative_to(repo_root)).replace("\\", "/"),
+        "html": str(ranking_mode_comparison_html.relative_to(repo_root)).replace("\\", "/"),
+        "summary": ranking_mode_comparison.get("summary", {}),
+    }
     autowfo_baseline._write_json(run_root / "manifest.json", manifest)
 
     print(f"[baseline] run_label={run_label}")
     print(f"[baseline] combo_run_id={combo_run_id}")
     print(f"[baseline] refine_run_id={refine_run_id}")
     print(f"[baseline] trigger_awf_002b_006={trigger['trigger_awf_002b_006']}")
+    print(f"[baseline] ranking_mode_comparison={ranking_mode_comparison_json}")
     print(f"[baseline] output_dir={run_root}")
 
 

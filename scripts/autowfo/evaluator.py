@@ -27,6 +27,71 @@ def _series_to_symbol_map(series_value, symbols):
     return {symbol: float(series_value[symbol]) for symbol in symbols}
 
 
+def _all_true_filter(template):
+    if isinstance(template, pd.DataFrame):
+        return pd.DataFrame(True, index=template.index, columns=template.columns)
+    return pd.Series(True, index=template.index)
+
+
+def _segment_combo_metrics(
+    *,
+    segment_close,
+    segment_long,
+    segment_short,
+    segment_trade_mom,
+    long_filter,
+    short_filter,
+    max_hold,
+    effective_fees,
+    sl_stop,
+    tp_stop,
+    timeframe,
+    capital_mode,
+    max_concurrent_positions,
+    effective_slippage,
+    order_size_pct,
+    init_cash_btc,
+    trade_symbols_tf,
+    bar_hours,
+):
+    pf_segment = autowfo_portfolio._run_pf(
+        segment_close,
+        segment_long,
+        segment_short,
+        max_hold,
+        effective_fees,
+        sl_stop,
+        tp_stop,
+        freq=timeframe,
+        long_filter=long_filter,
+        short_filter=short_filter,
+        init_cash=init_cash_btc,
+        size=order_size_pct,
+        size_type="percent",
+        cash_sharing=(capital_mode == "shared"),
+        lock_cash=True,
+        allow_partial=False,
+        max_positions=(max_concurrent_positions if capital_mode == "shared" else None),
+        long_scores=segment_trade_mom,
+        short_scores=-segment_trade_mom,
+        slippage=effective_slippage,
+    )
+    if capital_mode == "shared":
+        return autowfo_metrics._calc_pf_combo_metrics(pf_segment, bar_hours)
+    seg_series = autowfo_metrics._calc_pf_series(pf_segment, trade_symbols_tf, bar_hours)
+    seg_agg = autowfo_metrics._aggregate_metrics(seg_series)
+    return {
+        "total_return_pct": seg_agg["avg_total_return_pct"],
+        "total_profit": np.nan,
+        "total_trades": seg_agg["avg_total_trades"],
+        "win_rate_pct": seg_agg["avg_win_rate_pct"],
+        "avg_trade_pct": seg_agg["avg_avg_trade_pct"],
+        "max_drawdown_pct": seg_agg["avg_max_drawdown_pct"],
+        "position_coverage_pct": seg_agg["avg_position_coverage_pct"],
+        "avg_hold_hours": seg_agg["avg_hold_hours"],
+    }
+
+
 def evaluate_combo_task(task, runtime):
     """Evaluate one combo task and return combo/symbol rows.
 
@@ -64,9 +129,14 @@ def evaluate_combo_task(task, runtime):
     wf_train_days = runtime["wf_train_days"]
     wf_test_days = runtime["wf_test_days"]
     wf_step_days = runtime["wf_step_days"]
+    wf_mode = str(runtime.get("wf_mode", "anchored") or "anchored").lower()
     rsi_window = runtime["rsi_window"]
     bar_hours = runtime["bar_hours"]
-    wf_slices = runtime["wf_slices"]
+    wf_windows = runtime.get("wf_windows")
+    if wf_windows is None:
+        wf_windows = []
+        for test_start, test_end in runtime.get("wf_slices", []):
+            wf_windows.append((None, None, test_start, test_end))
     config_sha256 = runtime["config_sha256"]
     data_fingerprint = runtime["data_fingerprint"]
 
@@ -150,53 +220,85 @@ def evaluate_combo_task(task, runtime):
         }
 
     oos_rows = []
-    for test_start, test_end in wf_slices:
+    for train_start, train_end, test_start, test_end in wf_windows:
         segment_close = ctx["trade_close"].loc[test_start:test_end]
         if segment_close.empty:
             continue
         segment_long = long_regime_final.loc[segment_close.index]
         segment_short = short_regime_final.loc[segment_close.index]
         segment_trade_mom = trade_mom.loc[segment_close.index]
-        seg_long_filter, seg_short_filter = autowfo_engine._build_trade_mom_filters(
+        base_long_filter, base_short_filter = autowfo_engine._build_trade_mom_filters(
             segment_trade_mom
         )
-        pf_test = autowfo_portfolio._run_pf(
-            segment_close,
-            segment_long,
-            segment_short,
-            max_hold,
-            effective_fees,
-            sl_stop,
-            tp_stop,
-            freq=timeframe,
+        selected_policy = "filtered"
+        if wf_mode == "rolling" and train_start is not None and train_end is not None:
+            train_close = ctx["trade_close"].loc[train_start:train_end]
+            if not train_close.empty:
+                train_long = long_regime_final.loc[train_close.index]
+                train_short = short_regime_final.loc[train_close.index]
+                train_trade_mom = trade_mom.loc[train_close.index]
+                train_base_long_filter, train_base_short_filter = autowfo_engine._build_trade_mom_filters(
+                    train_trade_mom
+                )
+                train_all_true = _all_true_filter(train_trade_mom)
+                candidate_filters = (
+                    ("filtered", train_base_long_filter, train_base_short_filter),
+                    ("unfiltered", train_all_true, train_all_true),
+                )
+                best_score = -np.inf
+                for policy_name, train_long_filter, train_short_filter in candidate_filters:
+                    train_metrics = _segment_combo_metrics(
+                        segment_close=train_close,
+                        segment_long=train_long,
+                        segment_short=train_short,
+                        segment_trade_mom=train_trade_mom,
+                        long_filter=train_long_filter,
+                        short_filter=train_short_filter,
+                        max_hold=max_hold,
+                        effective_fees=effective_fees,
+                        sl_stop=sl_stop,
+                        tp_stop=tp_stop,
+                        timeframe=timeframe,
+                        capital_mode=capital_mode,
+                        max_concurrent_positions=max_concurrent_positions,
+                        effective_slippage=effective_slippage,
+                        order_size_pct=order_size_pct,
+                        init_cash_btc=ctx["init_cash_btc"],
+                        trade_symbols_tf=trade_symbols_tf,
+                        bar_hours=bar_hours,
+                    )
+                    score = float(train_metrics.get("total_return_pct", np.nan))
+                    if np.isnan(score):
+                        continue
+                    if score > best_score:
+                        best_score = score
+                        selected_policy = policy_name
+        if selected_policy == "unfiltered":
+            seg_long_filter = _all_true_filter(segment_trade_mom)
+            seg_short_filter = _all_true_filter(segment_trade_mom)
+        else:
+            seg_long_filter, seg_short_filter = base_long_filter, base_short_filter
+
+        seg_combo_metrics = _segment_combo_metrics(
+            segment_close=segment_close,
+            segment_long=segment_long,
+            segment_short=segment_short,
+            segment_trade_mom=segment_trade_mom,
             long_filter=seg_long_filter,
             short_filter=seg_short_filter,
-            init_cash=ctx["init_cash_btc"],
-            size=order_size_pct,
-            size_type="percent",
-            cash_sharing=(capital_mode == "shared"),
-            lock_cash=True,
-            allow_partial=False,
-            max_positions=(max_concurrent_positions if capital_mode == "shared" else None),
-            long_scores=segment_trade_mom,
-            short_scores=-segment_trade_mom,
-            slippage=effective_slippage,
+            max_hold=max_hold,
+            effective_fees=effective_fees,
+            sl_stop=sl_stop,
+            tp_stop=tp_stop,
+            timeframe=timeframe,
+            capital_mode=capital_mode,
+            max_concurrent_positions=max_concurrent_positions,
+            effective_slippage=effective_slippage,
+            order_size_pct=order_size_pct,
+            init_cash_btc=ctx["init_cash_btc"],
+            trade_symbols_tf=trade_symbols_tf,
+            bar_hours=bar_hours,
         )
-        if capital_mode == "shared":
-            seg_combo_metrics = autowfo_metrics._calc_pf_combo_metrics(pf_test, bar_hours)
-        else:
-            seg_series = autowfo_metrics._calc_pf_series(pf_test, trade_symbols_tf, bar_hours)
-            seg_agg = autowfo_metrics._aggregate_metrics(seg_series)
-            seg_combo_metrics = {
-                "total_return_pct": seg_agg["avg_total_return_pct"],
-                "total_profit": np.nan,
-                "total_trades": seg_agg["avg_total_trades"],
-                "win_rate_pct": seg_agg["avg_win_rate_pct"],
-                "avg_trade_pct": seg_agg["avg_avg_trade_pct"],
-                "max_drawdown_pct": seg_agg["avg_max_drawdown_pct"],
-                "position_coverage_pct": seg_agg["avg_position_coverage_pct"],
-                "avg_hold_hours": seg_agg["avg_hold_hours"],
-            }
         seg_row = {
             "avg_total_return_pct": seg_combo_metrics["total_return_pct"],
             "avg_win_rate_pct": seg_combo_metrics["win_rate_pct"],

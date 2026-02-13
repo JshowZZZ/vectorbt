@@ -42,6 +42,7 @@ def test_write_run_metadata_requires_contract_fields(tmp_path):
         "timestamp_utc": "2026-02-08T00:00:00Z",
         "search_mode": "combo",
         "config_sha256": "abc",
+        "combo_seed": 42,
         "data_fingerprint": "def",
         "config_path": "artifacts/sweep_config.json",
         "exchange": "binance",
@@ -51,6 +52,7 @@ def test_write_run_metadata_requires_contract_fields(tmp_path):
         "wf_train_days": 120,
         "wf_test_days": 30,
         "wf_step_days": 30,
+        "wf_mode": "anchored",
         "capital_mode": "shared",
         "init_cash_usdt": 1000,
     }
@@ -58,8 +60,14 @@ def test_write_run_metadata_requires_contract_fields(tmp_path):
     got = json.loads(path.read_text(encoding="utf-8"))
     assert got["run_id"] == payload["run_id"]
     assert got["config_sha256"] == payload["config_sha256"]
+    assert got["combo_seed"] == 42
 
     bad_payload = dict(payload)
     bad_payload.pop("config_sha256")
     with pytest.raises(ValueError, match="missing required fields"):
         a._write_run_metadata(str(path), bad_payload)
+
+    bad_payload_seed = dict(payload)
+    bad_payload_seed.pop("combo_seed")
+    with pytest.raises(ValueError, match="missing required fields"):
+        a._write_run_metadata(str(path), bad_payload_seed)

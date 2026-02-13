@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from autowfo import cli
+from scripts.autowfo import artifact_contract as ac
 
 
 def test_cli_run_writes_runtime_config_and_invokes_sweep(tmp_path, monkeypatch):
@@ -444,3 +445,175 @@ def test_cli_report_generates_cross_run_outputs(tmp_path):
     assert out_json.exists()
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert payload["summary"]["total_runs"] == 1
+
+
+def test_cli_repro_generates_reproducibility_report(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    reference_top = artifacts_dir / "top_ref.csv"
+    candidate_top = artifacts_dir / "top_new.csv"
+    reference_top.write_text(
+        "combo_id,oos_avg_total_return_pct,oos_sharpe_like\n"
+        "A,5.0,1.2\n"
+        "B,4.0,1.1\n",
+        encoding="utf-8",
+    )
+    candidate_top.write_text(
+        "combo_id,oos_avg_total_return_pct,oos_sharpe_like\n"
+        "A,5.0,1.2\n"
+        "B,4.0,1.1\n",
+        encoding="utf-8",
+    )
+    out_json = artifacts_dir / "repro.json"
+
+    code = cli.main(
+        [
+            "repro",
+            "--reference-top",
+            str(reference_top),
+            "--candidate-top",
+            str(candidate_top),
+            "--out-json",
+            str(out_json),
+            "--top-n",
+            "2",
+            "--identity-fields",
+            "combo_id",
+            "--metric-fields",
+            "oos_avg_total_return_pct,oos_sharpe_like",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["stable"] is True
+    assert payload["overlap_rows"] == 2
+    assert payload["identity_fields"] == ["combo_id"]
+
+
+def test_cli_repro_missing_reference_fails(tmp_path):
+    missing_ref = tmp_path / "missing.csv"
+    candidate_top = tmp_path / "candidate.csv"
+    candidate_top.write_text("combo_id,oos_avg_total_return_pct\nA,5.0\n", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="reference top csv not found"):
+        cli.main(
+            [
+                "repro",
+                "--reference-top",
+                str(missing_ref),
+                "--candidate-top",
+                str(candidate_top),
+                "--cwd",
+                str(tmp_path),
+            ]
+        )
+
+
+def test_cli_gate_c_runs_dual_workflow_and_writes_report(tmp_path, monkeypatch):
+    cfg_path = tmp_path / "experiment.json"
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "combo_seed": 42,
+                "timeframes": [{"timeframe": "4h", "days": 10}],
+                "combo_sizes": [1],
+            }
+        ),
+        encoding="utf-8",
+    )
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    contract = ac.load_artifact_contract()
+    call_index = {"value": 0}
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
+        call_index["value"] += 1
+        idx = call_index["value"]
+        run_id = f"20260213_13000{idx}"
+        run_dir = cwd / "artifacts"
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        metadata = {field: "ok" for field in contract["run_metadata_fields"]}
+        metadata["run_id"] = run_id
+        metadata["combo_seed"] = 42
+        metadata["timeframes"] = [{"timeframe": "4h", "days": 10}]
+        metadata["trade_symbols"] = ["ETH/USDT"]
+        metadata["init_cash_usdt"] = 1000.0
+        (run_dir / "run_metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+        for filename in contract["required_files"]:
+            path = run_dir / filename
+            if filename in {"param_sweep_combo_summary.csv", "param_sweep_symbol_summary.csv", "leaderboard.csv"}:
+                path.write_text("config_sha256,data_fingerprint\nabc,def\n", encoding="utf-8")
+            elif filename == "run_metadata.json":
+                continue
+            else:
+                path.write_text("ok", encoding="utf-8")
+
+        top_csv = run_dir / f"param_sweep_top10_{run_id}.csv"
+        top_csv.write_text(
+            "combo_id,oos_avg_total_return_pct,oos_sharpe_like\n"
+            "A,5.0,1.2\n"
+            "B,4.0,1.1\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+
+    out_json = tmp_path / "artifacts" / "reproducibility" / "gate_c_report.json"
+    code = cli.main(
+        [
+            "gate-c",
+            "--config",
+            str(cfg_path),
+            "--workflow",
+            "run",
+            "--mode",
+            "combo",
+            "--target-mode",
+            "combo",
+            "--out-json",
+            str(out_json),
+            "--top-n",
+            "2",
+            "--identity-fields",
+            "combo_id",
+            "--metric-fields",
+            "oos_avg_total_return_pct,oos_sharpe_like",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["schema_valid"] is True
+    assert payload["reproducibility"]["stable"] is True
+    assert payload["gate_c_passed"] is True
+    assert [entry["run_label"] for entry in payload["runs"]] == ["", ""]
+    assert [entry["run_id"] for entry in payload["runs"]] == ["20260213_130001", "20260213_130002"]
+
+
+def test_cli_gate_c_rejects_mode_override_for_baseline(tmp_path):
+    cfg_path = tmp_path / "experiment.json"
+    cfg_path.write_text(json.dumps({"search_mode": "combo"}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="mode override is only valid for workflow=run"):
+        cli.main(
+            [
+                "gate-c",
+                "--config",
+                str(cfg_path),
+                "--workflow",
+                "baseline",
+                "--mode",
+                "combo",
+                "--cwd",
+                str(tmp_path),
+            ]
+        )

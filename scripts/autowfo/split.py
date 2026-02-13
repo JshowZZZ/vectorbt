@@ -18,10 +18,15 @@ def _to_positive_int(value, field_name):
     return value
 
 
-def _build_walk_forward_slices(index, train_days, test_days, step_days, mode=None):
+def _normalize_split_mode(mode):
     mode_value = DEFAULT_SPLIT_MODE if mode is None else str(mode).strip().lower()
     if mode_value not in SUPPORTED_SPLIT_MODES:
         raise ValueError(f"unsupported split mode: {mode_value}")
+    return mode_value
+
+
+def _build_walk_forward_windows(index, train_days, test_days, step_days, mode=None):
+    mode_value = _normalize_split_mode(mode)
     train_days = _to_positive_int(train_days, "train_days")
     test_days = _to_positive_int(test_days, "test_days")
     step_days = _to_positive_int(step_days, "step_days")
@@ -38,12 +43,29 @@ def _build_walk_forward_slices(index, train_days, test_days, step_days, mode=Non
     step_delta = pd.Timedelta(days=step_days)
     cursor = index[0]
     end = index[-1]
-    slices = []
+    windows = []
     while True:
-        train_end = cursor + train_delta
+        if mode_value == "anchored":
+            train_start = index[0]
+            train_end = cursor + train_delta
+        else:
+            train_start = cursor
+            train_end = train_start + train_delta
+        test_start = train_end
         test_end = train_end + test_delta
         if test_end > end:
             break
-        slices.append((train_end, test_end))
+        windows.append((train_start, train_end, test_start, test_end))
         cursor = cursor + step_delta
-    return slices
+    return windows
+
+
+def _build_walk_forward_slices(index, train_days, test_days, step_days, mode=None):
+    windows = _build_walk_forward_windows(
+        index=index,
+        train_days=train_days,
+        test_days=test_days,
+        step_days=step_days,
+        mode=mode,
+    )
+    return [(test_start, test_end) for _, _, test_start, test_end in windows]

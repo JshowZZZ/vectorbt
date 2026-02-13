@@ -110,6 +110,8 @@ def validate_split_protocol(payload: object, source: str = "<in-memory>") -> Non
     if not isinstance(output_schema, dict):
         raise ValueError(f"output_schema must be an object: {source}")
     _assert_string_list(output_schema, "slice_tuple", source)
+    if "window_tuple" in output_schema:
+        _assert_string_list(output_schema, "window_tuple", source)
 
 
 def build_supported_modes(payload: Mapping[str, object]) -> List[str]:

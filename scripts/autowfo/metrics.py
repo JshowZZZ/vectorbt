@@ -20,6 +20,7 @@ IS_AGGREGATE_METRIC_FIELDS = tuple(
 OOS_AGGREGATE_METRIC_FIELDS = tuple(
     autowfo_metric_contract.build_metric_name_list(METRIC_CONTRACT, "oos_aggregate_metrics")
 )
+LOW_TRADE_SEGMENT_THRESHOLD = 30.0
 
 
 def _assert_metric_keys(metrics_dict, expected_keys, scope):
@@ -141,6 +142,11 @@ def _aggregate_oos_metrics(oos_rows):
             "oos_min_total_trades": np.nan,
             "oos_avg_daily_trades": np.nan,
             "oos_avg_hold_hours": np.nan,
+            "oos_return_std": np.nan,
+            "oos_positive_segment_ratio": np.nan,
+            "oos_sharpe_like": np.nan,
+            "oos_low_trade_segment_ratio": np.nan,
+            "oos_low_trade_penalty": np.nan,
             "oos_segments": 0,
         }
         _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
@@ -158,8 +164,52 @@ def _aggregate_oos_metrics(oos_rows):
             return np.nan
         return float(np.nanmin(arr))
 
+    def safe_nanstd(values):
+        arr = np.asarray(values, dtype="float64")
+        if arr.size == 0 or np.all(np.isnan(arr)):
+            return np.nan
+        return float(np.nanstd(arr))
+
+    def safe_ratio(values):
+        arr = np.asarray(values, dtype="float64")
+        if arr.size == 0:
+            return np.nan
+        valid = ~np.isnan(arr)
+        if not valid.any():
+            return np.nan
+        return float(np.nanmean(arr[valid]))
+
+    returns = np.asarray([row["avg_total_return_pct"] for row in oos_rows], dtype="float64")
+    min_trades = np.asarray([row["min_total_trades"] for row in oos_rows], dtype="float64")
+    return_std = safe_nanstd(returns)
+    avg_return = safe_nanmean(returns)
+    sharpe_like = np.nan
+    if np.isfinite(avg_return) and np.isfinite(return_std) and return_std > 0:
+        sharpe_like = float(avg_return / return_std)
+    positive_segment_ratio = safe_ratio(
+        np.where(np.isnan(returns), np.nan, (returns > 0).astype("float64"))
+    )
+    low_trade_segment_ratio = safe_ratio(
+        np.where(
+            np.isnan(min_trades),
+            np.nan,
+            (min_trades < LOW_TRADE_SEGMENT_THRESHOLD).astype("float64"),
+        )
+    )
+    low_trade_penalty = safe_nanmean(
+        np.where(
+            np.isnan(min_trades),
+            np.nan,
+            np.clip(
+                (LOW_TRADE_SEGMENT_THRESHOLD - min_trades) / LOW_TRADE_SEGMENT_THRESHOLD,
+                0.0,
+                None,
+            ),
+        )
+    )
+
     metrics = {
-        "oos_avg_total_return_pct": safe_nanmean([row["avg_total_return_pct"] for row in oos_rows]),
+        "oos_avg_total_return_pct": avg_return,
         "oos_avg_win_rate_pct": safe_nanmean([row["avg_win_rate_pct"] for row in oos_rows]),
         "oos_avg_avg_trade_pct": safe_nanmean([row["avg_avg_trade_pct"] for row in oos_rows]),
         "oos_avg_max_drawdown_pct": safe_nanmean([row["avg_max_drawdown_pct"] for row in oos_rows]),
@@ -168,6 +218,11 @@ def _aggregate_oos_metrics(oos_rows):
         "oos_min_total_trades": safe_nanmin([row["min_total_trades"] for row in oos_rows]),
         "oos_avg_daily_trades": safe_nanmean([row["avg_daily_trades"] for row in oos_rows]),
         "oos_avg_hold_hours": safe_nanmean([row["avg_hold_hours"] for row in oos_rows]),
+        "oos_return_std": return_std,
+        "oos_positive_segment_ratio": positive_segment_ratio,
+        "oos_sharpe_like": sharpe_like,
+        "oos_low_trade_segment_ratio": low_trade_segment_ratio,
+        "oos_low_trade_penalty": low_trade_penalty,
         "oos_segments": len(oos_rows),
     }
     _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")

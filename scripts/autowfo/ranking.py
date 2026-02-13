@@ -1,5 +1,77 @@
 """Ranking helpers extracted from run_btc_regime_sweep monolith."""
 
+from __future__ import annotations
+
+import copy
+
+import numpy as np
+import pandas as pd
+
+
+DEFAULT_RANKING_CONFIG = {
+    "mode": "composite",
+    "low_trade_threshold": 30.0,
+    "legacy": {
+        "preferred": "oos_avg_total_return_pct",
+        "fallback": "avg_total_return_pct",
+    },
+    "weights": {
+        "return": 1.0,
+        "stability": 1.0,
+        "risk_adjust": 0.5,
+        "drawdown_penalty": 1.0,
+        "low_sample_penalty": 1.0,
+    },
+}
+
+
+def _to_numeric_series(df, column):
+    if column not in df.columns:
+        return pd.Series(np.nan, index=df.index, dtype="float64")
+    return pd.to_numeric(df[column], errors="coerce")
+
+
+def _coerce_float(value, default):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _resolve_ranking_config(config=None):
+    resolved = copy.deepcopy(DEFAULT_RANKING_CONFIG)
+    if config is None:
+        return resolved
+    if not isinstance(config, dict):
+        return resolved
+
+    mode = str(config.get("mode", resolved["mode"])).strip().lower()
+    if mode not in {"legacy", "composite"}:
+        mode = resolved["mode"]
+    resolved["mode"] = mode
+
+    legacy = config.get("legacy")
+    if isinstance(legacy, dict):
+        preferred = legacy.get("preferred")
+        fallback = legacy.get("fallback")
+        if isinstance(preferred, str) and preferred.strip():
+            resolved["legacy"]["preferred"] = preferred.strip()
+        if isinstance(fallback, str) and fallback.strip():
+            resolved["legacy"]["fallback"] = fallback.strip()
+
+    weights = config.get("weights")
+    if isinstance(weights, dict):
+        for key in resolved["weights"]:
+            if key in weights:
+                resolved["weights"][key] = _coerce_float(weights[key], resolved["weights"][key])
+
+    if "low_trade_threshold" in config:
+        resolved["low_trade_threshold"] = max(
+            _coerce_float(config.get("low_trade_threshold"), resolved["low_trade_threshold"]),
+            0.0,
+        )
+    return resolved
+
 
 def _choose_score_col(df, preferred="oos_avg_total_return_pct", fallback="avg_total_return_pct"):
     sort_col = preferred
@@ -8,19 +80,79 @@ def _choose_score_col(df, preferred="oos_avg_total_return_pct", fallback="avg_to
     return sort_col
 
 
+def _build_composite_score(
+    df,
+    ranking_config,
+    preferred="oos_avg_total_return_pct",
+    fallback="avg_total_return_pct",
+):
+    threshold = float(ranking_config["low_trade_threshold"])
+    weights = ranking_config["weights"]
+
+    return_pct = _to_numeric_series(df, preferred)
+    fallback_return = _to_numeric_series(df, fallback)
+    return_pct = return_pct.where(return_pct.notna(), fallback_return)
+    return_component = return_pct / 100.0
+
+    positive_ratio = _to_numeric_series(df, "oos_positive_segment_ratio").fillna(0.0)
+    return_std = (_to_numeric_series(df, "oos_return_std").clip(lower=0.0) / 100.0).fillna(0.0)
+    stability_component = positive_ratio - return_std
+
+    # Cap risk-adjust to avoid accidental outlier domination.
+    risk_adjust = (_to_numeric_series(df, "oos_sharpe_like").clip(lower=-10.0, upper=10.0) / 10.0).fillna(0.0)
+
+    drawdown_pct = _to_numeric_series(df, "oos_avg_max_drawdown_pct")
+    fallback_drawdown_pct = _to_numeric_series(df, "avg_max_drawdown_pct")
+    drawdown_pct = drawdown_pct.where(drawdown_pct.notna(), fallback_drawdown_pct)
+    drawdown_penalty = (-drawdown_pct).clip(lower=0.0).fillna(0.0) / 100.0
+
+    low_sample_penalty = _to_numeric_series(df, "oos_low_trade_penalty")
+    if (not low_sample_penalty.notna().any()) and threshold > 0:
+        min_trades = _to_numeric_series(df, "oos_min_total_trades")
+        low_sample_penalty = ((threshold - min_trades) / threshold).clip(lower=0.0)
+    low_sample_penalty = low_sample_penalty.fillna(0.0)
+
+    score = (
+        weights["return"] * return_component
+        + weights["stability"] * stability_component
+        + weights["risk_adjust"] * risk_adjust
+        - weights["drawdown_penalty"] * drawdown_penalty
+        - weights["low_sample_penalty"] * low_sample_penalty
+    )
+    # Keep rows with missing returns as NaN so legacy fallback can still be chosen.
+    return score.where(return_component.notna(), np.nan)
+
+
 def _sort_by_score(
     df,
     preferred="oos_avg_total_return_pct",
     fallback="avg_total_return_pct",
     tie_break_avg_hold=True,
+    ranking_config=None,
 ):
-    score_col = _choose_score_col(df, preferred=preferred, fallback=fallback)
+    working_df = df.copy()
+    resolved = _resolve_ranking_config(ranking_config)
+    preferred_col = resolved["legacy"]["preferred"] or preferred
+    fallback_col = resolved["legacy"]["fallback"] or fallback
+    score_col = _choose_score_col(working_df, preferred=preferred_col, fallback=fallback_col)
+
+    if resolved["mode"] == "composite":
+        composite_col = "composite_score"
+        working_df[composite_col] = _build_composite_score(
+            working_df,
+            ranking_config=resolved,
+            preferred=preferred_col,
+            fallback=fallback_col,
+        )
+        if working_df[composite_col].notna().any():
+            score_col = composite_col
+
     sort_cols = [score_col]
     sort_asc = [False]
-    if tie_break_avg_hold and "avg_hold_hours" in df.columns:
+    if tie_break_avg_hold and "avg_hold_hours" in working_df.columns:
         sort_cols.append("avg_hold_hours")
         sort_asc.append(True)
-    return df.sort_values(sort_cols, ascending=sort_asc), score_col
+    return working_df.sort_values(sort_cols, ascending=sort_asc), score_col
 
 
 def _top_by_score(
@@ -29,11 +161,13 @@ def _top_by_score(
     preferred="oos_avg_total_return_pct",
     fallback="avg_total_return_pct",
     tie_break_avg_hold=True,
+    ranking_config=None,
 ):
     sorted_df, score_col = _sort_by_score(
         df,
         preferred=preferred,
         fallback=fallback,
         tie_break_avg_hold=tie_break_avg_hold,
+        ranking_config=ranking_config,
     )
     return sorted_df.head(top_n), score_col

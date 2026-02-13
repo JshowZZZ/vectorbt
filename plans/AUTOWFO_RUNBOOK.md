@@ -20,6 +20,7 @@
    - `python -m autowfo baseline --help`
    - `python -m autowfo batch --help`
    - `python -m autowfo plan --help`
+   - `python -m autowfo gate-c --help`
 4. Check disk headroom before long sweeps:
    - Windows: `Get-PSDrive -Name E | Select-Object Name,Free,Used`
    - Recommended: keep at least `20GB` free before baseline.
@@ -39,6 +40,8 @@
    - `python -m autowfo batch --plan artifacts/batch_plan.json --state artifacts/batch_state.json --cwd .`
 6. Generate batch plan from registry coverage gaps:
    - `python -m autowfo plan --registry artifacts/run_registry.json --template-config artifacts/sweep_config.json --out-plan artifacts/batch_plan.auto.json --out-config-dir artifacts/planned_configs --max-jobs 20 --cwd .`
+7. Run Gate C reproducibility check (dual-run + schema validation + top-N comparison):
+   - `python -m autowfo gate-c --config artifacts/sweep_config_window11_quick.json --workflow run --mode combo --target-mode combo --out-json artifacts/reproducibility/gate_c_window11_quick.json --cwd .`
 
 ## Output Locations
 - Latest sweep artifacts:
@@ -50,21 +53,27 @@
 - Run snapshots:
   - `artifacts/param_sweep_top10_<run_id>.csv`
   - `artifacts/run_metadata_<run_id>.json`
+- Gate C report:
+  - `artifacts/reproducibility/gate_c_<label>.json` (or custom `--out-json` path)
 - Baseline archive root:
   - `artifacts/runs/<run_label>/`
-  - Includes `combo/`, `refine/`, `comparison.json`, `trigger_decision.json`, `manifest.json`
+  - Includes `combo/`, `refine/`, `comparison.json`, `trigger_decision.json`, `ranking_mode_comparison.json`, `ranking_mode_comparison.html`, `manifest.json`
 - Batch state:
   - `artifacts/batch_state.json` (seen-keys + job history for crash-safe resume)
 
 ## Evidence Gate Interpretation
 - Ranking-upgrade trigger file:
   - `artifacts/runs/<run_label>/trigger_decision.json`
-- Current gate rule:
-  - Trigger AWF-002b/AWF-006 only when at least 2 of 3 conditions are true:
-    - `D1` drawdown ratio threshold
-    - `D2` insufficient OOS segment ratio threshold
-    - `D3` low-trade-count ratio threshold
-- If only `D3=true` and `D1=false`, `D2=false`, keep ranking upgrade deferred.
+- Current governance (2026-02-11 and later):
+  - `D1` / `D2` / `D3` are health-monitoring indicators, not activation gates.
+  - Use these ratios to detect drift and sample-quality issues over time.
+- Ranking comparison artifacts:
+  - `artifacts/runs/<run_label>/ranking_mode_comparison.json`
+  - `artifacts/runs/<run_label>/ranking_mode_comparison.html`
+  - These provide same-window legacy vs composite paired comparison and 3-axis diagnostics:
+    - strategy quality
+    - sample sufficiency
+    - combo scarcity
 
 ## Failure Handling
 1. `refine` run shows `run_total=0`:
@@ -91,7 +100,7 @@
 
 ## Post-Run Checklist
 1. Confirm pass completion in `manifest.json` (`run_done == run_total`).
-2. Confirm `comparison.json` and `trigger_decision.json` exist.
+2. Confirm `comparison.json`, `trigger_decision.json`, and `ranking_mode_comparison.json` exist.
 3. Update:
    - `plans/AUTOWFO_TODO.md` (status + session log)
    - `plans/AUTOWFO_MASTER_PLAN.md` (change log if direction/evidence changed)
@@ -101,4 +110,6 @@
 ## Operational Defaults
 - Keep protocol and metric contracts unchanged unless explicitly planned.
 - Prefer one-command execution via `python -m autowfo`.
-- Treat each baseline run as evidence, not as immediate ranking-change justification.
+- Walk-forward mode is configured by `wf_mode` in sweep config (`anchored` default, `rolling` for true-WFO windowing experiments).
+- Current true-WFO behavior (`wf_mode=rolling`): each window selects train-time execution policy (`filtered` vs `unfiltered`) and applies it to that window's OOS segment.
+- Treat each baseline run as evidence; use same-window paired comparison artifacts to evaluate ranking-rule changes.

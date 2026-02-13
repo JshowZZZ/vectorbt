@@ -19,6 +19,7 @@
     "timestamp_utc",
     "search_mode",
     "config_sha256",
+    "combo_seed",
     "data_fingerprint",
     "config_path",
     "exchange",
@@ -28,6 +29,7 @@
     "wf_train_days",
     "wf_test_days",
     "wf_step_days",
+    "wf_mode",
     "capital_mode",
     "init_cash_usdt"
   ]

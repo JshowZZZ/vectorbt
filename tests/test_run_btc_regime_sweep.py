@@ -312,15 +312,80 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
     )
     seen = {}
 
-    def _capture_wf(index, train_days, test_days, step_days):
-        seen["wf"] = (train_days, test_days, step_days)
+    def _capture_wf(index, train_days, test_days, step_days, mode=None):
+        seen["wf"] = (train_days, test_days, step_days, mode)
         return []
 
     monkeypatch.setattr(autowfo_split, "_build_walk_forward_slices", _capture_wf)
 
     sweep.main()
 
-    assert seen.get("wf") == (7, 2, 2)
+    assert seen.get("wf") == (7, 2, 2, "anchored")
+
+
+def test_main_uses_configured_walk_forward_mode(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    cfg = {
+        "search_mode": "combo",
+        "combo_sizes": [1],
+        "combo_seed": 1,
+        "combo_segment_start": 0,
+        "combo_segment_size": 1,
+        "timeframes": [{"timeframe": "1h", "days": 2}],
+        "wf_train_days": 7,
+        "wf_test_days": 2,
+        "wf_step_days": 2,
+        "wf_mode": "rolling",
+        "top_n_refine": 1,
+        "trade_symbols": ["ETH/BTC"],
+        "capital_mode": "per_symbol",
+        "init_cash_usdt": 1000,
+        "order_size_pct": 0.5,
+        "max_concurrent_positions": 1,
+        "slippage_bps": 0.0,
+        "spread_bps": 0.0,
+        "funding_rate_daily": 0.0,
+    }
+    (artifacts / "sweep_config.json").write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        autowfo_data,
+        "_fetch_top_trade_symbols",
+        lambda exchange, limit=10, fallback=None: ["ETH/BTC"],
+    )
+
+    def loader(symbol, *_args, **_kwargs):
+        index = pd.date_range("2024-01-01", periods=48, freq="h")
+        base = 100.0 if symbol == "BTC/USDT" else 1.0
+        return _make_ohlcv(index, base=base)
+
+    monkeypatch.setattr(autowfo_data, "_load_or_update_symbol", loader)
+    monkeypatch.setattr(
+        autowfo_strategy,
+        "_build_indicator_param_options_coarse",
+        lambda: {"volume_z": [{"volume_lookback": 12, "volume_z": 0.1}]},
+    )
+    monkeypatch.setattr(
+        sweep,
+        "INDICATOR_META",
+        {"volume_z": {"label": "volume_z", "category": "volume"}},
+    )
+    seen = {}
+
+    def _capture_wf(index, train_days, test_days, step_days, mode=None):
+        seen["wf"] = (train_days, test_days, step_days, mode)
+        return []
+
+    monkeypatch.setattr(autowfo_split, "_build_walk_forward_slices", _capture_wf)
+
+    sweep.main()
+
+    assert seen.get("wf") == (7, 2, 2, "rolling")
 
 
 def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):

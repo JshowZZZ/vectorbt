@@ -2,7 +2,8 @@
   "protocol_version": "1.0.0",
   "default_mode": "anchored",
   "supported_modes": [
-    "anchored"
+    "anchored",
+    "rolling"
   ],
   "time_units": "days",
   "segments": {
@@ -26,6 +27,12 @@
   "output_schema": {
     "slice_tuple": [
       "train_end",
+      "test_end"
+    ],
+    "window_tuple": [
+      "train_start",
+      "train_end",
+      "test_start",
       "test_end"
     ]
   }

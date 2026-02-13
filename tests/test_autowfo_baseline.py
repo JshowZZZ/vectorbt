@@ -122,3 +122,128 @@ def test_read_run_status_handles_missing_and_invalid(tmp_path):
     (target / "run_status.json").write_text("{invalid json", encoding="utf-8")
     invalid = b._read_run_status(target)
     assert invalid == {}
+
+
+def test_build_ranking_mode_comparison_report_prefers_composite_quality():
+    combo_df = pd.DataFrame(
+        [
+            {
+                "timeframe": "1h",
+                "data_days": 60,
+                "indicator_list": "high_return_low_sample",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "filter_name": "none",
+                "avg_daily_trades": 8.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_avg_total_return_pct": 20.0,
+                "oos_sharpe_like": 0.1,
+                "oos_return_std": 30.0,
+                "oos_positive_segment_ratio": 0.2,
+                "oos_avg_max_drawdown_pct": -25.0,
+                "oos_min_total_trades": 5.0,
+                "oos_segments": 1.0,
+                "oos_low_trade_penalty": 0.9,
+                "oos_low_trade_segment_ratio": 1.0,
+                "avg_hold_hours": 5.0,
+            },
+            {
+                "timeframe": "1h",
+                "data_days": 60,
+                "indicator_list": "balanced_high_quality",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "filter_name": "none",
+                "avg_daily_trades": 8.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_avg_total_return_pct": 12.0,
+                "oos_sharpe_like": 2.0,
+                "oos_return_std": 3.0,
+                "oos_positive_segment_ratio": 0.9,
+                "oos_avg_max_drawdown_pct": -8.0,
+                "oos_min_total_trades": 50.0,
+                "oos_segments": 3.0,
+                "oos_low_trade_penalty": 0.0,
+                "oos_low_trade_segment_ratio": 0.0,
+                "avg_hold_hours": 2.0,
+            },
+            {
+                "timeframe": "1h",
+                "data_days": 60,
+                "indicator_list": "mid_quality",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "filter_name": "none",
+                "avg_daily_trades": 8.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_avg_total_return_pct": 9.0,
+                "oos_sharpe_like": 0.7,
+                "oos_return_std": 8.0,
+                "oos_positive_segment_ratio": 0.7,
+                "oos_avg_max_drawdown_pct": -12.0,
+                "oos_min_total_trades": 30.0,
+                "oos_segments": 2.0,
+                "oos_low_trade_penalty": 0.0,
+                "oos_low_trade_segment_ratio": 0.0,
+                "avg_hold_hours": 3.0,
+            },
+        ]
+    )
+    cfg = {
+        "timeframes": [{"timeframe": "1h", "days": 60}],
+        "min_avg_daily_trades_target": 1.0,
+        "min_oos_trades_target": 1,
+        "ranking_compare_top_n": 2,
+        "ranking": {"mode": "composite"},
+    }
+    report = b._build_ranking_mode_comparison_report(
+        combo_df=combo_df,
+        config_payload=cfg,
+        run_label="20260211_120000",
+        run_id="20260211_120001",
+        generated_utc="2026-02-11T12:00:00Z",
+        top_n=2,
+    )
+
+    assert report["schema_version"] == "1.0.0"
+    assert report["summary"]["candidate_rows"] == 3
+    assert report["summary"]["legacy_rows"] == 2
+    assert report["summary"]["composite_rows"] == 2
+    assert report["legacy_top_rows"][0]["indicator_list"] == "high_return_low_sample"
+    assert report["composite_top_rows"][0]["indicator_list"] == "balanced_high_quality"
+    assert report["diagnostic"]["strategy_quality"]["delta"]["avg_oos_sharpe_like"] > 0
+    assert report["diagnostic"]["sample_sufficiency"]["delta"]["avg_oos_min_total_trades"] > 0
+
+
+def test_render_ranking_mode_comparison_html_has_fixed_sections():
+    payload = {
+        "schema_version": "1.0.0",
+        "generated_utc": "2026-02-11T12:00:00Z",
+        "run_label": "20260211_120000",
+        "run_id": "20260211_120001",
+        "summary": {"candidate_rows": 2},
+        "diagnostic": {
+            "strategy_quality": {
+                "legacy": {"avg_oos_return_pct": 1.0},
+                "composite": {"avg_oos_return_pct": 2.0},
+                "delta": {"avg_oos_return_pct": 1.0},
+            },
+            "sample_sufficiency": {"legacy": {}, "composite": {}, "delta": {}},
+            "combo_scarcity": {"legacy": {}, "composite": {}, "delta": {}},
+        },
+        "paired_rows": [],
+        "legacy_top_rows": [],
+        "composite_top_rows": [],
+    }
+    html = b._render_ranking_mode_comparison_html(payload)
+    assert "AUTOWFO Ranking Mode Paired Comparison" in html
+    assert "Diagnostic: Strategy Quality" in html
+    assert "Paired Rows (legacy vs composite)" in html
+
+
+def test_read_combo_summary_for_run_falls_back_to_static_file(tmp_path):
+    target = tmp_path / "out"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "param_sweep_combo_summary.csv").write_text("a\n1\n", encoding="utf-8")
+    df = b._read_combo_summary_for_run(target, "20260211_120001")
+    assert len(df) == 1
