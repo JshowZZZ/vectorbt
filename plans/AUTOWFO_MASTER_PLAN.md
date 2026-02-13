@@ -124,8 +124,8 @@ indicators, symbols, and time windows to discover robust combinations.
 - Gate 0: Monolith decomposed before protocol freeze (Phase 1). **??Passed.**
 - Gate A: Protocol freeze before scale/automation work (Phase 2??). **??Passed at `524f837`.**
 - Gate D: Regression suite green before automation expansion (Phase 4??). **??Passed at `a147972`.**
-- Gate B: Ranking rule freeze before advanced modes (Phase 9??0). In progress (checklist 3/4 complete; commit freeze record pending).
-- Gate C: Reproducibility checks before broadening strategy universe (Phase 10). In progress (checklist 3/4 complete; freeze commit record pending).
+- Gate B: Ranking rule freeze before advanced modes (Phase 9??0). **??Passed at `cfe3c8a`.**
+- Gate C: Reproducibility checks before broadening strategy universe (Phase 10). **??Passed at `cfe3c8a`.**
 
 ## Gate Checklists
 Gate A (Protocol Freeze) owner: Maintainer + AI agent pair sign-off
@@ -139,13 +139,13 @@ Gate B (Ranking Freeze) owner: Maintainer + AI agent pair sign-off
 - [x] Ranking formula spec finalized (including penalties).
 - [x] Before/after ranking comparison artifacts stored (`artifacts/runs/20260211_125631/ranking_mode_comparison.json` + `.html`).
 - [x] Selection-rule regression tests pass (`pytest tests -k "autowfo or control_panel or run_btc_regime_sweep" -q` -> `186 passed`, `846 deselected`).
-- [ ] `Change Log` entry added with `Ranking frozen at commit <hash>`.
+- [x] `Change Log` entry added with `Ranking frozen at commit cfe3c8a`.
 
 Gate C (Reproducibility Check) owner: Maintainer + AI agent pair sign-off
 - [x] Fixed seed and dataset snapshot identifiers recorded.
 - [x] Repeated runs produce stable top-N within defined tolerance.
 - [x] Experiment artifact schema validation passes.
-- [ ] `Change Log` entry added with `Reproducibility verified at commit <hash>`.
+- [x] `Change Log` entry added with `Reproducibility verified at commit cfe3c8a`.
 
 Gate D (Regression Green) owner: Maintainer + AI agent pair sign-off
 - [x] Regression suite green (split and ranking invariants).
@@ -252,3 +252,5 @@ Each experiment should record:
 - 2026-02-13: AWF-005 modular refactor step 21 completed. Added schema-field helper `scripts/autowfo/engine.py::_build_sweep_schema_fields` to centralize `COMBO_KEY_FIELDS`, `COMBO_RESULT_FIELDS`, `SYMBOL_RESULT_FIELDS`, and `STRICT_CONFIG_FIELDS` contracts, and rewired `scripts/run_btc_regime_sweep.py` to consume generated schema maps instead of inline constant blocks. Added schema contract regression test coverage and verified behavior-preserving output contracts. Validation remains green (`92 passed` targeted sweep/engine/report tests, `177 passed`, `846 deselected` AUTOWFO subset).
 - 2026-02-13: Gate C preflight implementation completed. Artifact contract now requires `combo_seed` in `run_metadata`, and engine finalize metadata pipeline propagates seed into persisted run metadata (`scripts/autowfo/engine.py`). Added reproducibility utility module `scripts/autowfo/reproducibility.py` with `compare_top_n_stability` for identity-overlap + metric-tolerance checks across repeated runs. Added regression coverage for contract enforcement, seed propagation, and reproducibility comparison behavior. Validation remains green (`99 passed` targeted tests, `180 passed`, `846 deselected` AUTOWFO subset).
 - 2026-02-13: Gate C execution tooling and run evidence completed. Added artifact-schema validator `scripts/autowfo/reproducibility.py::validate_run_artifact_schema` and new CLI workflow `python -m autowfo gate-c` (dual-run orchestration + schema validation + top-N stability comparison) with `workflow=run` output-dir handling fix. Executed real dual-run check using fixed seed/config (`artifacts/sweep_config_window11_quick.json`) and generated `artifacts/reproducibility/gate_c_window11_quick.json` (`schema_valid=true`, `stable=true`, `gate_c_passed=true`; run IDs `20260213_133808`/`20260213_134556`). Validation remains green (`18 passed` targeted CLI/repro tests, `186 passed`, `846 deselected` AUTOWFO subset).
+- 2026-02-13: Ranking frozen at commit `cfe3c8a` (Gate B passed). Ranking formula/spec, paired comparison artifacts, and AUTOWFO regression baseline are now locked for Phase 10+ work.
+- 2026-02-13: Reproducibility verified at commit `cfe3c8a` (Gate C passed). Dual-run fixed-seed validation and artifact-schema checks are both green and recorded in `artifacts/reproducibility/gate_c_window11_quick.json`.
