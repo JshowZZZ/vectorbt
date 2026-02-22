@@ -38,6 +38,65 @@ SYMBOL_RESULT_FIELDS = SWEEP_SCHEMA_FIELDS["symbol_result_fields"]
 STRICT_CONFIG_FIELDS = SWEEP_SCHEMA_FIELDS["strict_config_fields"]
 
 
+RISK_GRID_LIMITS = {
+    "tp_stops": (0.000001, 0.2),
+    "sl_stops": (0.000001, 0.2),
+    "max_holds": (1, 240),
+}
+
+
+def _resolve_risk_grid_from_config(config):
+    cfg = config if isinstance(config, dict) else {}
+
+    def _coerce_grid(raw, default_values, cast_fn, min_value=None, max_value=None):
+        if raw in (None, ""):
+            return list(default_values)
+        values = raw if isinstance(raw, (list, tuple)) else [raw]
+        parsed = []
+        for item in values:
+            try:
+                value = cast_fn(item)
+            except Exception:
+                continue
+            if min_value is not None and value < min_value:
+                continue
+            if max_value is not None and value > max_value:
+                continue
+            parsed.append(value)
+        if not parsed:
+            return list(default_values)
+        unique = []
+        for value in parsed:
+            if value in unique:
+                continue
+            unique.append(value)
+        return unique
+
+    return {
+        "tp_stops": _coerce_grid(
+            cfg.get("tp_stops"),
+            [0.003, 0.005],
+            float,
+            min_value=RISK_GRID_LIMITS["tp_stops"][0],
+            max_value=RISK_GRID_LIMITS["tp_stops"][1],
+        ),
+        "sl_stops": _coerce_grid(
+            cfg.get("sl_stops"),
+            [0.006, 0.01],
+            float,
+            min_value=RISK_GRID_LIMITS["sl_stops"][0],
+            max_value=RISK_GRID_LIMITS["sl_stops"][1],
+        ),
+        "max_holds": _coerce_grid(
+            cfg.get("max_holds"),
+            [2, 4],
+            int,
+            min_value=RISK_GRID_LIMITS["max_holds"][0],
+            max_value=RISK_GRID_LIMITS["max_holds"][1],
+        ),
+    }
+
+
 def main():
     base_symbol = "BTC/USDT"
     exchange = "binance"
@@ -84,15 +143,17 @@ def main():
     wf_train_days = runtime_settings["wf_train_days"]
     wf_test_days = runtime_settings["wf_test_days"]
     wf_step_days = runtime_settings["wf_step_days"]
+    wf_valid_days = runtime_settings.get("wf_valid_days", 0)
     wf_mode = runtime_settings["wf_mode"]
 
     vol_lookbacks = [24]
     vol_zs = [0.8]
     mom_lookbacks = [6, 12]
     trade_mom_lookbacks = [3]
-    tp_stops = [0.003, 0.005]
-    sl_stops = [0.006, 0.01]
-    max_holds = [2, 4]
+    risk_grid = _resolve_risk_grid_from_config(default_config)
+    tp_stops = risk_grid["tp_stops"]
+    sl_stops = risk_grid["sl_stops"]
+    max_holds = risk_grid["max_holds"]
 
     rsi_window = 14
     rsi_revert_pairs = [(30, 70), (35, 65), (40, 60)]
@@ -109,6 +170,20 @@ def main():
     mfi_window = 14
     vroc_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
     ad_lookbacks = autowfo_strategy._expand_lookback_list([20, 40], lookback_refine_step)
+    cci_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
+    willr_lookbacks = autowfo_strategy._expand_lookback_list([14, 21], lookback_refine_step)
+    adx_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
+    trix_lookbacks = autowfo_strategy._expand_lookback_list([12, 18], lookback_refine_step)
+    dpo_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
+    efi_lookbacks = autowfo_strategy._expand_lookback_list([13, 26], lookback_refine_step)
+    vwma_lookbacks = autowfo_strategy._expand_lookback_list([20, 40], lookback_refine_step)
+    ultosc_periods = (7, 14, 28)
+    keltner_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
+    donchian_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
+    ppo_fast = 12
+    ppo_slow = 26
+    ppo_signal = 9
+    chop_lookbacks = autowfo_strategy._expand_lookback_list([14, 20], lookback_refine_step)
 
     fees = 0.001
     slippage_bps = runtime_settings["slippage_bps"]
@@ -127,6 +202,7 @@ def main():
     min_oos_trades_target = runtime_settings["min_oos_trades_target"]
     top_n_fine = runtime_settings["top_n_fine"]
     ranking_config = runtime_settings["ranking_config"]
+    pruning_config = runtime_settings.get("pruning_config")
     history_rows = 20
     leaderboard_path = os.path.join(out_dir, "leaderboard.csv")
     registry_path = os.path.join(out_dir, "run_registry.json")
@@ -200,6 +276,9 @@ def main():
     total_combos = count_coarse_combos() * len(timeframe_configs) if search_mode == "combo" else 0
     pending_combo_rows = []
     pending_symbol_rows = []
+    # AWF-108(c): checkpoint / progress frequency configurable via sweep_config.json
+    _checkpoint_every_n = max(int(default_config.get("checkpoint_every_n", 200) or 200), 1)
+    _progress_every_n = max(int(default_config.get("progress_every_n", 25) or 25), 1)
     lifecycle = autowfo_engine._build_run_lifecycle_callbacks(
         total_combos=total_combos,
         run_id=run_id,
@@ -224,6 +303,8 @@ def main():
         build_updated_timestamp_fn=(
             lambda: dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
         ),
+        checkpoint_every=_checkpoint_every_n,
+        progress_every=_progress_every_n,
     )
     emit_progress = lifecycle["emit_progress_fn"]
     _advance_progress_counts = lifecycle["advance_progress_counts_fn"]
@@ -251,11 +332,18 @@ def main():
     df_to_html_fn = sweep_adapters["df_to_html_fn"]
     has_all_config_fields_fn = sweep_adapters["has_all_config_fields_fn"]
 
-    seen_keys = autowfo_engine._build_seen_keys(
+    _seen_keys_result = autowfo_engine._build_seen_keys(
         existing_combo_df,
         has_all_config_fields_fn=has_all_config_fields_fn,
         combo_key_from_dict_fn=combo_key_from_dict_fn,
+        # AWF-106d: pass current runtime capital_mode so that CSV rows written
+        # before capital_mode was persisted still produce matching seen keys.
+        null_fill_overrides={"capital_mode": capital_mode},
     )
+    # Use stripped seen_keys (without data_start/data_end) for cross-run skip
+    # decisions so that routine OHLCV refresh (data_end advances each run)
+    # does not invalidate all seen_keys and force a full re-evaluation.
+    seen_keys = _seen_keys_result["stripped"]
 
     apply_quality_filters = lambda df: autowfo_engine._apply_quality_filters(
         df,
@@ -285,11 +373,26 @@ def main():
         mfi_window=mfi_window,
         vroc_lookbacks=vroc_lookbacks,
         ad_lookbacks=ad_lookbacks,
+        cci_lookbacks=cci_lookbacks,
+        willr_lookbacks=willr_lookbacks,
+        adx_lookbacks=adx_lookbacks,
+        trix_lookbacks=trix_lookbacks,
+        dpo_lookbacks=dpo_lookbacks,
+        efi_lookbacks=efi_lookbacks,
+        vwma_lookbacks=vwma_lookbacks,
+        ultosc_periods=ultosc_periods,
+        keltner_lookbacks=keltner_lookbacks,
+        donchian_lookbacks=donchian_lookbacks,
+        ppo_fast=ppo_fast,
+        ppo_slow=ppo_slow,
+        ppo_signal=ppo_signal,
+        chop_lookbacks=chop_lookbacks,
         init_cash_usdt=init_cash_usdt,
         capital_mode=capital_mode,
         wf_train_days=wf_train_days,
         wf_test_days=wf_test_days,
         wf_step_days=wf_step_days,
+        wf_valid_days=wf_valid_days,
         wf_mode=wf_mode,
         indicator_param_fields=INDICATOR_PARAM_FIELDS,
         fees=fees,
@@ -342,6 +445,7 @@ def main():
         safe_float_fn=autowfo_engine._safe_float,
         refine_indicator_params_fn=autowfo_strategy._refine_indicator_params,
         safe_int_fn=autowfo_engine._safe_int,
+        pruning_config=pruning_config,
     )
     finalize_pipeline_context = autowfo_engine._build_finalize_pipeline_context_from_shared(
         shared_pipeline_runtime_context=shared_pipeline_runtime_context,
@@ -412,4 +516,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

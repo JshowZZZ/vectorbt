@@ -4,6 +4,8 @@ import pandas as pd
 import pytest
 
 from scripts.autowfo import engine as e
+from scripts.autowfo import engine_search as _e_search
+from scripts.autowfo import engine_finalize as _e_finalize
 
 
 def test_load_runtime_config_reads_file_and_env_override(tmp_path):
@@ -97,7 +99,7 @@ def test_build_sweep_schema_fields_contract():
     assert combo_result_fields[-1] == "oos_segments"
 
     assert symbol_result_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
-    assert symbol_result_fields[16:18] == metadata_fields
+    assert symbol_result_fields[17:19] == metadata_fields
     assert symbol_result_fields[-4:] == [
         "avg_trade_pct",
         "max_drawdown_pct",
@@ -117,6 +119,7 @@ def test_build_sweep_schema_fields_contract():
         "wf_train_days",
         "wf_test_days",
         "wf_step_days",
+        "wf_valid_days",
         "wf_mode",
         "data_start",
         "data_end",
@@ -576,7 +579,280 @@ def test_build_seen_keys_filters_invalid_rows():
         has_all_config_fields_fn=lambda row: bool(row.get("ok")),
         combo_key_from_dict_fn=lambda row: f"a={row['a']}",
     )
-    assert seen == {"a=1"}
+    # Returns dict with 'full' and 'stripped' sets;
+    # no data_start/data_end in this key so stripped == full.
+    assert seen["full"] == {"a=1"}
+    assert seen["stripped"] == {"a=1"}
+
+
+def test_build_seen_keys_strips_data_range():
+    # Verify stripped set removes data_start/data_end so cross-run OHLCV
+    # refresh (data_end advances) does not invalidate seen_keys.
+    key_v1 = "timeframe=1h|data_start=2024-01-01|data_end=2024-03-01|indicator_list=RSI"
+    key_v2 = "timeframe=1h|data_start=2024-01-01|data_end=2024-03-10|indicator_list=RSI"
+    expected_stripped = "timeframe=1h|indicator_list=RSI"
+    df = pd.DataFrame([{"combo_key": key_v1, "ok": True}])
+    seen = e._build_seen_keys(
+        df,
+        has_all_config_fields_fn=lambda row: bool(row.get("ok")),
+        combo_key_from_dict_fn=lambda row: row["combo_key"],
+    )
+    assert key_v1 in seen["full"]
+    assert expected_stripped in seen["stripped"]
+    # A new run with updated data_end strips to the same key -> would be skipped
+    stripped_new = e._strip_data_range_from_combo_key(key_v2)
+    assert stripped_new == expected_stripped
+    assert stripped_new in seen["stripped"]
+
+
+def test_build_seen_keys_fills_null_fields_with_defaults():
+    """AWF-106b: rows with None/NaN strict fields get DEFAULT_CONFIG fills so
+    they pass has_all_config_fields and produce matchable seen keys.
+    Regression: old CSV rows written before capital_mode/wf_valid_days/wf_mode
+    were added caused ALL rows to fail has_all_config_fields → seen_keys always
+    empty → 0 cross-run skips → same speed on every re-run."""
+    import numpy as np
+    from scripts.autowfo.engine_helpers import _SEEN_KEY_NULL_FIELD_DEFAULTS
+
+    # Simulate an old CSV row: has combo fields but capital_mode/wf_mode are NaN
+    old_row = {
+        "capital_mode": float("nan"),   # was not tracked in old runs
+        "wf_mode": float("nan"),        # ditto
+        "wf_valid_days": float("nan"),  # ditto
+        "indicator_list": "RSI",
+        "timeframe": "15m",
+        "ok": True,
+    }
+    df = pd.DataFrame([old_row])
+
+    # With the old behavior (no fill), has_all_config_fields would fail for
+    # capital_mode=NaN → seen_keys is empty.
+    strict_fields = ["capital_mode", "wf_mode", "indicator_list"]
+
+    def has_all_config_fields(row):
+        for f in strict_fields:
+            v = row.get(f)
+            if v is None or (isinstance(v, float) and np.isnan(v)) or (isinstance(v, str) and not v):
+                return False
+        return True
+
+    def combo_key(row):
+        return f"capital_mode={row.get('capital_mode')}|wf_mode={row.get('wf_mode')}|indicator_list={row.get('indicator_list')}"
+
+    seen = e._build_seen_keys(
+        df,
+        has_all_config_fields_fn=has_all_config_fields,
+        combo_key_from_dict_fn=combo_key,
+    )
+
+    # After AWF-106b, capital_mode/wf_mode should be filled with defaults so
+    # the row passes the filter and contributes a valid key.
+    default_capital_mode = _SEEN_KEY_NULL_FIELD_DEFAULTS.get("capital_mode", "shared")
+    default_wf_mode = _SEEN_KEY_NULL_FIELD_DEFAULTS.get("wf_mode", "anchored")
+    expected_key = f"capital_mode={default_capital_mode}|wf_mode={default_wf_mode}|indicator_list=RSI"
+
+    assert len(seen["full"]) == 1, (
+        f"Expected 1 seen key after null-fill, got {len(seen['full'])}. "
+        "Old rows with NaN capital_mode/wf_mode must be included in seen_keys."
+    )
+    assert expected_key in seen["full"], f"Expected key '{expected_key}' in seen['full'], got {seen['full']}"
+
+
+def test_normalize_key_value_int_float_consistency():
+    """AWF-106c: When pandas reads a CSV column that has NaN in some rows, it
+    upcasts the entire column to float64. Integer values like wf_valid_days=0
+    become 0.0 (np.float64). Before AWF-106c, _normalize_key_value(0.0) produced
+    the string '0.0' while _normalize_key_value(0) produced '0', so CSV-sourced
+    keys never matched config-sourced keys even after AWF-106b null-fill.
+    After AWF-106c, integer-valued floats are converted to int for consistent
+    key representation regardless of how the value was sourced."""
+    import numpy as np
+    from scripts.autowfo.search import _normalize_key_value, _combo_key_from_dict
+
+    # Core correctness: integer-valued floats -> int
+    assert _normalize_key_value(0.0) == 0
+    assert _normalize_key_value(10.0) == 10
+    assert _normalize_key_value(np.float64(30.0)) == 30
+    # Types should match
+    assert type(_normalize_key_value(0.0)) is int
+    assert type(_normalize_key_value(0)) is int
+    # Non-integer floats must NOT be converted
+    assert _normalize_key_value(0.001) == 0.001
+    assert _normalize_key_value(2.5) == 2.5
+    assert isinstance(_normalize_key_value(0.001), float)
+
+    # End-to-end: CSV row (float64 from pandas) vs config row (int) must produce same key
+    fields = ["wf_valid_days", "wf_train_days", "indicator_list"]
+    csv_row = {"wf_valid_days": np.float64(0.0), "wf_train_days": np.int64(10), "indicator_list": "RSI"}
+    cfg_row = {"wf_valid_days": 0, "wf_train_days": 10, "indicator_list": "RSI"}
+    csv_key = _combo_key_from_dict(csv_row, fields)
+    cfg_key = _combo_key_from_dict(cfg_row, fields)
+    assert csv_key == cfg_key, (
+        f"CSV key {csv_key!r} != config key {cfg_key!r}. "
+        "Float-upcast integer columns from pandas must produce identical keys to int config values."
+    )
+
+
+def test_build_seen_keys_int_float_csv_roundtrip():
+    """AWF-106c regression: simulates the CSV roundtrip where wf_valid_days=0 is written
+    to CSV and read back as 0.0 (float64 due to NaN rows), then must still match the
+    current-run combo key built with wf_valid_days=0 (int from config)."""
+    import numpy as np
+
+    # Simulate a CSV row where wf_valid_days was stored as 0 but pandas reads as 0.0
+    csv_row = {
+        "wf_valid_days": np.float64(0.0),  # pandas float64 upcast
+        "indicator_list": "RSI",
+        "ok": True,
+    }
+    df = pd.DataFrame([csv_row])
+
+    def has_all(row):
+        return bool(row.get("ok"))
+
+    def key_fn(row):
+        # wf_valid_days must come out as "0" not "0.0"
+        from scripts.autowfo.search import _combo_key_from_dict
+        return _combo_key_from_dict(row, ["wf_valid_days", "indicator_list"])
+
+    seen = e._build_seen_keys(df, has_all_config_fields_fn=has_all, combo_key_from_dict_fn=key_fn)
+
+    # Current-run key uses int 0 from config
+    current_key = "wf_valid_days=0|indicator_list=RSI"
+    assert current_key in seen["full"], (
+        f"Expected '{current_key}' in seen_keys. "
+        "CSV float64 0.0 must normalize identically to config int 0."
+    )
+
+
+def test_build_seen_keys_null_fill_overrides_capital_mode():
+    """AWF-106d regression: _build_combo_row did not persist capital_mode to CSV,
+    so every CSV row had capital_mode=NaN.  _build_seen_keys filled NaN with
+    DEFAULT_CONFIG['capital_mode']='shared' regardless of the actual runtime
+    value.  When the user's config used capital_mode='per_symbol', the
+    runtime-generated key (capital_mode=per_symbol) never matched the seen key
+    (capital_mode=shared) → zero cross-run skips.
+
+    After AWF-106d:
+    - _build_combo_row writes capital_mode to CSV (prevents future NaN).
+    - _build_seen_keys accepts null_fill_overrides so that legacy NaN rows
+      are filled with the *current* runtime value, not the hardcoded default.
+    """
+    import numpy as np
+
+    csv_row = {
+        "capital_mode": float("nan"),  # OLD CSV row: capital_mode never written
+        "indicator_list": "RSI",
+        "ok": True,
+    }
+    df = pd.DataFrame([csv_row])
+
+    def has_all(row):
+        for f in ["capital_mode", "indicator_list"]:
+            v = row.get(f)
+            if v is None or (isinstance(v, float) and np.isnan(v)):
+                return False
+        return True
+
+    def key_fn(row):
+        from scripts.autowfo.search import _combo_key_from_dict
+        return _combo_key_from_dict(row, ["capital_mode", "indicator_list"])
+
+    # Without override: NaN is filled with DEFAULT_CONFIG's 'shared'
+    seen_default = e._build_seen_keys(df, has_all, key_fn)
+    assert "capital_mode=shared|indicator_list=RSI" in seen_default["full"]
+
+    # With override: NaN is filled with the current runtime value 'per_symbol'
+    seen_override = e._build_seen_keys(
+        df, has_all, key_fn, null_fill_overrides={"capital_mode": "per_symbol"}
+    )
+    assert "capital_mode=per_symbol|indicator_list=RSI" in seen_override["full"], (
+        "null_fill_overrides must take precedence over _SEEN_KEY_NULL_FIELD_DEFAULTS "
+        "so that legacy NaN rows match the current runtime's capital_mode."
+    )
+    assert "capital_mode=shared|indicator_list=RSI" not in seen_override["full"], (
+        "When null_fill_overrides provides capital_mode, the default fill must "
+        "NOT be used."
+    )
+
+
+def test_build_combo_row_includes_capital_mode():
+    """AWF-106d: _build_combo_row must include capital_mode in the returned dict
+    so that future CSV rows have a non-NaN capital_mode column."""
+    variant_params = {
+        "rsi_long": None, "rsi_short": None, "bb_width": None, "atr_ratio": None,
+        "ma_fast": None, "ma_slow": None, "macd_hist_ratio": None,
+        "stoch_long": None, "stoch_short": None, "obv_lookback": None,
+        "volume_lookback": None, "volume_z": None, "roc_lookback": None,
+        "roc_threshold": None, "mfi_long": None, "mfi_short": None,
+        "cmf_lookback": None, "cmf_threshold": None, "vroc_lookback": None,
+        "vroc_threshold": None, "ad_lookback": None,
+    }
+    metrics = {
+        "total_return_pct": pd.Series([10.0], index=["ETH/BTC"]),
+        "total_profit": pd.Series([100.0], index=["ETH/BTC"]),
+        "total_trades": pd.Series([5.0], index=["ETH/BTC"]),
+        "win_rate_pct": pd.Series([60.0], index=["ETH/BTC"]),
+        "avg_trade_pct": pd.Series([1.5], index=["ETH/BTC"]),
+        "max_drawdown_pct": pd.Series([-5.0], index=["ETH/BTC"]),
+        "position_coverage_pct": pd.Series([30.0], index=["ETH/BTC"]),
+        "avg_hold_hours": pd.Series([2.0], index=["ETH/BTC"]),
+    }
+
+    for cm in ("shared", "per_symbol"):
+        row = e._build_combo_row(
+            timeframe="5m",
+            data_days=30,
+            exchange="binance",
+            base_symbol="BTC/USDT",
+            trade_symbols_tf=["ETH/BTC"],
+            capital_mode=cm,
+            fees=0.001,
+            slippage_bps=2.0,
+            spread_bps=2.0,
+            funding_rate_daily=0.0,
+            order_size_pct=0.5,
+            max_concurrent_positions=2,
+            init_cash_usdt=1000.0,
+            wf_train_days=10,
+            wf_test_days=10,
+            wf_step_days=10,
+            data_start="2024-01-01",
+            data_end="2024-01-31",
+            regime={"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high"},
+            regime_rsi_long=None,
+            regime_rsi_short=None,
+            filter_name="none",
+            indicator_list="rsi",
+            indicator_combo=("rsi",),
+            vol_lookback=24,
+            vol_z=0.8,
+            mom_lookback=6,
+            trade_mom_lookback=3,
+            tp_stop=0.003,
+            sl_stop=0.006,
+            max_hold=2,
+            rsi_window=14,
+            variant_params=variant_params,
+            combo_metrics={
+                "total_return_pct": 8.0, "win_rate_pct": 55.0, "avg_trade_pct": 1.2,
+                "max_drawdown_pct": -4.0, "position_coverage_pct": 40.0,
+                "total_trades": 5.0, "avg_hold_hours": 2.0,
+            },
+            sym_metrics={
+                "avg_total_return_pct": 10.0, "avg_win_rate_pct": 60.0,
+                "avg_avg_trade_pct": 1.5, "avg_max_drawdown_pct": -5.0,
+                "avg_position_coverage_pct": 30.0, "avg_total_trades": 5.0,
+                "min_total_trades": 5.0, "avg_hold_hours": 2.0,
+            },
+            metrics=metrics,
+            ctx_total_days=10,
+            oos_metrics={"oos_avg_total_return_pct": 7.0},
+        )
+        assert "capital_mode" in row, "combo_row must include capital_mode"
+        assert row["capital_mode"] == cm, (
+            f"combo_row['capital_mode'] should be '{cm}', got {row['capital_mode']!r}"
+        )
 
 
 def test_control_file_helpers(tmp_path):
@@ -849,6 +1125,7 @@ def test_build_symbol_and_combo_rows():
         exchange="binance",
         base_symbol="BTC/USDT",
         trade_symbols_tf=["ETH/BTC"],
+        capital_mode="shared",
         fees=0.001,
         slippage_bps=2.0,
         spread_bps=2.0,
@@ -900,6 +1177,7 @@ def test_build_symbol_and_combo_rows():
         oos_metrics={"oos_avg_total_return_pct": 7.0},
     )
     assert combo_row["avg_total_return_pct"] == 8.0
+    assert combo_row["capital_mode"] == "shared"
     assert combo_row["oos_avg_total_return_pct"] == 7.0
 
 
@@ -1140,7 +1418,8 @@ def test_run_parallel_combo_search_for_timeframe_counts_done_and_skipped():
     assert result == {"done": 2, "skipped": 1}
     assert counter == {"done": 2, "skipped": 1}
     assert seen_keys == {"k1", "k2"}
-    assert progress_calls == ["1h combo", "1h combo"]
+    # AWF-108(a): skip emit is throttled every 200 consecutive skips; only 1 skip here → no skip emit
+    assert progress_calls == ["1h combo"]
     assert len(append_calls) == 1
     assert append_calls[0][1]["combo_key"] == "k2"
     assert len(checkpoint_calls) == 1
@@ -1156,8 +1435,8 @@ def test_run_timeframe_ready_search_parallel_branch(monkeypatch):
     def _unexpected_search(**_kwargs):
         raise AssertionError("search branch should not be called")
 
-    monkeypatch.setattr(e, "_run_parallel_combo_search_for_timeframe", _capture_parallel)
-    monkeypatch.setattr(e, "_run_search_for_timeframe", _unexpected_search)
+    monkeypatch.setattr(_e_search, "_run_parallel_combo_search_for_timeframe", _capture_parallel)
+    monkeypatch.setattr(_e_search, "_run_search_for_timeframe", _unexpected_search)
 
     e._run_timeframe_ready_search(
         timeframe="1h",
@@ -1269,8 +1548,8 @@ def test_run_timeframe_ready_search_refine_branch_invokes_refine_plan(monkeypatc
     def _unexpected_parallel(**_kwargs):
         raise AssertionError("parallel branch should not be called")
 
-    monkeypatch.setattr(e, "_run_search_for_timeframe", _capture_search)
-    monkeypatch.setattr(e, "_run_parallel_combo_search_for_timeframe", _unexpected_parallel)
+    monkeypatch.setattr(_e_search, "_run_search_for_timeframe", _capture_search)
+    monkeypatch.setattr(_e_search, "_run_parallel_combo_search_for_timeframe", _unexpected_parallel)
 
     e._run_timeframe_ready_search(
         timeframe="1h",
@@ -1550,6 +1829,20 @@ def test_build_prepare_timeframe_runtime_kwargs_maps_runtime_inputs():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -1601,6 +1894,20 @@ def test_prepare_timeframe_runtime_context_and_from_context_builder():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -1654,6 +1961,20 @@ def _sample_shared_pipeline_runtime_context():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -2216,6 +2537,20 @@ def test_build_finalize_pipeline_kwargs_maps_inputs_and_top_score_wiring(tmp_pat
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -2326,6 +2661,20 @@ def test_finalize_pipeline_context_and_from_context_builder(tmp_path):
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -2635,6 +2984,8 @@ def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
     assert pending_combo_rows == [{"timeframe": "1h"}]
     assert symbol_calls[-1]["symbol"] == "ETH/BTC"
     assert combo_calls[-1]["timeframe"] == "1h"
+    # AWF-106d: capital_mode must be forwarded to build_combo_row_fn
+    assert combo_calls[-1]["capital_mode"] == "shared"
 
 
 def test_run_timeframe_search_loop_tracks_state_and_warnings():
@@ -2820,9 +3171,9 @@ def test_prepare_timeframe_runtime_builds_payload():
             "total_days": 1,
         }
 
-    def _build_walk_forward_windows_fn(idx, train_days, test_days, step_days, mode=None):
+    def _build_walk_forward_windows_fn(idx, train_days, test_days, step_days, mode=None, valid_days=0):
         seen["wf_args"] = (len(idx), train_days, test_days, step_days, mode)
-        return [(idx[0], idx[2], idx[2], idx[3])]
+        return [(idx[0], idx[2], idx[2], idx[2], idx[2], idx[3])]
 
     def _compute_data_fingerprint_fn(payload):
         seen["fingerprint_payload"] = payload
@@ -2851,6 +3202,20 @@ def test_prepare_timeframe_runtime_builds_payload():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         wf_train_days=7,
@@ -2985,6 +3350,20 @@ def test_prepare_best_timeframe_context_success_and_error():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         prepare_timeframe_context_fn=_prepare,
@@ -3020,6 +3399,20 @@ def test_prepare_best_timeframe_context_success_and_error():
         mfi_window=14,
         vroc_lookbacks=[12],
         ad_lookbacks=[20],
+        cci_lookbacks=[14],
+        willr_lookbacks=[14],
+        adx_lookbacks=[14],
+        trix_lookbacks=[12],
+        dpo_lookbacks=[14],
+        efi_lookbacks=[13],
+        vwma_lookbacks=[20],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[14],
+        donchian_lookbacks=[14],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
         prepare_timeframe_context_fn=_raise,
@@ -3150,6 +3543,20 @@ def _base_finalize_kwargs(tmp_path, *, combo_path, per_symbol_path):
         "mfi_window": 14,
         "vroc_lookbacks": [12],
         "ad_lookbacks": [20],
+        "cci_lookbacks": [14],
+        "willr_lookbacks": [14],
+        "adx_lookbacks": [14],
+        "trix_lookbacks": [12],
+        "dpo_lookbacks": [14],
+        "efi_lookbacks": [13],
+        "vwma_lookbacks": [20],
+        "ultosc_periods": (7, 14, 28),
+        "keltner_lookbacks": [14],
+        "donchian_lookbacks": [14],
+        "ppo_fast": 12,
+        "ppo_slow": 26,
+        "ppo_signal": 9,
+        "chop_lookbacks": [14],
         "init_cash_usdt": 1000.0,
         "capital_mode": "shared",
         "timeframe_ranges": {"1h": "2024-01-01 to 2024-02-01"},
@@ -3245,7 +3652,7 @@ def test_run_finalize_pipeline_forwards_vol_zs(tmp_path, monkeypatch):
         seen["vol_zs"] = payload_kwargs["vol_zs"]
         raise _StopPipeline
 
-    monkeypatch.setattr(e, "_prepare_best_replay_payload", _capture_prepare_best_replay_payload)
+    monkeypatch.setattr(_e_finalize, "_prepare_best_replay_payload", _capture_prepare_best_replay_payload)
 
     with pytest.raises(_StopPipeline):
         e._run_finalize_pipeline(**kwargs)
@@ -3283,6 +3690,7 @@ def test_build_report_html_scan_timeframes_toggle():
         "wf_train_days": "WF Train Days",
         "wf_test_days": "WF Test Days",
         "wf_step_days": "WF Step Days",
+        "wf_valid_days": "WF Valid Days",
         "wf_mode": "WF Mode",
         "wf_segments": "WF Segments",
         "base_symbol": "Base Symbol",
@@ -3452,7 +3860,7 @@ def test_prepare_best_replay_payload():
             "avg_hold_hours": pd.Series({"ETH/BTC": 2.0}),
         }
 
-    def _build_wf_slices(idx, train_days, test_days, step_days, mode=None):
+    def _build_wf_slices(idx, train_days, test_days, step_days, mode=None, valid_days=0):
         seen["wf_slice_args"] = (len(idx), train_days, test_days, step_days, mode)
         return [(idx[0], idx[1])]
 
