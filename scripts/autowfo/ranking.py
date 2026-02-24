@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ DEFAULT_RANKING_CONFIG = {
         "drawdown_penalty": 1.0,
         "low_sample_penalty": 1.0,
     },
+    "regime_weights": {},
 }
 
 
@@ -70,6 +72,11 @@ def _resolve_ranking_config(config=None):
             _coerce_float(config.get("low_trade_threshold"), resolved["low_trade_threshold"]),
             0.0,
         )
+
+    regime_weights = config.get("regime_weights")
+    if isinstance(regime_weights, dict):
+        resolved["regime_weights"] = {str(k): float(v) for k, v in regime_weights.items()}
+
     return resolved
 
 
@@ -171,3 +178,88 @@ def _top_by_score(
         ranking_config=ranking_config,
     )
     return sorted_df.head(top_n), score_col
+
+
+# ---------------------------------------------------------------------------
+#  AWF-026: Regime-aware ranking helpers
+# ---------------------------------------------------------------------------
+
+def _apply_regime_weight(
+    df: pd.DataFrame,
+    ranking_config: Optional[Dict[str, Any]] = None,
+) -> pd.DataFrame:
+    """Multiply composite_score by per-regime weight if configured.
+
+    ``ranking_config["regime_weights"]`` is an optional dict mapping
+    ``regime_name`` → float multiplier (default 1.0 for missing names).
+    When empty or absent, no adjustment is applied.
+    """
+    resolved = _resolve_ranking_config(ranking_config)
+    regime_weights = resolved.get("regime_weights")
+    if not regime_weights or "composite_score" not in df.columns:
+        return df
+    if "regime_name" not in df.columns:
+        return df
+    working = df.copy()
+    weight_series = working["regime_name"].map(
+        lambda name: float(regime_weights.get(str(name), 1.0))
+    )
+    working["composite_score"] = working["composite_score"] * weight_series
+    return working
+
+
+def _top_by_score_per_regime(
+    df: pd.DataFrame,
+    top_n: int,
+    preferred: str = "oos_avg_total_return_pct",
+    fallback: str = "avg_total_return_pct",
+    tie_break_avg_hold: bool = True,
+    ranking_config: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Tuple[pd.DataFrame, str]]:
+    """Group *df* by ``regime_name`` and return top-N per group.
+
+    Returns ``{regime_name: (top_df, score_col)}``.
+    Groups with fewer than 1 row are omitted.
+    """
+    if "regime_name" not in df.columns:
+        return {}
+    result: Dict[str, Tuple[pd.DataFrame, str]] = {}
+    for regime_name, group_df in df.groupby("regime_name", sort=True):
+        if group_df.empty:
+            continue
+        top_df, score_col = _top_by_score(
+            group_df,
+            top_n=top_n,
+            preferred=preferred,
+            fallback=fallback,
+            tie_break_avg_hold=tie_break_avg_hold,
+            ranking_config=ranking_config,
+        )
+        result[str(regime_name)] = (top_df, score_col)
+    return result
+
+
+def _regime_summary(
+    df: pd.DataFrame,
+    ranking_config: Optional[Dict[str, Any]] = None,
+) -> list:
+    """Produce a per-regime summary: count, avg return, avg score."""
+    if "regime_name" not in df.columns:
+        return []
+    resolved = _resolve_ranking_config(ranking_config)
+    preferred = resolved["legacy"]["preferred"]
+    fallback = resolved["legacy"]["fallback"]
+    rows = []
+    for regime_name, group_df in df.groupby("regime_name", sort=True):
+        ret_col = preferred if preferred in group_df.columns else fallback
+        avg_ret = _to_numeric_series(group_df, ret_col).mean() if ret_col in group_df.columns else None
+        score_col_val = None
+        if "composite_score" in group_df.columns:
+            score_col_val = group_df["composite_score"].mean()
+        rows.append({
+            "regime_name": str(regime_name),
+            "combo_count": len(group_df),
+            "avg_return_pct": round(float(avg_ret), 4) if avg_ret is not None and not np.isnan(avg_ret) else None,
+            "avg_composite_score": round(float(score_col_val), 4) if score_col_val is not None and not np.isnan(score_col_val) else None,
+        })
+    return rows

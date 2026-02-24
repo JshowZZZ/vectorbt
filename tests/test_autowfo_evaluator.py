@@ -1,6 +1,7 @@
 import pandas as pd
 
 from scripts.autowfo import evaluator as autowfo_evaluator
+from scripts.autowfo import strategy as autowfo_strategy
 
 
 def test_evaluator_coerces_missing_indicator_lookback(monkeypatch):
@@ -206,7 +207,7 @@ def test_evaluator_rolling_mode_reoptimizes_filter_policy_per_window(monkeypatch
         "rsi_window": 14,
         "bar_hours": 24.0,
         "wf_windows": [
-            (idx[0], idx[3], idx[4], idx[5]),
+            (idx[0], idx[3], idx[3], idx[3], idx[4], idx[5]),
         ],
         "wf_slices": [
             (idx[4], idx[5]),
@@ -361,3 +362,27 @@ def test_evaluator_rolling_mode_reoptimizes_filter_policy_per_window(monkeypatch
     assert result["oos_metrics"]["oos_avg_total_return_pct"] == 9.0
     assert (4, "unfiltered") in calls
     assert (2, "unfiltered") in calls
+
+
+def test_apply_indicator_combo_fills_missing_ppo_threshold():
+    idx = pd.date_range("2026-02-22", periods=2, freq="h")
+    long_regime = pd.Series(True, index=idx)
+    short_regime = pd.Series(True, index=idx)
+    ctx = {
+        "ppo_hist_series": pd.Series([0.1, -0.2], index=idx),
+    }
+    combo_params = {
+        "ppo_threshold": None,
+    }
+
+    long_out, short_out, params_out = autowfo_strategy._apply_indicator_combo(
+        long_regime=long_regime,
+        short_regime=short_regime,
+        combo_keys=("ppo",),
+        combo_params=combo_params,
+        ctx=ctx,
+    )
+
+    assert params_out["ppo_threshold"] == 0.0
+    assert long_out.tolist() == [True, False]
+    assert short_out.tolist() == [False, True]

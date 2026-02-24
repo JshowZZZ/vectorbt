@@ -76,6 +76,7 @@ def test_combo_key_and_config_field_adapters_match_module_behavior():
         "wf_train_days": 7,
         "wf_test_days": 2,
         "wf_step_days": 2,
+        "wf_valid_days": 0,
         "wf_mode": "rolling",
         "data_start": "2024-01-01",
         "data_end": "2024-02-01",

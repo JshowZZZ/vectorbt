@@ -5,6 +5,7 @@ importable and testable.
 """
 
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -165,6 +166,122 @@ def _load_or_update_symbol(
     return df
 
 
+def _format_data_end(ts):
+    try:
+        stamp = pd.Timestamp(ts)
+    except Exception:
+        return ""
+    if pd.isna(stamp):
+        return ""
+    if stamp.tzinfo is not None:
+        stamp = stamp.tz_convert("UTC").tz_localize(None)
+    return stamp.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def refresh_ohlcv_cache(
+    exchange,
+    timeframes,
+    symbols,
+    base_symbol=None,
+    cache_dir="artifacts/cache_ccxt",
+    cache_format="csv",
+    end="now UTC",
+    load_or_update_symbol_fn=None,
+):
+    """Refresh cached OHLCV files and return per-timeframe latest data_end marks.
+
+    This helper is lightweight orchestration around `_load_or_update_symbol` so it
+    can be reused by control-plane periodic refresh and manual refresh hooks.
+    """
+    if load_or_update_symbol_fn is None:
+        load_or_update_symbol_fn = _load_or_update_symbol
+
+    normalized_timeframes = []
+    if isinstance(timeframes, list):
+        for item in timeframes:
+            if not isinstance(item, dict):
+                continue
+            timeframe = str(item.get("timeframe", "")).strip()
+            if not timeframe:
+                continue
+            try:
+                days = int(item.get("days", 0))
+            except Exception:
+                days = 0
+            if days <= 0:
+                days = 1
+            normalized_timeframes.append({"timeframe": timeframe, "days": days})
+
+    symbol_list = []
+    if base_symbol:
+        base = str(base_symbol).strip()
+        if base:
+            symbol_list.append(base)
+    if isinstance(symbols, (list, tuple)):
+        for raw in symbols:
+            sym = str(raw).strip()
+            if sym and sym not in symbol_list:
+                symbol_list.append(sym)
+
+    pair_data_end = []
+    timeframe_latest = {}
+    errors = []
+
+    for tf_entry in normalized_timeframes:
+        timeframe = tf_entry["timeframe"]
+        days = int(tf_entry["days"])
+        start = f"{days} days ago UTC"
+        timeframe_marks = []
+        for symbol in symbol_list:
+            try:
+                df = load_or_update_symbol_fn(
+                    symbol=symbol,
+                    exchange=exchange,
+                    timeframe=timeframe,
+                    start=start,
+                    end=end,
+                    cache_dir=cache_dir,
+                    cache_format=cache_format,
+                )
+            except Exception as exc:
+                errors.append(f"{timeframe} {symbol}: {exc}")
+                continue
+            if df is None or getattr(df, "empty", True):
+                continue
+            try:
+                last_ts = df.index.max()
+            except Exception:
+                continue
+            if pd.isna(last_ts):
+                continue
+            mark = _format_data_end(last_ts)
+            if not mark:
+                continue
+            pair_data_end.append(
+                {
+                    "timeframe": timeframe,
+                    "symbol": symbol,
+                    "data_end": mark,
+                }
+            )
+            timeframe_marks.append(last_ts)
+        if timeframe_marks:
+            # Use the minimum timestamp across symbols as conservative freshness.
+            timeframe_latest[timeframe] = _format_data_end(min(timeframe_marks))
+
+    pair_data_end = sorted(
+        pair_data_end,
+        key=lambda item: (str(item.get("timeframe", "")), str(item.get("symbol", ""))),
+    )
+    return {
+        "updated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "exchange": exchange,
+        "timeframe_data_end": timeframe_latest,
+        "pair_data_end": pair_data_end,
+        "errors": errors,
+    }
+
+
 def _prepare_timeframe_context(
     timeframe,
     data_days,
@@ -188,6 +305,20 @@ def _prepare_timeframe_context(
     mfi_window,
     vroc_lookbacks,
     ad_lookbacks,
+    cci_lookbacks,
+    willr_lookbacks,
+    adx_lookbacks,
+    trix_lookbacks,
+    dpo_lookbacks,
+    efi_lookbacks,
+    vwma_lookbacks,
+    ultosc_periods,
+    keltner_lookbacks,
+    donchian_lookbacks,
+    ppo_fast,
+    ppo_slow,
+    ppo_signal,
+    chop_lookbacks,
     init_cash_usdt,
     capital_mode,
     load_or_update_symbol_fn=None,
@@ -329,6 +460,116 @@ def _prepare_timeframe_context(
     ad_line = mfv.cumsum()
     ad_roc_by_lb = {lb: ad_line.pct_change(lb) for lb in ad_lookbacks}
 
+    # --- CCI (Commodity Channel Index) ---
+    typical_price_cci = (btc_high + btc_low + btc_close) / 3
+    cci_by_lb = {}
+    for lb in cci_lookbacks:
+        tp_sma = typical_price_cci.rolling(lb).mean()
+        tp_mad = typical_price_cci.rolling(lb).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+        cci_by_lb[lb] = (typical_price_cci - tp_sma) / (0.015 * tp_mad.replace(0, np.nan))
+
+    # --- Williams %R ---
+    willr_by_lb = {}
+    for lb in willr_lookbacks:
+        hh = btc_high.rolling(lb).max()
+        ll = btc_low.rolling(lb).min()
+        denom = (hh - ll).replace(0, np.nan)
+        willr_by_lb[lb] = ((hh - btc_close) / denom) * -100
+
+    # --- ADX (Average Directional Index) ---
+    adx_by_lb = {}
+    for lb in adx_lookbacks:
+        up_move = btc_high.diff()
+        down_move = -btc_low.diff()
+        plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+        minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+        tr = pd.concat([
+            btc_high - btc_low,
+            (btc_high - btc_close.shift(1)).abs(),
+            (btc_low - btc_close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+        atr_adx = tr.ewm(span=lb, adjust=False).mean()
+        plus_di = 100 * plus_dm.ewm(span=lb, adjust=False).mean() / atr_adx.replace(0, np.nan)
+        minus_di = 100 * minus_dm.ewm(span=lb, adjust=False).mean() / atr_adx.replace(0, np.nan)
+        dx = (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan) * 100
+        adx_by_lb[lb] = dx.ewm(span=lb, adjust=False).mean()
+
+    # --- TRIX (Triple Exponential Average ROC) ---
+    trix_by_lb = {}
+    for lb in trix_lookbacks:
+        ema1 = btc_close.ewm(span=lb, adjust=False).mean()
+        ema2 = ema1.ewm(span=lb, adjust=False).mean()
+        ema3 = ema2.ewm(span=lb, adjust=False).mean()
+        trix_by_lb[lb] = ema3.pct_change() * 100
+
+    # --- DPO (Detrended Price Oscillator) ---
+    dpo_by_lb = {}
+    for lb in dpo_lookbacks:
+        shift_n = lb // 2 + 1
+        sma_n = btc_close.rolling(lb).mean()
+        dpo_by_lb[lb] = btc_close.shift(shift_n) - sma_n
+
+    # --- Elder Force Index ---
+    efi_by_lb = {}
+    for lb in efi_lookbacks:
+        raw_force = btc_close.diff() * btc_volume
+        efi_by_lb[lb] = raw_force.ewm(span=lb, adjust=False).mean()
+
+    # --- VWMA Trend (VWMA vs SMA) ---
+    vwma_trend_by_lb = {}
+    for lb in vwma_lookbacks:
+        vwma = (btc_close * btc_volume).rolling(lb).sum() / btc_volume.rolling(lb).sum().replace(0, np.nan)
+        sma = btc_close.rolling(lb).mean()
+        vwma_trend_by_lb[lb] = (vwma > sma, vwma < sma)
+
+    # --- Ultimate Oscillator ---
+    bp = btc_close - pd.concat([btc_low, btc_close.shift(1)], axis=1).min(axis=1)
+    tr_ult = pd.concat([
+        btc_high - btc_low,
+        (btc_high - btc_close.shift(1)).abs(),
+        (btc_low - btc_close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+    p1, p2, p3 = ultosc_periods
+    avg1 = bp.rolling(p1).sum() / tr_ult.rolling(p1).sum().replace(0, np.nan)
+    avg2 = bp.rolling(p2).sum() / tr_ult.rolling(p2).sum().replace(0, np.nan)
+    avg3 = bp.rolling(p3).sum() / tr_ult.rolling(p3).sum().replace(0, np.nan)
+    ultosc_series = 100 * (4 * avg1 + 2 * avg2 + avg3) / 7
+
+    # --- Keltner Channel Position ---
+    keltner_pos_by_lb = {}
+    for lb in keltner_lookbacks:
+        kelt_mid = btc_close.ewm(span=lb, adjust=False).mean()
+        kelt_atr = vbt.ATR.run(btc_high, btc_low, btc_close, window=lb).atr
+        kelt_upper = kelt_mid + 2 * kelt_atr
+        kelt_lower = kelt_mid - 2 * kelt_atr
+        kelt_range = (kelt_upper - kelt_lower).replace(0, np.nan)
+        keltner_pos_by_lb[lb] = (btc_close - kelt_lower) / kelt_range
+
+    # --- Donchian Channel Position ---
+    donchian_pos_by_lb = {}
+    for lb in donchian_lookbacks:
+        don_high = btc_high.rolling(lb).max()
+        don_low = btc_low.rolling(lb).min()
+        don_range = (don_high - don_low).replace(0, np.nan)
+        donchian_pos_by_lb[lb] = (btc_close - don_low) / don_range
+
+    # --- PPO (Percentage Price Oscillator) ---
+    ppo_fast_ema = btc_close.ewm(span=ppo_fast, adjust=False).mean()
+    ppo_slow_ema = btc_close.ewm(span=ppo_slow, adjust=False).mean()
+    ppo_line = (ppo_fast_ema - ppo_slow_ema) / ppo_slow_ema.replace(0, np.nan) * 100
+    ppo_signal_line = ppo_line.ewm(span=ppo_signal, adjust=False).mean()
+    ppo_hist_series = ppo_line - ppo_signal_line
+
+    # --- Choppiness Index ---
+    chop_by_lb = {}
+    for lb in chop_lookbacks:
+        chop_atr = vbt.ATR.run(btc_high, btc_low, btc_close, window=1).atr
+        chop_atr_sum = chop_atr.rolling(lb).sum()
+        chop_high = btc_high.rolling(lb).max()
+        chop_low = btc_low.rolling(lb).min()
+        chop_range = (chop_high - chop_low).replace(0, np.nan)
+        chop_by_lb[lb] = 100 * np.log10(chop_atr_sum / chop_range) / np.log10(lb)
+
     data_range = f"{trade_close.index[0]} -> {trade_close.index[-1]}"
 
     return {
@@ -363,5 +604,17 @@ def _prepare_timeframe_context(
         "mfi_window": mfi_window,
         "vroc_by_lb": vroc_by_lb,
         "ad_roc_by_lb": ad_roc_by_lb,
+        "cci_by_lb": cci_by_lb,
+        "willr_by_lb": willr_by_lb,
+        "adx_by_lb": adx_by_lb,
+        "trix_by_lb": trix_by_lb,
+        "dpo_by_lb": dpo_by_lb,
+        "efi_by_lb": efi_by_lb,
+        "vwma_trend_by_lb": vwma_trend_by_lb,
+        "ultosc_series": ultosc_series,
+        "keltner_pos_by_lb": keltner_pos_by_lb,
+        "donchian_pos_by_lb": donchian_pos_by_lb,
+        "ppo_hist_series": ppo_hist_series,
+        "chop_by_lb": chop_by_lb,
         "data_range": data_range,
     }

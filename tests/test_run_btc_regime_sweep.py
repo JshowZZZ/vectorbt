@@ -51,9 +51,43 @@ def _common_ctx_kwargs():
         mfi_window=3,
         vroc_lookbacks=[3],
         ad_lookbacks=[3],
+        cci_lookbacks=[3],
+        willr_lookbacks=[3],
+        adx_lookbacks=[3],
+        trix_lookbacks=[3],
+        dpo_lookbacks=[3],
+        efi_lookbacks=[3],
+        vwma_lookbacks=[3],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[3],
+        donchian_lookbacks=[3],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[3],
         init_cash_usdt=1000,
         capital_mode="shared",
     )
+
+
+def test_resolve_risk_grid_from_config_overrides_and_fallback():
+    got = sweep._resolve_risk_grid_from_config(
+        {
+            "tp_stops": [0.004, "bad", -1, 0.004, 0.3],
+            "sl_stops": [0.009, 0.5],
+            "max_holds": ["3", 0, "x", 3, 999],
+        }
+    )
+    assert got["tp_stops"] == [0.004]
+    assert got["sl_stops"] == [0.009]
+    assert got["max_holds"] == [3]
+
+    fallback = sweep._resolve_risk_grid_from_config(
+        {"tp_stops": [], "sl_stops": [None], "max_holds": ["bad"]}
+    )
+    assert fallback["tp_stops"] == [0.003, 0.005]
+    assert fallback["sl_stops"] == [0.006, 0.01]
+    assert fallback["max_holds"] == [2, 4]
 
 
 def test_prepare_timeframe_context_success():
@@ -312,7 +346,7 @@ def test_main_uses_configured_walk_forward_days(tmp_path, monkeypatch):
     )
     seen = {}
 
-    def _capture_wf(index, train_days, test_days, step_days, mode=None):
+    def _capture_wf(index, train_days, test_days, step_days, mode=None, valid_days=0):
         seen["wf"] = (train_days, test_days, step_days, mode)
         return []
 
@@ -377,7 +411,7 @@ def test_main_uses_configured_walk_forward_mode(tmp_path, monkeypatch):
     )
     seen = {}
 
-    def _capture_wf(index, train_days, test_days, step_days, mode=None):
+    def _capture_wf(index, train_days, test_days, step_days, mode=None, valid_days=0):
         seen["wf"] = (train_days, test_days, step_days, mode)
         return []
 

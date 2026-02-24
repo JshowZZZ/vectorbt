@@ -430,3 +430,4 @@
 
 
 
+| 2026-02-24 | AWF-018~AWF-108 + docs-sync | done | Consolidated pending AUTOWFO engine/control-panel work into a single upload batch: engine responsibility split persisted (`engine_search.py`, `engine_finalize.py`, `engine_report.py`), control-panel frontend modularization landed (`api.js`, `i18n.js`, `components.js`, tab modules), legacy static UI retained under `static_legacy/`, and protocol/docs were synchronized (`split_protocol.yaml`, `strategy_schema.json`, `AUTOWFO_MASTER_PLAN.md`, `AGENTSMD_INTEGRATION.md`). Regression validation for this sync batch: `pytest tests/test_autowfo_cli.py tests/test_autowfo_cross_run.py tests/test_control_panel.py tests/test_autowfo_e2e.py tests/test_autowfo_gate_e.py -q` -> `172 passed`. | Next batch: prioritize mojibake cleanup in plan/docs and continue runtime guardrail hardening for non-UI write paths. | done |

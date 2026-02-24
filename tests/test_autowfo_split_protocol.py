@@ -12,6 +12,11 @@ def test_default_split_protocol_contains_expected_fields():
     assert protocol["default_mode"] == "anchored"
     assert protocol["supported_modes"] == ["anchored", "rolling"]
     assert protocol["constraints"]["allow_oos_overlap"] is False
+    # 6-element output schema for 3-way split
+    assert len(protocol["output_schema"]["window_tuple"]) == 6
+    assert protocol["output_schema"]["window_tuple"] == [
+        "train_start", "train_end", "valid_start", "valid_end", "test_start", "test_end"
+    ]
 
 
 def test_validate_split_protocol_rejects_unknown_default_mode(tmp_path):

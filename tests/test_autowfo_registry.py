@@ -79,3 +79,107 @@ def test_update_run_registry_replaces_same_run_id(tmp_path):
     payload = json.loads(registry_path.read_text(encoding="utf-8"))
     assert len(payload["runs"]) == 1
     assert payload["runs"][0]["best_timeframe"] == "4h"
+
+
+# -- _build_coverage_map target dimensions ----------------------------------
+
+def test_build_coverage_map_without_targets_ignores_unseen_timeframes():
+    """Without target args, 1h doesn't appear if no run used it."""
+    per_symbol_df = pd.DataFrame([
+        {"timeframe": "2h", "symbol": "ETH/USDT"},
+        {"timeframe": "4h", "symbol": "ETH/USDT"},
+    ])
+    run_entries = [
+        {"timeframes": [{"timeframe": "2h", "days": 120}, {"timeframe": "4h", "days": 180}],
+         "trade_symbols": ["ETH/USDT", "BNB/USDT"]},
+    ]
+    cov = r._build_coverage_map(per_symbol_df, run_entries)
+    assert "1h" not in cov["timeframes"]
+    # 2h×BNB and 4h×BNB should be untested
+    untested_keys = {(p["timeframe"], p["symbol"]) for p in cov["untested_pairs"]}
+    assert ("2h", "BNB/USDT") in untested_keys
+    assert ("4h", "BNB/USDT") in untested_keys
+
+
+def test_build_coverage_map_with_targets_surfaces_unseen_gaps():
+    """With target_timeframes=['1h','2h','4h'], 1h gaps become visible."""
+    per_symbol_df = pd.DataFrame([
+        {"timeframe": "2h", "symbol": "ETH/USDT"},
+        {"timeframe": "4h", "symbol": "ETH/USDT"},
+    ])
+    run_entries = [
+        {"timeframes": [{"timeframe": "2h", "days": 120}],
+         "trade_symbols": ["ETH/USDT"]},
+    ]
+    cov = r._build_coverage_map(
+        per_symbol_df, run_entries,
+        target_timeframes=["1h", "2h", "4h"],
+        target_symbols=["ETH/USDT", "BNB/USDT", "SOL/USDT"],
+    )
+    assert "1h" in cov["timeframes"]
+    assert "SOL/USDT" in cov["symbols"]
+
+    untested_keys = {(p["timeframe"], p["symbol"]) for p in cov["untested_pairs"]}
+    # All 1h pairs should be untested
+    assert ("1h", "ETH/USDT") in untested_keys
+    assert ("1h", "BNB/USDT") in untested_keys
+    assert ("1h", "SOL/USDT") in untested_keys
+    # 2h tested only for ETH
+    assert ("2h", "BNB/USDT") in untested_keys
+    assert ("2h", "SOL/USDT") in untested_keys
+    # 4h tested only for ETH
+    assert ("4h", "BNB/USDT") in untested_keys
+    assert ("4h", "SOL/USDT") in untested_keys
+    # Already tested should NOT be in untested
+    assert ("2h", "ETH/USDT") not in untested_keys
+    assert ("4h", "ETH/USDT") not in untested_keys
+    # Total untested = 9 - 2 = 7
+    assert len(cov["untested_pairs"]) == 7
+
+
+# -- _build_run_entry benchmark fields --------------------------------------
+
+def test_build_run_entry_includes_benchmark_fields():
+    """bh_return_pct and random_entry_return_pct should propagate."""
+    meta = {
+        "run_id": "bench1",
+        "timestamp_utc": "2026-02-14T00:00:00Z",
+        "search_mode": "combo",
+        "config_sha256": "x",
+        "data_fingerprint": "y",
+        "timeframes": [{"timeframe": "2h", "days": 120}],
+        "trade_symbols": ["ETH/USDT"],
+    }
+    best = {
+        "timeframe": "2h",
+        "data_days": 120,
+        "avg_total_return_pct": 3.5,
+        "oos_avg_total_return_pct": 2.8,
+        "bh_return_pct": 1.5,
+        "random_entry_return_pct": 0.3,
+        "report_file": "report.html",
+    }
+    entry = r._build_run_entry(meta, best)
+    assert entry["bh_return_pct"] == 1.5
+    assert entry["random_entry_return_pct"] == 0.3
+
+
+def test_build_run_entry_benchmark_fields_missing():
+    """Old best_row without benchmark fields → None."""
+    meta = {
+        "run_id": "old1",
+        "timestamp_utc": "2026-01-01T00:00:00Z",
+        "search_mode": "combo",
+        "config_sha256": "x",
+        "data_fingerprint": "y",
+        "timeframes": [],
+        "trade_symbols": [],
+    }
+    best = {
+        "timeframe": "4h",
+        "data_days": 180,
+        "report_file": "old.html",
+    }
+    entry = r._build_run_entry(meta, best)
+    assert entry["bh_return_pct"] is None
+    assert entry["random_entry_return_pct"] is None

@@ -94,6 +94,66 @@
       "key": "ma_trend",
       "label": "MA \u8da8\u52e2",
       "category": "volatility"
+    },
+    {
+      "key": "cci",
+      "label": "CCI",
+      "category": "momentum"
+    },
+    {
+      "key": "willr",
+      "label": "Williams %R",
+      "category": "momentum"
+    },
+    {
+      "key": "adx",
+      "label": "ADX",
+      "category": "volatility"
+    },
+    {
+      "key": "trix",
+      "label": "TRIX",
+      "category": "momentum"
+    },
+    {
+      "key": "dpo",
+      "label": "DPO",
+      "category": "momentum"
+    },
+    {
+      "key": "efi",
+      "label": "Elder Force",
+      "category": "volume"
+    },
+    {
+      "key": "vwma_trend",
+      "label": "VWMA \u8da8\u52e2",
+      "category": "volume"
+    },
+    {
+      "key": "ultosc",
+      "label": "Ultimate Osc",
+      "category": "momentum"
+    },
+    {
+      "key": "keltner_pos",
+      "label": "Keltner \u4f4d\u7f6e",
+      "category": "volatility"
+    },
+    {
+      "key": "donchian_pos",
+      "label": "Donchian \u4f4d\u7f6e",
+      "category": "volatility"
+    },
+    {
+      "key": "ppo",
+      "label": "PPO",
+      "category": "momentum"
+    },
+    {
+      "key": "chop",
+      "label": "\u6ce2\u52d5\u6307\u6578",
+      "category": "volatility"
     }
   ],
   "regimes": [

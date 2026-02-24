@@ -1,274 +1,239 @@
-const COVERAGE_POLL_MS = 5000;
+﻿import { ref, onMounted, onUnmounted } from 'vue'
+import { fetchJson, postJson } from './api.js'
+import { showToast, confirmAction } from './store.js'
+import { L } from './i18n.js'
 
-let initialized = false;
-let pollTimer = null;
-
-function _setMessage(text, isError = false) {
-  const el = document.getElementById("cpCoverageMessage");
-  if (!el) return;
-  el.textContent = text || "";
-  el.style.color = isError ? "#b3122f" : "#355d3a";
-}
-
-function _setModeEnabled() {
-  const workflowEl = document.getElementById("cpCoverageWorkflow");
-  const modeEl = document.getElementById("cpCoverageMode");
-  if (!workflowEl || !modeEl) return;
-  const isRun = workflowEl.value === "run";
-  modeEl.disabled = !isRun;
-  if (!isRun) {
-    modeEl.value = "";
-  } else if (!modeEl.value) {
-    modeEl.value = "combo";
-  }
-}
-
-async function _requestJson(url, options = {}) {
-  const headers = { "Content-Type": "application/json" };
-  const req = { ...options, headers: { ...headers, ...(options.headers || {}) } };
-  const res = await fetch(url, req);
-  let payload = {};
-  try {
-    payload = await res.json();
-  } catch (_err) {
-    payload = {};
-  }
-  if (!res.ok || payload.ok === false) {
-    const msg = payload.message || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return payload;
-}
-
-function _buildUi(section) {
-  const card = document.createElement("div");
-  card.className = "panel cp-coverage-card";
-  card.id = "cpCoverageCard";
-  card.innerHTML = `
-    <h2>Coverage Matrix</h2>
-    <div class="note">Click a cell to enqueue that timeframe/symbol pair into batch queue.</div>
-    <div class="filter-group cp-coverage-form">
-      <label>Workflow
-        <select id="cpCoverageWorkflow">
-          <option value="baseline">baseline</option>
-          <option value="run">run</option>
-        </select>
-      </label>
-      <label>Mode
-        <select id="cpCoverageMode" disabled>
-          <option value="">(none)</option>
-          <option value="combo">combo</option>
-          <option value="refine">refine</option>
-        </select>
-      </label>
-      <label>Workers
-        <input id="cpCoverageWorkers" type="number" min="1" step="1" placeholder="optional">
-      </label>
-      <div class="row">
-        <button id="cpCoverageRefreshBtn" type="button">Refresh</button>
-        <button id="cpCoverageStartBatchBtn" type="button">Start Batch</button>
+export const CoverageTab = {
+  name: 'CoverageTab',
+  template: `
+    <div class="space-y-4 animate-fade-in">
+      <div v-if="loading" class="space-y-4">
+        <div class="skeleton skeleton-card h-44"></div>
+        <div class="skeleton skeleton-card h-3"></div>
+        <div class="skeleton skeleton-card h-80"></div>
       </div>
+      <template v-else>
+        <div class="rounded-xl p-5 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ t('coverage_title', 'Coverage Matrix') }}</h2>
+            <div class="flex gap-2">
+              <button @click="refresh"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
+                             bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                {{ t('coverage_refresh', 'Refresh') }}
+              </button>
+              <button @click="startBatch" :disabled="batchBusy"
+                      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50">
+                {{ t('coverage_start_batch', 'Start Batch') }}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="space-y-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_workflow', 'Workflow') }}</span>
+              <select v-model="workflow" @change="onWorkflowChange" class="cfg-input">
+                <option value="baseline">baseline</option>
+                <option value="run">run</option>
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_mode', 'Mode') }}</span>
+              <select v-model="mode" :disabled="workflow !== 'run'" class="cfg-input">
+                <option value="">{{ t('coverage_none', 'none') }}</option>
+                <option value="combo">combo</option>
+                <option value="refine">refine</option>
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_workers', 'Workers') }}</span>
+              <input v-model.number="workers" type="number" min="1" :placeholder="t('coverage_optional', 'optional')" class="cfg-input w-20" />
+            </label>
+          </div>
+
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_hint', 'Click an untested cell to enqueue a focused job for that timeframe-symbol pair.') }}</p>
+
+          <div class="flex flex-wrap gap-4 text-xs">
+            <span class="text-gray-600 dark:text-gray-300">
+              {{ t('coverage_total', 'total') }}=<strong>{{ summary.total || 0 }}</strong>
+              {{ t('coverage_tested', 'tested') }}=<strong class="text-profit">{{ summary.tested || 0 }}</strong>
+              {{ t('coverage_queued', 'queued') }}=<strong class="text-warn">{{ summary.queued || 0 }}</strong>
+              {{ t('coverage_untested', 'untested') }}=<strong class="text-gray-500">{{ summary.untested || 0 }}</strong>
+            </span>
+            <div class="flex-1"></div>
+            <span class="font-semibold text-gray-900 dark:text-white">{{ t('coverage_percent', 'coverage') }}={{ summary.coverage_pct || 0 }}%</span>
+          </div>
+
+          <div class="flex gap-3">
+            <span class="inline-flex items-center gap-1 text-xs">
+              <span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50"></span> {{ t('coverage_legend_tested', 'Tested') }}
+            </span>
+            <span class="inline-flex items-center gap-1 text-xs">
+              <span class="w-3 h-3 rounded bg-amber-500/30 border border-amber-500/50"></span> {{ t('coverage_legend_queued', 'Queued') }}
+            </span>
+            <span class="inline-flex items-center gap-1 text-xs">
+              <span class="w-3 h-3 rounded bg-gray-500/20 border border-gray-500/30"></span> {{ t('coverage_legend_untested', 'Untested') }}
+            </span>
+          </div>
+        </div>
+
+        <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+          <div class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+               :style="{ width: (summary.coverage_pct || 0) + '%' }"></div>
+        </div>
+
+        <div class="rounded-xl border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 overflow-hidden">
+          <div class="overflow-x-auto p-4">
+            <table v-if="tfs.length && syms.length" class="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">
+                    {{ t('coverage_matrix_symbol_tf', 'Symbol \\ TF') }}
+                  </th>
+                  <th v-for="tf in tfs" :key="tf"
+                      class="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">
+                    {{ tf }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="sym in syms" :key="sym"
+                    class="border-b border-gray-100 dark:border-gray-800">
+                  <td class="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300">{{ sym }}</td>
+                  <td v-for="tf in tfs" :key="tf" class="px-2 py-2 text-center">
+                    <button @click="cellClick(tf, sym, cellStatus(tf, sym))"
+                            class="cov-cell inline-block px-3 py-1.5 rounded-lg text-xs font-semibold"
+                            :class="cellClass(cellStatus(tf, sym))">
+                      {{ cellLabel(cellStatus(tf, sym)) }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="text-center text-gray-400 dark:text-gray-500 py-8 text-sm">
+              {{ t('coverage_empty_state', 'No coverage data. Run') }} <code>autowfo plan</code> {{ t('coverage_empty_state_suffix', 'to bootstrap matrix targets.') }}
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
-    <div id="cpCoverageSummary" class="note"></div>
-    <div class="cp-coverage-legend">
-      <span class="cp-cov-pill cp-cov-tested">tested</span>
-      <span class="cp-cov-pill cp-cov-queued">queued</span>
-      <span class="cp-cov-pill cp-cov-untested">untested</span>
-    </div>
-    <div class="cp-coverage-wrap">
-      <table id="cpCoverageTable" class="cp-coverage-table"></table>
-    </div>
-    <span id="cpCoverageMessage" class="note"></span>
-  `;
-  section.innerHTML = "";
-  section.appendChild(card);
-}
+  `,
+  setup() {
+    const t = (key, fallback = '') => L[key] || fallback || key
 
-function _renderSummary(payload) {
-  const summaryEl = document.getElementById("cpCoverageSummary");
-  if (!summaryEl) return;
-  const summary = payload?.summary || {};
-  const total = summary.total || 0;
-  const tested = summary.tested || 0;
-  const queued = summary.queued || 0;
-  const untested = summary.untested || 0;
-  const pct = summary.coverage_pct || 0;
-  summaryEl.textContent = `total=${total} tested=${tested} queued=${queued} untested=${untested} coverage=${pct}%`;
-}
+    const loading = ref(true)
+    const tfs = ref([])
+    const syms = ref([])
+    const cells = ref(new Map())
+    const summary = ref({})
+    const workflow = ref('baseline')
+    const mode = ref('')
+    const workers = ref(null)
+    const batchBusy = ref(false)
+    let pollTimer = null
 
-function _statusToClass(status) {
-  if (status === "tested") return "cp-cov-tested";
-  if (status === "queued") return "cp-cov-queued";
-  return "cp-cov-untested";
-}
+    function onWorkflowChange() {
+      if (workflow.value !== 'run') {
+        mode.value = ''
+      }
+    }
 
-function _renderTable(payload) {
-  const table = document.getElementById("cpCoverageTable");
-  if (!table) return;
-  const timeframes = Array.isArray(payload?.timeframes) ? payload.timeframes : [];
-  const symbols = Array.isArray(payload?.symbols) ? payload.symbols : [];
-  const cells = Array.isArray(payload?.cells) ? payload.cells : [];
-  const cellMap = new Map();
-  cells.forEach((cell) => {
-    const tf = String(cell.timeframe || "");
-    const sym = String(cell.symbol || "");
-    if (!tf || !sym) return;
-    cellMap.set(`${tf}||${sym}`, String(cell.status || "untested"));
-  });
+    function cellStatus(tf, sym) {
+      return cells.value.get(tf + '||' + sym) || 'untested'
+    }
 
-  table.innerHTML = "";
-  if (!timeframes.length || !symbols.length) {
-    const tbody = document.createElement("tbody");
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.className = "text-left";
-    td.textContent = "No coverage data available.";
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    table.appendChild(tbody);
-    return;
-  }
+    function cellClass(status) {
+      if (status === 'tested') return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+      if (status === 'queued') return 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+      return 'bg-gray-500/10 text-gray-500 border border-gray-500/20 hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/30'
+    }
 
-  const thead = document.createElement("thead");
-  const hr = document.createElement("tr");
-  const firstTh = document.createElement("th");
-  firstTh.textContent = "symbol \\ timeframe";
-  firstTh.className = "text-left";
-  hr.appendChild(firstTh);
-  timeframes.forEach((tf) => {
-    const th = document.createElement("th");
-    th.textContent = tf;
-    hr.appendChild(th);
-  });
-  thead.appendChild(hr);
-  table.appendChild(thead);
+    function cellLabel(status) {
+      if (status === 'tested') return t('coverage_cell_tested', 'Tested')
+      if (status === 'queued') return t('coverage_cell_queued', 'Queued')
+      return t('coverage_cell_untested', 'Untested')
+    }
 
-  const tbody = document.createElement("tbody");
-  symbols.forEach((symbol) => {
-    const tr = document.createElement("tr");
-
-    const symbolTd = document.createElement("td");
-    symbolTd.className = "text-left";
-    symbolTd.textContent = symbol;
-    tr.appendChild(symbolTd);
-
-    timeframes.forEach((tf) => {
-      const td = document.createElement("td");
-      const status = cellMap.get(`${tf}||${symbol}`) || "untested";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `cp-cov-cell ${_statusToClass(status)}`;
-      btn.dataset.timeframe = tf;
-      btn.dataset.symbol = symbol;
-      btn.dataset.status = status;
-      btn.textContent = status;
-      td.appendChild(btn);
-      tr.appendChild(td);
-    });
-
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-}
-
-function _currentEnqueueOptions() {
-  const workflow = (document.getElementById("cpCoverageWorkflow")?.value || "baseline").trim();
-  const mode = (document.getElementById("cpCoverageMode")?.value || "").trim();
-  const workersRaw = (document.getElementById("cpCoverageWorkers")?.value || "").trim();
-  const payload = { workflow };
-  if (workflow === "run" && mode) payload.mode = mode;
-  if (workersRaw) payload.workers = Number(workersRaw);
-  return payload;
-}
-
-async function _refreshMatrix() {
-  try {
-    const payload = await _requestJson("/coverage/matrix.json", { cache: "no-store" });
-    _renderSummary(payload);
-    _renderTable(payload);
-  } catch (err) {
-    _setMessage(`Coverage refresh failed: ${err}`, true);
-  }
-}
-
-function _bindEvents() {
-  const workflowEl = document.getElementById("cpCoverageWorkflow");
-  if (workflowEl) {
-    workflowEl.onchange = () => _setModeEnabled();
-  }
-
-  const refreshBtn = document.getElementById("cpCoverageRefreshBtn");
-  if (refreshBtn) {
-    refreshBtn.onclick = async () => {
-      await _refreshMatrix();
-    };
-  }
-
-  const startBatchBtn = document.getElementById("cpCoverageStartBatchBtn");
-  if (startBatchBtn) {
-    startBatchBtn.onclick = async () => {
+    async function refresh() {
       try {
-        await _requestJson("/batch/start", { method: "POST" });
-        _setMessage("Batch started.");
-      } catch (err) {
-        _setMessage(`Batch start failed: ${err}`, true);
+        const payload = await fetchJson('/coverage/matrix.json')
+        tfs.value = payload.timeframes || []
+        syms.value = payload.symbols || []
+        const next = new Map()
+        ;(payload.cells || []).forEach(cell => {
+          if (cell.timeframe && cell.symbol) {
+            next.set(cell.timeframe + '||' + cell.symbol, cell.status || 'untested')
+          }
+        })
+        cells.value = next
+        summary.value = payload.summary || {}
+      } catch (e) {
+        showToast(t('coverage_toast_load_failed', 'Failed to load coverage') + ': ' + e, 'error')
+      } finally {
+        loading.value = false
       }
-    };
-  }
+    }
 
-  const table = document.getElementById("cpCoverageTable");
-  if (table) {
-    table.onclick = async (event) => {
-      const target = event.target;
-      if (!target || !(target instanceof HTMLElement)) return;
-      if (!target.classList.contains("cp-cov-cell")) return;
-
-      const timeframe = String(target.dataset.timeframe || "").trim();
-      const symbol = String(target.dataset.symbol || "").trim();
-      const status = String(target.dataset.status || "").trim();
-      if (!timeframe || !symbol) return;
-
-      if (status === "queued") {
-        _setMessage(`Already queued: ${timeframe} / ${symbol}`, false);
-        return;
-      }
-
-      let shouldQueue = true;
-      if (status === "tested") {
-        shouldQueue = window.confirm(`Pair is already tested. Queue another run for ${timeframe} / ${symbol}?`);
-      }
-      if (!shouldQueue) return;
-
+    async function cellClick(tf, sym, status) {
+      if (status === 'tested') return
       try {
-        const base = _currentEnqueueOptions();
-        await _requestJson("/coverage/enqueue", {
-          method: "POST",
-          body: JSON.stringify({
-            timeframe,
-            symbol,
-            ...base,
-          }),
-        });
-        _setMessage(`Queued ${timeframe} / ${symbol}`);
-        await _refreshMatrix();
-      } catch (err) {
-        _setMessage(`Enqueue failed: ${err}`, true);
+        const payload = { timeframe: tf, symbol: sym, workflow: workflow.value }
+        if (workflow.value === 'run' && mode.value) payload.mode = mode.value
+        if (workers.value) payload.workers = workers.value
+        await postJson('/coverage/enqueue', payload)
+        showToast(t('coverage_toast_enqueued_pair', 'Enqueued pair') + ': ' + tf + ' x ' + sym, 'success')
+        refresh()
+      } catch (e) {
+        showToast(String(e), 'error')
       }
-    };
-  }
-}
+    }
 
-export function initCoverageTab() {
-  if (initialized) return;
-  const section = document.querySelector('.cp-tab-panel[data-tab="coverage"]');
-  if (!section) return;
-  _buildUi(section);
-  _bindEvents();
-  _setModeEnabled();
-  _refreshMatrix();
-  pollTimer = window.setInterval(() => {
-    _refreshMatrix();
-  }, COVERAGE_POLL_MS);
-  initialized = true;
-  void pollTimer;
+    async function startBatch() {
+      const confirmed = await confirmAction({
+        title: t('coverage_confirm_start_title', 'Start batch jobs?'),
+        message: t('coverage_confirm_start_message', 'This will execute jobs currently in queue.'),
+        confirmText: t('coverage_start_batch', 'Start Batch'),
+        variant: 'primary',
+      })
+      if (!confirmed) return
+      batchBusy.value = true
+      try {
+        await postJson('/batch/start')
+        showToast(t('coverage_toast_batch_started', 'Batch started'), 'success')
+      } catch (e) {
+        showToast(String(e), 'error')
+      } finally {
+        batchBusy.value = false
+      }
+    }
+
+    onMounted(() => {
+      refresh()
+      pollTimer = setInterval(refresh, 5000)
+    })
+
+    onUnmounted(() => {
+      clearInterval(pollTimer)
+    })
+
+    return {
+      loading,
+      tfs,
+      syms,
+      cells,
+      summary,
+      workflow,
+      mode,
+      workers,
+      batchBusy,
+      onWorkflowChange,
+      cellStatus,
+      cellClass,
+      cellLabel,
+      refresh,
+      cellClick,
+      startBatch,
+      t,
+    }
+  },
 }

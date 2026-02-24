@@ -389,6 +389,150 @@ def test_cli_plan_generates_empty_jobs_when_no_gaps(tmp_path):
     assert payload["jobs"] == []
 
 
+def test_cli_plan_target_timeframes_surfaces_unseen_gaps(tmp_path):
+    """--target-timeframes/--target-symbols detect gaps for never-run dimensions."""
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Registry has only 2h×ETH and 4h×ETH as tested.  1h never appeared.
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(
+        json.dumps({
+            "runs": [
+                {"timeframes": [{"timeframe": "2h", "days": 120}], "trade_symbols": ["ETH/USDT"]},
+                {"timeframes": [{"timeframe": "4h", "days": 180}], "trade_symbols": ["ETH/USDT"]},
+            ],
+            "coverage": {
+                "tested_pairs": [
+                    {"timeframe": "2h", "symbol": "ETH/USDT"},
+                    {"timeframe": "4h", "symbol": "ETH/USDT"},
+                ],
+                "untested_pairs": [],
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    template_path = artifacts_dir / "sweep_config.json"
+    template_path.write_text(
+        json.dumps({
+            "search_mode": "combo",
+            "timeframes": [{"timeframe": "4h", "days": 180}],
+            "trade_symbols": ["ETH/USDT"],
+            "combo_sizes": [2],
+        }),
+        encoding="utf-8",
+    )
+
+    out_plan = artifacts_dir / "batch_plan.auto.json"
+    out_cfg_dir = artifacts_dir / "planned_configs"
+    code = cli.main([
+        "plan",
+        "--registry", str(registry_path),
+        "--template-config", str(template_path),
+        "--out-plan", str(out_plan),
+        "--out-config-dir", str(out_cfg_dir),
+        "--workflow", "run",
+        "--mode", "combo",
+        "--target-timeframes", "1h,2h,4h",
+        "--target-symbols", "ETH/USDT,BNB/USDT,SOL/USDT",
+        "--timeframe-days", "1h:90,2h:120,4h:180",
+        "--cwd", str(tmp_path),
+    ])
+    assert code == 0
+
+    plan_payload = json.loads(out_plan.read_text(encoding="utf-8"))
+    # 9 total pairs - 2 tested = 7 gaps
+    assert plan_payload["job_count"] == 7
+    assert len(plan_payload["jobs"]) == 7
+
+    # Verify all gap jobs reference correct single-pair configs
+    generated_pairs = set()
+    for job in plan_payload["jobs"]:
+        cfg_path = Path(job["config"])
+        assert cfg_path.exists()
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        assert len(cfg["timeframes"]) == 1
+        assert len(cfg["trade_symbols"]) == 1
+        tf = cfg["timeframes"][0]["timeframe"]
+        sym = cfg["trade_symbols"][0]
+        generated_pairs.add((tf, sym))
+
+    # Already-tested pairs should NOT appear
+    assert ("2h", "ETH/USDT") not in generated_pairs
+    assert ("4h", "ETH/USDT") not in generated_pairs
+    # 1h pairs should be present
+    assert ("1h", "ETH/USDT") in generated_pairs
+    assert ("1h", "BNB/USDT") in generated_pairs
+    assert ("1h", "SOL/USDT") in generated_pairs
+
+
+def test_cli_plan_timeframe_days_override(tmp_path):
+    """--timeframe-days injects days values for new timeframes."""
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(
+        json.dumps({
+            "runs": [],
+            "coverage": {"tested_pairs": [], "untested_pairs": []},
+        }),
+        encoding="utf-8",
+    )
+
+    template_path = artifacts_dir / "sweep_config.json"
+    template_path.write_text(
+        json.dumps({
+            "search_mode": "combo",
+            "timeframes": [{"timeframe": "4h", "days": 180}],
+            "trade_symbols": ["ETH/USDT"],
+        }),
+        encoding="utf-8",
+    )
+
+    out_plan = artifacts_dir / "batch_plan.auto.json"
+    out_cfg_dir = artifacts_dir / "planned_configs"
+    code = cli.main([
+        "plan",
+        "--registry", str(registry_path),
+        "--template-config", str(template_path),
+        "--out-plan", str(out_plan),
+        "--out-config-dir", str(out_cfg_dir),
+        "--target-timeframes", "1h",
+        "--target-symbols", "ETH/USDT",
+        "--timeframe-days", "1h:90",
+        "--cwd", str(tmp_path),
+    ])
+    assert code == 0
+
+    plan_payload = json.loads(out_plan.read_text(encoding="utf-8"))
+    assert plan_payload["job_count"] == 1
+    cfg_path = Path(plan_payload["jobs"][0]["config"])
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg["timeframes"][0]["timeframe"] == "1h"
+    assert cfg["timeframes"][0]["days"] == 90
+
+
+def test_cli_plan_target_requires_both_dimensions(tmp_path):
+    """Providing only one of --target-timeframes/--target-symbols raises."""
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts_dir / "run_registry.json"
+    registry_path.write_text(json.dumps({"runs": [], "coverage": {}}), encoding="utf-8")
+    template_path = artifacts_dir / "sweep_config.json"
+    template_path.write_text(json.dumps({"timeframes": [], "trade_symbols": []}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="both be provided"):
+        cli.main([
+            "plan",
+            "--registry", str(registry_path),
+            "--template-config", str(template_path),
+            "--target-timeframes", "1h,2h",
+            "--cwd", str(tmp_path),
+        ])
+
+
 def test_cli_report_generates_cross_run_outputs(tmp_path):
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -617,3 +761,848 @@ def test_cli_gate_c_rejects_mode_override_for_baseline(tmp_path):
                 str(tmp_path),
             ]
         )
+
+
+# -- _compute_coverage_gaps unit tests --------------------------------------
+
+def test_compute_coverage_gaps_full_cartesian_minus_tested():
+    """Gaps = target cartesian minus tested."""
+    registry_payload = {
+        "coverage": {
+            "tested_pairs": [
+                {"timeframe": "2h", "symbol": "ETH/USDT"},
+                {"timeframe": "4h", "symbol": "ETH/USDT"},
+                {"timeframe": "4h", "symbol": "BNB/USDT"},
+            ],
+        }
+    }
+    gaps = cli._compute_coverage_gaps(
+        registry_payload,
+        target_timeframes=["1h", "2h", "4h"],
+        target_symbols=["ETH/USDT", "BNB/USDT"],
+    )
+    gap_keys = {(g["timeframe"], g["symbol"]) for g in gaps}
+    # 6 total - 3 tested = 3 gaps
+    assert len(gaps) == 3
+    assert ("1h", "ETH/USDT") in gap_keys
+    assert ("1h", "BNB/USDT") in gap_keys
+    assert ("2h", "BNB/USDT") in gap_keys
+
+
+def test_compute_coverage_gaps_empty_registry():
+    gaps = cli._compute_coverage_gaps(
+        {"coverage": {}},
+        target_timeframes=["1h", "2h"],
+        target_symbols=["ETH/USDT"],
+    )
+    assert len(gaps) == 2
+
+
+def test_compute_coverage_gaps_sorted_output():
+    gaps = cli._compute_coverage_gaps(
+        {"coverage": {"tested_pairs": []}},
+        target_timeframes=["4h", "1h"],
+        target_symbols=["SOL/USDT", "BNB/USDT"],
+    )
+    # Should be sorted by timeframe then symbol
+    assert gaps[0] == {"timeframe": "1h", "symbol": "BNB/USDT"}
+    assert gaps[1] == {"timeframe": "1h", "symbol": "SOL/USDT"}
+    assert gaps[2] == {"timeframe": "4h", "symbol": "BNB/USDT"}
+    assert gaps[3] == {"timeframe": "4h", "symbol": "SOL/USDT"}
+
+
+# ---------------------------------------------------------------------------
+#  AWF-023: Parallel batch execution tests
+# ---------------------------------------------------------------------------
+
+
+def _make_batch_plan(tmp_path, jobs):
+    """Helper: write a batch plan JSON and per-job config stubs."""
+    for job in jobs:
+        cfg = tmp_path / job["config"]
+        if not cfg.exists():
+            cfg.write_text(json.dumps({"combo_sizes": [1]}), encoding="utf-8")
+    plan_path = tmp_path / "batch_plan.json"
+    plan_path.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+    return plan_path
+
+
+def test_cli_batch_parallel_runs_all_jobs(tmp_path, monkeypatch):
+    """--parallel-jobs 2 should run all jobs and write state."""
+    plan_path = _make_batch_plan(
+        tmp_path,
+        [
+            {"name": "a", "workflow": "run", "mode": "combo", "config": "a.json"},
+            {"name": "b", "workflow": "baseline", "config": "b.json"},
+            {"name": "c", "workflow": "run", "mode": "refine", "config": "c.json"},
+        ],
+    )
+    calls = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        calls.append(workflow)
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    code = cli.main([
+        "batch", "--plan", str(plan_path),
+        "--cwd", str(tmp_path),
+        "--min-free-gb", "0",
+        "--parallel-jobs", "2",
+    ])
+    assert code == 0
+    assert sorted(calls) == sorted(["run", "baseline", "run"])
+
+    state = json.loads(
+        (tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8")
+    )
+    assert len(state["seen_keys"]) == 3
+
+
+def test_cli_batch_parallel_skips_seen_keys(tmp_path, monkeypatch):
+    """Parallel mode should skip jobs already registered in seen_keys."""
+    plan_path = _make_batch_plan(
+        tmp_path,
+        [
+            {"name": "x", "workflow": "run", "mode": "combo", "config": "x.json"},
+        ],
+    )
+    calls = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        calls.append(workflow)
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    base_argv = [
+        "batch", "--plan", str(plan_path),
+        "--cwd", str(tmp_path),
+        "--min-free-gb", "0",
+        "--parallel-jobs", "2",
+    ]
+    assert cli.main(base_argv) == 0
+    assert len(calls) == 1
+
+    # Second run — job already seen
+    assert cli.main(base_argv) == 0
+    assert len(calls) == 1  # no new calls
+
+    state = json.loads(
+        (tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8")
+    )
+    assert any(h["status"] == "skipped_seen_key" for h in state["history"])
+
+
+def test_cli_batch_parallel_continue_on_error(tmp_path, monkeypatch):
+    """With --continue-on-error --parallel-jobs 2, remaining jobs still run."""
+    plan_path = _make_batch_plan(
+        tmp_path,
+        [
+            {"name": "fail-job", "workflow": "run", "mode": "combo", "config": "fail.json"},
+            {"name": "ok-job", "workflow": "baseline", "config": "ok.json"},
+        ],
+    )
+    calls = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        calls.append(config_path.name)
+        if config_path.name == "fail.json":
+            raise RuntimeError("deliberate")
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    code = cli.main([
+        "batch", "--plan", str(plan_path),
+        "--cwd", str(tmp_path),
+        "--min-free-gb", "0",
+        "--parallel-jobs", "2",
+        "--continue-on-error",
+    ])
+    # With continue_on_error, return code is 1 (has failures) but does not raise
+    assert code == 1
+    # Both jobs were attempted
+    assert sorted(calls) == ["fail.json", "ok.json"]
+
+    state = json.loads(
+        (tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8")
+    )
+    statuses = [h["status"] for h in state["history"]]
+    assert "failed" in statuses
+    assert "done" in statuses
+
+
+def test_cli_batch_parallel_fail_fast_raises(tmp_path, monkeypatch):
+    """Without --continue-on-error, a failure raises RuntimeError."""
+    plan_path = _make_batch_plan(
+        tmp_path,
+        [
+            {"name": "fail-first", "workflow": "run", "mode": "combo", "config": "f.json"},
+        ],
+    )
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    with pytest.raises(RuntimeError, match="batch job failed"):
+        cli.main([
+            "batch", "--plan", str(plan_path),
+            "--cwd", str(tmp_path),
+            "--min-free-gb", "0",
+            "--parallel-jobs", "2",
+        ])
+
+
+def test_cli_batch_parallel_jobs_1_uses_sequential(tmp_path, monkeypatch):
+    """--parallel-jobs 1 (default) should use the sequential path."""
+    plan_path = _make_batch_plan(
+        tmp_path,
+        [
+            {"name": "s1", "workflow": "run", "mode": "combo", "config": "s1.json"},
+            {"name": "s2", "workflow": "baseline", "config": "s2.json"},
+        ],
+    )
+    order = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        order.append(config_path.name)
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    code = cli.main([
+        "batch", "--plan", str(plan_path),
+        "--cwd", str(tmp_path),
+        "--min-free-gb", "0",
+        "--parallel-jobs", "1",
+    ])
+    assert code == 0
+    # Sequential guarantees order
+    assert order == ["s1.json", "s2.json"]
+
+    state = json.loads(
+        (tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8")
+    )
+    assert len(state["seen_keys"]) == 2
+
+
+def test_run_batch_job_single_done(tmp_path, monkeypatch):
+    """Unit test: _run_batch_job_single records done in state."""
+    import threading
+
+    cfg = tmp_path / "unit.json"
+    cfg.write_text(json.dumps({}), encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    state = {"seen_keys": {}, "history": []}
+
+    called = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        called.append(True)
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    result = cli._run_batch_job_single(
+        idx=1,
+        total=1,
+        job={
+            "name": "u1",
+            "workflow": "run",
+            "mode": "combo",
+            "workers": None,
+            "config_path": cfg,
+            "cwd": tmp_path,
+        },
+        state=state,
+        state_path=state_path,
+        lock=threading.Lock(),
+    )
+    assert result["status"] == "done"
+    assert len(called) == 1
+    assert len(state["seen_keys"]) == 1
+
+
+def test_run_batch_job_single_skip_seen(tmp_path, monkeypatch):
+    """Unit test: _run_batch_job_single skips seen keys."""
+    import threading
+
+    cfg = tmp_path / "seen.json"
+    cfg.write_text(json.dumps({}), encoding="utf-8")
+    state_path = tmp_path / "state.json"
+
+    job = {
+        "name": "s",
+        "workflow": "run",
+        "mode": "combo",
+        "workers": None,
+        "config_path": cfg,
+        "cwd": tmp_path,
+    }
+    job_key = cli._compute_job_key(job)
+    state = {"seen_keys": {job_key: {"status": "done"}}, "history": []}
+
+    called = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        called.append(True)
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    result = cli._run_batch_job_single(
+        idx=1, total=1, job=job,
+        state=state, state_path=state_path,
+        lock=threading.Lock(),
+    )
+    assert result["status"] == "skipped"
+    assert len(called) == 0
+
+
+def test_run_batch_job_single_failed(tmp_path, monkeypatch):
+    """Unit test: _run_batch_job_single records failure."""
+    import threading
+
+    cfg = tmp_path / "fail.json"
+    cfg.write_text(json.dumps({}), encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    state = {"seen_keys": {}, "history": []}
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    result = cli._run_batch_job_single(
+        idx=1, total=1,
+        job={
+            "name": "f",
+            "workflow": "baseline",
+            "mode": None,
+            "workers": None,
+            "config_path": cfg,
+            "cwd": tmp_path,
+        },
+        state=state, state_path=state_path,
+        lock=threading.Lock(),
+    )
+    assert result["status"] == "failed"
+    assert "kaboom" in result["error"]
+    assert len(state["seen_keys"]) == 0
+    assert any(h["status"] == "failed" for h in state["history"])
+
+
+# ---------------------------------------------------------------------------
+#  AWF-027: Cron patrol cycle tests
+# ---------------------------------------------------------------------------
+
+
+def test_run_patrol_cycle_no_gaps_produces_report(tmp_path, monkeypatch):
+    """With no untested pairs, cycle should skip batch and still generate report."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        json.dumps({
+            "runs": [
+                {"run_id": "r1", "timestamp_utc": "2026-01-01T00:00:00Z",
+                 "oos_avg_total_return_pct": 1.0, "trade_symbols": ["ETH/USDT"],
+                 "timeframes": [{"timeframe": "1h", "days": 90}]},
+            ],
+            "coverage": {"tested_pairs": [], "untested_pairs": []},
+        }),
+        encoding="utf-8",
+    )
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+        "trade_symbols": ["ETH/USDT"],
+    }), encoding="utf-8")
+
+    report_html = artifacts / "cron_report.html"
+    result = cli._run_patrol_cycle(
+        cwd=tmp_path,
+        registry_path=registry_path,
+        template_config_path=template_cfg,
+        plan_out=artifacts / "cron_plan.json",
+        plan_config_dir=artifacts / "cron_configs",
+        batch_state_path=artifacts / "batch_state.json",
+        report_html_path=report_html,
+        report_json_path=None,
+        workflow="run",
+        mode="combo",
+    )
+    assert result["plan_jobs"] == 0
+    assert result["batch_ok"] is True
+    assert result["report_ok"] is True
+    assert result["error"] is None
+    assert report_html.exists()
+
+
+def test_run_patrol_cycle_with_gaps_runs_batch(tmp_path, monkeypatch):
+    """With untested pairs, cycle should plan jobs, run batch, then report."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        json.dumps({
+            "runs": [],
+            "coverage": {
+                "tested_pairs": [],
+                "untested_pairs": [
+                    {"timeframe": "1h", "symbol": "ETH/USDT"},
+                ],
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+        "trade_symbols": ["ETH/USDT"],
+    }), encoding="utf-8")
+
+    # Mock _run_workflow to avoid actual sweep
+    batch_calls = []
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode=None, workers=None):
+        batch_calls.append({"workflow": workflow, "config_path": str(config_path)})
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+
+    report_html = artifacts / "cron_report.html"
+    result = cli._run_patrol_cycle(
+        cwd=tmp_path,
+        registry_path=registry_path,
+        template_config_path=template_cfg,
+        plan_out=artifacts / "cron_plan.json",
+        plan_config_dir=artifacts / "cron_configs",
+        batch_state_path=artifacts / "batch_state.json",
+        report_html_path=report_html,
+        report_json_path=None,
+        workflow="run",
+        mode="combo",
+    )
+    assert result["plan_jobs"] == 1
+    assert result["batch_ok"] is True
+    assert result["report_ok"] is True
+    assert len(batch_calls) == 1
+    assert report_html.exists()
+
+
+def test_cmd_cron_single_cycle(tmp_path, monkeypatch):
+    """autowfo cron --max-cycles 1 should run exactly one cycle."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        json.dumps({
+            "runs": [],
+            "coverage": {"tested_pairs": [], "untested_pairs": []},
+        }),
+        encoding="utf-8",
+    )
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    args = cli.build_parser().parse_args([
+        "cron",
+        "--template-config", str(template_cfg),
+        "--registry", str(registry_path),
+        "--max-cycles", "1",
+        "--interval", "0",
+        "--cwd", str(tmp_path),
+    ])
+    result = args.handler(args)
+    assert result == 0
+
+    # Cycle log should exist with 1 entry
+    log_path = artifacts / "cron_cycle_log.json"
+    assert log_path.exists()
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    assert len(log) == 1
+    assert log[0]["cycle_number"] == 1
+
+
+def test_cmd_cron_parser_defaults():
+    """Verify cron subcommand parser defaults."""
+    parser = cli.build_parser()
+    args = parser.parse_args(["cron", "--template-config", "sweep.json"])
+    assert args.command == "cron"
+    assert args.interval == 0
+    assert args.max_cycles == 1
+    assert args.max_jobs == 0
+    assert args.parallel_jobs == 1
+    assert args.workflow == "run"
+    assert args.mode == "combo"
+
+
+def test_run_patrol_cycle_plan_error_returns_early(tmp_path):
+    """If registry doesn't exist, plan should fail and cycle returns error."""
+    missing_registry = tmp_path / "no_such_file.json"
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({}), encoding="utf-8")
+
+    result = cli._run_patrol_cycle(
+        cwd=tmp_path,
+        registry_path=missing_registry,
+        template_config_path=template_cfg,
+        plan_out=tmp_path / "plan.json",
+        plan_config_dir=tmp_path / "cfgs",
+        batch_state_path=tmp_path / "state.json",
+        report_html_path=tmp_path / "report.html",
+        report_json_path=None,
+    )
+    assert result["error"] is not None
+    assert "plan failed" in result["error"]
+    assert result["batch_ok"] is False
+    assert result["report_ok"] is False
+
+
+# ---------------------------------------------------------------------------
+#  AWF-032: Cron patrol validation — deeper cycle state tracking tests
+# ---------------------------------------------------------------------------
+
+
+def test_patrol_cycle_state_timestamps(tmp_path, monkeypatch):
+    """Cycle result dict must have ISO cycle_start_utc and cycle_end_utc."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(json.dumps({
+        "runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []},
+    }), encoding="utf-8")
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    result = cli._run_patrol_cycle(
+        cwd=tmp_path,
+        registry_path=registry_path,
+        template_config_path=template_cfg,
+        plan_out=artifacts / "plan.json",
+        plan_config_dir=artifacts / "cfgs",
+        batch_state_path=artifacts / "state.json",
+        report_html_path=artifacts / "report.html",
+        report_json_path=None,
+    )
+    assert result["cycle_start_utc"] is not None
+    assert result["cycle_end_utc"] is not None
+    # Both should parse as ISO timestamps
+    from datetime import datetime
+    datetime.fromisoformat(result["cycle_start_utc"].replace("Z", "+00:00"))
+    datetime.fromisoformat(result["cycle_end_utc"].replace("Z", "+00:00"))
+
+
+def test_patrol_cycle_target_filtering(tmp_path):
+    """With target_timeframes/target_symbols, cycle should use
+    _compute_coverage_gaps instead of registry untested list."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(json.dumps({
+        "runs": [],
+        "coverage": {
+            "tested_pairs": [{"timeframe": "1h", "symbol": "ETH/USDT"}],
+            "untested_pairs": [],
+        },
+    }), encoding="utf-8")
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    # Mock _run_workflow to capture planned jobs
+    batch_calls = []
+    import autowfo.cli as cli_mod
+    orig_run_workflow = getattr(cli_mod, "_run_workflow", None)
+
+    def _fake_run_workflow(cwd, config_path, workflow, mode=None, workers=None):
+        batch_calls.append(str(config_path))
+
+    cli_mod._run_workflow = _fake_run_workflow
+    try:
+        result = cli._run_patrol_cycle(
+            cwd=tmp_path,
+            registry_path=registry_path,
+            template_config_path=template_cfg,
+            plan_out=artifacts / "plan.json",
+            plan_config_dir=artifacts / "cfgs",
+            batch_state_path=artifacts / "state.json",
+            report_html_path=artifacts / "report.html",
+            report_json_path=None,
+            target_timeframes=["1h"],
+            target_symbols=["ETH/USDT", "BNB/USDT"],
+        )
+    finally:
+        if orig_run_workflow is not None:
+            cli_mod._run_workflow = orig_run_workflow
+
+    # ETH/USDT is already tested; only BNB/USDT should be a gap
+    assert result["plan_jobs"] == 1
+    plan = json.loads((artifacts / "plan.json").read_text(encoding="utf-8"))
+    assert any("BNB" in j.get("config", "") for j in plan["jobs"])
+
+
+def test_cmd_cron_multi_cycle_log(tmp_path, monkeypatch):
+    """Multiple cycles should accumulate entries in cron_cycle_log.json."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(json.dumps({
+        "runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []},
+    }), encoding="utf-8")
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    # interval must be > 0 for multi-cycle; mock time.sleep to skip waiting
+    import autowfo.cli as cli_mod
+    monkeypatch.setattr(cli_mod.time, "sleep", lambda _: None)
+
+    args = cli.build_parser().parse_args([
+        "cron",
+        "--template-config", str(template_cfg),
+        "--registry", str(registry_path),
+        "--max-cycles", "3",
+        "--interval", "1",
+        "--cwd", str(tmp_path),
+    ])
+    ret = args.handler(args)
+    assert ret == 0
+
+    log_path = artifacts / "cron_cycle_log.json"
+    assert log_path.exists()
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    assert len(log) == 3
+    for i, entry in enumerate(log, start=1):
+        assert entry["cycle_number"] == i
+        assert "cycle_start_utc" in entry
+        assert "cycle_end_utc" in entry
+        assert "plan_jobs" in entry
+
+
+def test_patrol_cycle_max_jobs_limits(tmp_path, monkeypatch):
+    """max_jobs should cap the number of planned jobs."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(json.dumps({
+        "runs": [],
+        "coverage": {
+            "tested_pairs": [],
+            "untested_pairs": [
+                {"timeframe": "1h", "symbol": "ETH/USDT"},
+                {"timeframe": "1h", "symbol": "BNB/USDT"},
+                {"timeframe": "1h", "symbol": "SOL/USDT"},
+            ],
+        },
+    }), encoding="utf-8")
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    import autowfo.cli as cli_mod
+    orig_run_workflow = getattr(cli_mod, "_run_workflow", None)
+    cli_mod._run_workflow = lambda *a, **kw: None
+    try:
+        result = cli._run_patrol_cycle(
+            cwd=tmp_path,
+            registry_path=registry_path,
+            template_config_path=template_cfg,
+            plan_out=artifacts / "plan.json",
+            plan_config_dir=artifacts / "cfgs",
+            batch_state_path=artifacts / "state.json",
+            report_html_path=artifacts / "report.html",
+            report_json_path=None,
+            max_jobs=2,
+        )
+    finally:
+        if orig_run_workflow is not None:
+            cli_mod._run_workflow = orig_run_workflow
+
+    # max_jobs=2 should limit to 2 jobs even though 3 untested pairs exist
+    assert result["plan_jobs"] == 2
+
+
+def test_patrol_cycle_batch_failure_continue_on_error(tmp_path, monkeypatch):
+    """When a batch job fails with continue_on_error, cycle should still
+    attempt report and return batch_ok=False."""
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(json.dumps({
+        "runs": [],
+        "coverage": {
+            "tested_pairs": [],
+            "untested_pairs": [
+                {"timeframe": "1h", "symbol": "ETH/USDT"},
+            ],
+        },
+    }), encoding="utf-8")
+
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({
+        "timeframes": [{"timeframe": "1h", "days": 90}],
+    }), encoding="utf-8")
+
+    # Mock _run_workflow to raise an error
+    import autowfo.cli as cli_mod
+    orig_run_workflow = getattr(cli_mod, "_run_workflow", None)
+
+    def _failing_workflow(*args, **kwargs):
+        raise RuntimeError("simulated batch failure")
+
+    cli_mod._run_workflow = _failing_workflow
+    try:
+        result = cli._run_patrol_cycle(
+            cwd=tmp_path,
+            registry_path=registry_path,
+            template_config_path=template_cfg,
+            plan_out=artifacts / "plan.json",
+            plan_config_dir=artifacts / "cfgs",
+            batch_state_path=artifacts / "state.json",
+            report_html_path=artifacts / "report.html",
+            report_json_path=None,
+            continue_on_error=True,
+        )
+    finally:
+        if orig_run_workflow is not None:
+            cli_mod._run_workflow = orig_run_workflow
+
+    assert result["plan_jobs"] == 1
+    assert result["batch_ok"] is False
+    # Report should still be attempted even after batch failure
+    assert result.get("report_ok") is not None
+
+
+def test_build_top_change_lines_reports_rank_movements():
+    previous_top = [
+        {"key": "combo-A", "label": "combo-A", "value": 10.0},
+        {"key": "combo-B", "label": "combo-B", "value": 9.0},
+        {"key": "combo-C", "label": "combo-C", "value": 8.0},
+    ]
+    current_top = [
+        {"key": "combo-B", "label": "combo-B", "value": 9.5},
+        {"key": "combo-D", "label": "combo-D", "value": 9.2},
+        {"key": "combo-A", "label": "combo-A", "value": 9.0},
+    ]
+
+    lines = cli._build_top_change_lines(previous_top, current_top, limit=3)
+    assert len(lines) == 3
+    assert "[UP 2->1]" in lines[0]
+    assert "[NEW]" in lines[1]
+    assert "[DOWN 1->3]" in lines[2]
+
+
+def test_build_freshness_alert_flags_stale_timeframes(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "data_refresh_state.json").write_text(
+        json.dumps(
+            {
+                "timeframe_data_end": {
+                    "1h": "2020-01-01 00:00:00",
+                    "4h": "2020-01-02 00:00:00",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    freshness_alert = cli._build_freshness_alert(artifacts, threshold_days=7)
+    assert freshness_alert["checked"] is True
+    assert freshness_alert["alert"] is True
+    assert any(row.get("timeframe") == "1h" for row in freshness_alert["stale"])
+    assert "ALERT" in cli._format_freshness_line(freshness_alert)
+
+
+def test_cmd_cron_notifications_and_state_update(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    registry_path = artifacts / "run_registry.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        json.dumps({"runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []}}),
+        encoding="utf-8",
+    )
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({"timeframes": [{"timeframe": "1h", "days": 90}]}), encoding="utf-8")
+
+    cycle_results = [
+        {
+            "cycle_start_utc": "2026-02-19T00:00:00Z",
+            "cycle_end_utc": "2026-02-19T00:00:30Z",
+            "plan_jobs": 0,
+            "batch_ok": True,
+            "report_ok": True,
+            "error": None,
+            "top_entities": [
+                {"key": "combo-A", "label": "combo-A", "value": 10.0, "kind": "combo"},
+                {"key": "combo-B", "label": "combo-B", "value": 9.0, "kind": "combo"},
+                {"key": "combo-C", "label": "combo-C", "value": 8.0, "kind": "combo"},
+            ],
+        },
+        {
+            "cycle_start_utc": "2026-02-19T00:01:00Z",
+            "cycle_end_utc": "2026-02-19T00:01:30Z",
+            "plan_jobs": 0,
+            "batch_ok": True,
+            "report_ok": True,
+            "error": None,
+            "top_entities": [
+                {"key": "combo-B", "label": "combo-B", "value": 9.6, "kind": "combo"},
+                {"key": "combo-A", "label": "combo-A", "value": 9.4, "kind": "combo"},
+                {"key": "combo-C", "label": "combo-C", "value": 8.1, "kind": "combo"},
+            ],
+        },
+    ]
+
+    def _fake_run_patrol_cycle(**kwargs):
+        return dict(cycle_results.pop(0))
+
+    notify_calls = []
+
+    def _fake_dispatch(**kwargs):
+        notify_calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(cli, "_run_patrol_cycle", _fake_run_patrol_cycle)
+    monkeypatch.setattr(cli, "_dispatch_cron_notifications", _fake_dispatch)
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+
+    code = cli.main(
+        [
+            "cron",
+            "--template-config",
+            str(template_cfg),
+            "--registry",
+            str(registry_path),
+            "--max-cycles",
+            "2",
+            "--interval",
+            "1",
+            "--notify-webhook",
+            "https://example.com/hook",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    assert len(notify_calls) == 2
+    assert any("NEW" in line for line in notify_calls[0]["payload"]["top_changes"])
+    assert any("UP 2->1" in line for line in notify_calls[1]["payload"]["top_changes"])
+
+    notify_state_path = artifacts / "cron_notify_state.json"
+    assert notify_state_path.exists()
+    notify_state = json.loads(notify_state_path.read_text(encoding="utf-8"))
+    assert notify_state["last_top"][0]["key"] == "combo-B"

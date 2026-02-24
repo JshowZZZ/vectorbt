@@ -26,12 +26,14 @@
   },
   "output_schema": {
     "slice_tuple": [
-      "train_end",
+      "test_start",
       "test_end"
     ],
     "window_tuple": [
       "train_start",
       "train_end",
+      "valid_start",
+      "valid_end",
       "test_start",
       "test_end"
     ]

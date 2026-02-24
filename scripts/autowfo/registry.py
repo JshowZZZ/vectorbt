@@ -53,6 +53,8 @@ def _build_run_entry(
         "best_data_days": best_row.get("data_days"),
         "avg_total_return_pct": best_row.get("avg_total_return_pct"),
         "oos_avg_total_return_pct": best_row.get("oos_avg_total_return_pct"),
+        "bh_return_pct": best_row.get("bh_return_pct"),
+        "random_entry_return_pct": best_row.get("random_entry_return_pct"),
         "report_file": best_row.get("report_file"),
     }
 
@@ -60,7 +62,21 @@ def _build_run_entry(
 def _build_coverage_map(
     per_symbol_df: pd.DataFrame,
     run_entries: List[Mapping[str, Any]],
+    *,
+    target_timeframes: List[str] | None = None,
+    target_symbols: List[str] | None = None,
 ) -> Dict[str, Any]:
+    """Build coverage map from tested data and run entries.
+
+    Parameters
+    ----------
+    target_timeframes : list[str] | None
+        When provided, these timeframes are always included in the
+        coverage dimensions (even if no run has ever used them).
+    target_symbols : list[str] | None
+        When provided, these symbols are always included in the
+        coverage dimensions.
+    """
     if per_symbol_df.empty:
         tested_pairs: List[Dict[str, str]] = []
     else:
@@ -82,6 +98,13 @@ def _build_coverage_map(
     for pair in tested_pairs:
         timeframe_values.add(pair["timeframe"])
         symbol_values.add(pair["symbol"])
+
+    # Inject external target dimensions so gaps are visible for
+    # timeframes/symbols that have never appeared in any run.
+    if target_timeframes:
+        timeframe_values.update(target_timeframes)
+    if target_symbols:
+        symbol_values.update(target_symbols)
 
     timeframe_list = _normalize_str_set(timeframe_values)
     symbol_list = _normalize_str_set(symbol_values)

@@ -1,269 +1,88 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
 <head>
-  <meta charset="utf-8">
-  <title>回測控制台</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt@1.13.8/css/jquery.dataTables.min.css">
-  <link rel="stylesheet" href="/static/css/app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AUTOWFO Control Panel</title>
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            profit: '#10b981',
+            loss:   '#ef4444',
+            warn:   '#f59e0b',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
+          },
+        },
+      },
+    }
+  </script>
+
+  <!-- Google Fonts: Inter + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+  <!-- App CSS (design system) -->
+  <link rel="stylesheet" href="/static/css/app.css" />
+
+  <!-- Vue 3 importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "https://cdn.jsdelivr.net/npm/vue@3/dist/vue.esm-browser.prod.js"
+    }
+  }
+  </script>
+
   <style>
-    body { font-family: "Noto Sans TC", Arial, sans-serif; margin: 24px; color: #111; background: #f7f7f7; }
-    h1, h2 { margin: 16px 0 8px; }
-    .panel { background: #fff; border: 1px solid #e6e6e6; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    .row { margin: 8px 0; display: flex; gap: 12px; flex-wrap: wrap; }
-    button { padding: 8px 14px; font-size: 14px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; background: #fafafa; }
-    button:hover { background: #f0f0f0; }
-    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: right; }
-    th { background: #f3f3f3; text-align: right; }
-    td:first-child, th:first-child { text-align: left; }
-    .links a { margin-right: 12px; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-    .kpi { border: 1px solid #ececec; border-radius: 10px; padding: 12px; background: #fafafa; }
-    .kpi .label { color: #666; font-size: 12px; }
-    .kpi .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
-    .pos { color: #0b7a36; }
-    .neg { color: #b3122f; }
-    .muted { color: #888; }
-    .note { font-size: 12px; color: #666; }
-    .filter-group { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
-    .filter-group label { font-size: 12px; color: #555; display: flex; flex-direction: column; gap: 4px; }
-    .filter-group input, .filter-group select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; min-width: 120px; }
-    .symbol-dropdown { border: 1px solid #ddd; border-radius: 8px; padding: 6px 8px; background: #fafafa; min-width: 220px; }
-    .symbol-options { max-height: 160px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px 12px; padding: 8px 0; }
-    .symbol-options label { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; }
-      .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-      .chart-card { border: 1px solid #ececec; border-radius: 10px; padding: 8px; background: #fff; }
-      canvas { width: 100%; height: 320px; }
-      .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
-      .log-box { background: #111; color: #eee; padding: 12px; border-radius: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; }
-      .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
-      .tag { background: #eef3ff; color: #1a3a7a; border: 1px solid #d8e3ff; border-radius: 12px; padding: 2px 8px; font-size: 12px; }
-      .param-summary { font-size: 12px; color: #333; line-height: 1.4; white-space: normal; }
-      .row-expand { cursor: pointer; }
-      .detail-wrap { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 12px; }
-      .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; }
-      .detail-item { font-size: 12px; }
-      .detail-label { color: #666; margin-right: 6px; }
-      .detail-value { color: #111; font-weight: 600; }
-      .text-left { text-align: left; }
-    </style>
-  </head>
-  <body>
-    <h1>回測控制台</h1>
-
-    <div class="panel">
-    <div class="row">
-      <button id="startBtn">開始回測</button>
-      <button id="pauseBtn">暫停</button>
-      <button id="resumeBtn">繼續</button>
-      <button id="clearLogBtn">清空執行紀錄</button>
-    </div>
-      <div class="row links">
-        <a href="/status" target="_blank">狀態頁</a>
-        <a id="reportLink" href="/report" target="_blank">最新報告</a>
-        <a href="/log" target="_blank">執行紀錄</a>
-        <a href="/log.txt" target="_blank">下載紀錄</a>
-      </div>
-    <table>
-      <tr><th>階段</th><td id="stage"></td></tr>
-      <tr><th>總組合</th><td id="total"></td></tr>
-      <tr><th>已完成</th><td id="done"></td></tr>
-      <tr><th>已跳過</th><td id="skipped"></td></tr>
-      <tr><th>剩餘</th><td id="remaining"></td></tr>
-      <tr><th>進度(%)</th><td id="percent"></td></tr>
-      <tr><th>經過時間</th><td id="elapsed"></td></tr>
-      <tr><th>預估剩餘</th><td id="eta"></td></tr>
-      <tr><th>更新時間</th><td id="updated"></td></tr>
-      </table>
-    </div>
-
-    <div class="panel">
-      <h2>單元測試</h2>
-      <div class="row">
-        <button id="testStartBtn">執行單元測試</button>
-        <button id="testStopBtn">停止測試</button>
-        <button id="testClearLogBtn">清空測試紀錄</button>
-        <a href="/tests/log" target="_blank">測試紀錄</a>
-        <a href="/tests/log.txt" target="_blank">下載測試紀錄</a>
-      </div>
-      <table>
-        <tr><th>狀態</th><td id="testStage"></td></tr>
-        <tr><th>開始時間</th><td id="testStarted"></td></tr>
-        <tr><th>已耗時</th><td id="testElapsed"></td></tr>
-        <tr><th>退出碼</th><td id="testReturnCode"></td></tr>
-        <tr><th>更新時間</th><td id="testUpdated"></td></tr>
-      </table>
-      <div class="note">執行範圍：tests/test_run_btc_regime_sweep.py、tests/test_control_panel.py</div>
-      <pre id="testLog" class="log-box"></pre>
-    </div>
-
-    <div class="panel">
-      <h2>結果總覽</h2>
-      <div class="kpi-grid" id="kpis"></div>
-      <div class="note" id="dataNote"></div>
-    <div class="row toolbar">
-      <button id="exportFilteredBtn">匯出篩選結果 CSV</button>
-      <button id="exportTopBtn">匯出 Top10 CSV</button>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>回測設定</h2>
-    <div class="filter-group">
-      <label>搜尋模式
-        <select id="cfgMode">
-          <option value="combo">combo（找組合）</option>
-          <option value="refine">refine（細找參數）</option>
-        </select>
-      </label>
-      <label>時間框架
-        <input id="cfgTimeframe" type="text" placeholder="例如 3m">
-      </label>
-        <label>資料天數
-          <input id="cfgDays" type="number" min="1" step="1" placeholder="例如 60">
-        </label>
-        <label>WF 訓練天數
-          <input id="cfgWfTrainDays" type="number" min="1" step="1" placeholder="例如 120">
-        </label>
-        <label>WF 驗證天數
-          <input id="cfgWfTestDays" type="number" min="1" step="1" placeholder="例如 30">
-        </label>
-        <label>WF 步長天數
-          <input id="cfgWfStepDays" type="number" min="1" step="1" placeholder="例如 30">
-        </label>
-        <label>資金模式
-          <select id="cfgCapitalMode">
-            <option value="shared">共享資金</option>
-            <option value="per_symbol">每幣獨立</option>
-          </select>
-        </label>
-        <label>起始資金(USDT/每幣)
-          <input id="cfgInitCash" type="number" min="0" step="1" placeholder="例如 1000">
-        </label>
-        <label>每筆比例(%)
-          <input id="cfgOrderSize" type="number" min="0" step="0.1" placeholder="例如 50">
-        </label>
-        <label>最大同時持倉
-          <input id="cfgMaxPositions" type="number" min="1" step="1" placeholder="例如 2">
-        </label>
-        <label>交易幣對
-          <details class="symbol-dropdown" id="cfgSymbolsDropdown">
-            <summary id="cfgSymbolsSummary">選擇幣對</summary>
-            <div class="symbol-options" id="cfgSymbolsOptions"></div>
-          </details>
-        <div class="row">
-          <button type="button" id="loadTopSymbolsBtn">載入熱門前10</button>
-        </div>
-        <input id="cfgTradeSymbols" type="text" placeholder="例如 ETH/BTC,BNB/BTC,ADA/BTC">
-      </label>
-      <label>組合大小
-        <input id="cfgComboSizes" type="text" placeholder="例如 2,3,4">
-      </label>
-        <label>組合種子
-          <input id="cfgSeed" type="number" step="1" placeholder="例如 42">
-        </label>
-        <label>滑點(bps)
-          <input id="cfgSlippage" type="number" step="0.1" placeholder="例如 2">
-        </label>
-        <label>價差(bps)
-          <input id="cfgSpread" type="number" step="0.1" placeholder="例如 2">
-        </label>
-        <label>資金費率/日
-          <input id="cfgFunding" type="number" step="0.0001" placeholder="例如 0.0003">
-        </label>
-        <label>分段起點
-          <input id="cfgSegStart" type="number" step="1" placeholder="例如 0">
-        </label>
-      <label>分段大小
-        <input id="cfgSegSize" type="number" step="1" placeholder="留空為全量">
-      </label>
-      <label>細找 Top N
-        <input id="cfgTopN" type="number" step="1" placeholder="例如 50">
-      </label>
-      <div class="row">
-        <button id="saveConfigBtn">儲存設定</button>
-        <span class="note" id="configStatus"></span>
-      </div>
-    </div>
-    <div class="note">設定寫入 artifacts/sweep_config.json，開始回測時會自動讀取。</div>
-  </div>
-  <div class="panel">
-    <h2>篩選條件</h2>
-    <div class="filter-group">
-      <label>時間框架
-        <select id="filterTimeframe">
-          <option value="all">全部</option>
-        </select>
-      </label>
-      <label>驗證總報酬(%) ≥
-        <input id="filterOosReturn" type="number" step="0.1" placeholder="例如 0">
-      </label>
-      <label>驗證勝率(%) ≥
-        <input id="filterOosWinRate" type="number" step="1" placeholder="例如 50">
-      </label>
-      <label>平均每日交易 ≥
-        <input id="filterDailyTrades" type="number" step="0.1" placeholder="例如 5">
-      </label>
-      <label>驗證最大回撤(%) ≤
-        <input id="filterMaxDrawdown" type="number" step="0.1" placeholder="例如 5">
-      </label>
-      <label>
-        <span>OOS > 0</span>
-        <input id="filterOosPositive" type="checkbox">
-      </label>
-    </div>
-    <div class="row">
-      <button id="applyFilterBtn">套用篩選</button>
-      <button id="resetFilterBtn">清除篩選</button>
-    </div>
-    <div class="note" id="filterNote"></div>
-  </div>
-
-  <div class="panel">
-    <h2>視覺化</h2>
-    <div class="chart-grid">
-      <div class="chart-card">
-        <div class="note">驗證總報酬(%) vs 驗證最大回撤(%)</div>
-        <canvas id="scatterChart" width="600" height="320"></canvas>
-      </div>
-      <div class="chart-card">
-        <div class="note">驗證總報酬(%) 分佈</div>
-        <canvas id="histChart" width="600" height="320"></canvas>
-      </div>
-      <div class="chart-card">
-        <div class="note">風險-報酬前緣（驗證總報酬 vs 回撤）</div>
-        <canvas id="frontierChart" width="600" height="320"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Top10（最新）</h2>
-    <table id="top10Table">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div class="panel">
-    <h2>所有組合（可排序/搜尋）</h2>
-    <table id="comboTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div class="panel">
-    <h2>歷史排行榜</h2>
-    <table id="leaderboardTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
+    /* Cfg input shared class */
+    .cfg-input {
+      display: block;
+      width: 100%;
+      padding: 0.375rem 0.625rem;
+      font-size: 0.75rem;
+      line-height: 1.25rem;
+      border-radius: 0.5rem;
+      border: 1px solid;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    .cfg-input {
+      background-color: #fff; border-color: #d1d5db; color: #374151;
+    }
+    .cfg-input:focus {
+      border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+    .dark .cfg-input {
+      background-color: #0d1117; border-color: #30363d; color: #e5e7eb;
+    }
+    .dark .cfg-input:focus {
+      border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+    }
+    .cfg-input:disabled {
+      opacity: 0.5; cursor: not-allowed;
+    }
+    select.cfg-input {
+      appearance: auto; width: auto; min-width: 6rem;
+    }
+    /* Smooth page transitions */
+    [v-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+  <div id="app" v-cloak></div>
   <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

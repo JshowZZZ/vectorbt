@@ -42,6 +42,20 @@ def _common_ctx_kwargs(cache_dir):
         mfi_window=3,
         vroc_lookbacks=[3],
         ad_lookbacks=[3],
+        cci_lookbacks=[3],
+        willr_lookbacks=[3],
+        adx_lookbacks=[3],
+        trix_lookbacks=[3],
+        dpo_lookbacks=[3],
+        efi_lookbacks=[3],
+        vwma_lookbacks=[3],
+        ultosc_periods=(7, 14, 28),
+        keltner_lookbacks=[3],
+        donchian_lookbacks=[3],
+        ppo_fast=12,
+        ppo_slow=26,
+        ppo_signal=9,
+        chop_lookbacks=[3],
         init_cash_usdt=1000,
         capital_mode="shared",
     )
@@ -88,3 +102,57 @@ def test_cache_csv_roundtrip(tmp_path):
         d._normalize_index(loaded),
         check_freq=False,
     )
+
+
+def test_refresh_ohlcv_cache_builds_data_end_maps(tmp_path):
+    index = pd.date_range("2024-01-01", periods=5, freq="h")
+    df = _make_ohlcv(index, base=100.0)
+
+    def loader(symbol, exchange, timeframe, start, end, cache_dir, cache_format):  # noqa: ARG001
+        return df
+
+    payload = d.refresh_ohlcv_cache(
+        exchange="binance",
+        timeframes=[{"timeframe": "1h", "days": 3}],
+        symbols=["ETH/BTC"],
+        base_symbol="BTC/USDT",
+        cache_dir=str(tmp_path / "cache"),
+        cache_format="csv",
+        load_or_update_symbol_fn=loader,
+    )
+
+    expected_mark = d._format_data_end(index[-1])
+    assert payload["timeframe_data_end"]["1h"] == expected_mark
+    assert payload["errors"] == []
+    assert payload["pair_data_end"] == [
+        {"timeframe": "1h", "symbol": "BTC/USDT", "data_end": expected_mark},
+        {"timeframe": "1h", "symbol": "ETH/BTC", "data_end": expected_mark},
+    ]
+
+
+def test_refresh_ohlcv_cache_keeps_partial_results_on_symbol_error(tmp_path):
+    index = pd.date_range("2024-01-01", periods=5, freq="h")
+    df = _make_ohlcv(index, base=100.0)
+
+    def loader(symbol, exchange, timeframe, start, end, cache_dir, cache_format):  # noqa: ARG001
+        if symbol == "ETH/BTC":
+            raise RuntimeError("boom")
+        return df
+
+    payload = d.refresh_ohlcv_cache(
+        exchange="binance",
+        timeframes=[{"timeframe": "1h", "days": 3}],
+        symbols=["ETH/BTC"],
+        base_symbol="BTC/USDT",
+        cache_dir=str(tmp_path / "cache"),
+        cache_format="csv",
+        load_or_update_symbol_fn=loader,
+    )
+
+    expected_mark = d._format_data_end(index[-1])
+    assert payload["timeframe_data_end"]["1h"] == expected_mark
+    assert payload["pair_data_end"] == [
+        {"timeframe": "1h", "symbol": "BTC/USDT", "data_end": expected_mark},
+    ]
+    assert payload["errors"]
+    assert "ETH/BTC" in payload["errors"][0]

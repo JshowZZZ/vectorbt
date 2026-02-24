@@ -136,7 +136,7 @@ def evaluate_combo_task(task, runtime):
     if wf_windows is None:
         wf_windows = []
         for test_start, test_end in runtime.get("wf_slices", []):
-            wf_windows.append((None, None, test_start, test_end))
+            wf_windows.append((None, None, None, None, test_start, test_end))
     config_sha256 = runtime["config_sha256"]
     data_fingerprint = runtime["data_fingerprint"]
 
@@ -220,7 +220,7 @@ def evaluate_combo_task(task, runtime):
         }
 
     oos_rows = []
-    for train_start, train_end, test_start, test_end in wf_windows:
+    for train_start, train_end, valid_start, valid_end, test_start, test_end in wf_windows:
         segment_close = ctx["trade_close"].loc[test_start:test_end]
         if segment_close.empty:
             continue
@@ -231,29 +231,41 @@ def evaluate_combo_task(task, runtime):
             segment_trade_mom
         )
         selected_policy = "filtered"
-        if wf_mode == "rolling" and train_start is not None and train_end is not None:
-            train_close = ctx["trade_close"].loc[train_start:train_end]
-            if not train_close.empty:
-                train_long = long_regime_final.loc[train_close.index]
-                train_short = short_regime_final.loc[train_close.index]
-                train_trade_mom = trade_mom.loc[train_close.index]
-                train_base_long_filter, train_base_short_filter = autowfo_engine._build_trade_mom_filters(
-                    train_trade_mom
+
+        # Use validation segment for filter policy selection when available,
+        # otherwise fall back to train segment (rolling mode only).
+        policy_start = None
+        policy_end = None
+        if valid_start is not None and valid_end is not None and valid_start != valid_end:
+            policy_start = valid_start
+            policy_end = valid_end
+        elif wf_mode == "rolling" and train_start is not None and train_end is not None:
+            policy_start = train_start
+            policy_end = train_end
+
+        if policy_start is not None and policy_end is not None:
+            policy_close = ctx["trade_close"].loc[policy_start:policy_end]
+            if not policy_close.empty:
+                policy_long = long_regime_final.loc[policy_close.index]
+                policy_short = short_regime_final.loc[policy_close.index]
+                policy_trade_mom = trade_mom.loc[policy_close.index]
+                policy_base_long_filter, policy_base_short_filter = autowfo_engine._build_trade_mom_filters(
+                    policy_trade_mom
                 )
-                train_all_true = _all_true_filter(train_trade_mom)
+                policy_all_true = _all_true_filter(policy_trade_mom)
                 candidate_filters = (
-                    ("filtered", train_base_long_filter, train_base_short_filter),
-                    ("unfiltered", train_all_true, train_all_true),
+                    ("filtered", policy_base_long_filter, policy_base_short_filter),
+                    ("unfiltered", policy_all_true, policy_all_true),
                 )
                 best_score = -np.inf
-                for policy_name, train_long_filter, train_short_filter in candidate_filters:
-                    train_metrics = _segment_combo_metrics(
-                        segment_close=train_close,
-                        segment_long=train_long,
-                        segment_short=train_short,
-                        segment_trade_mom=train_trade_mom,
-                        long_filter=train_long_filter,
-                        short_filter=train_short_filter,
+                for policy_name, p_long_filter, p_short_filter in candidate_filters:
+                    policy_metrics = _segment_combo_metrics(
+                        segment_close=policy_close,
+                        segment_long=policy_long,
+                        segment_short=policy_short,
+                        segment_trade_mom=policy_trade_mom,
+                        long_filter=p_long_filter,
+                        short_filter=p_short_filter,
                         max_hold=max_hold,
                         effective_fees=effective_fees,
                         sl_stop=sl_stop,
@@ -267,7 +279,7 @@ def evaluate_combo_task(task, runtime):
                         trade_symbols_tf=trade_symbols_tf,
                         bar_hours=bar_hours,
                     )
-                    score = float(train_metrics.get("total_return_pct", np.nan))
+                    score = float(policy_metrics.get("total_return_pct", np.nan))
                     if np.isnan(score):
                         continue
                     if score > best_score:
