@@ -536,7 +536,7 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
         """
         checks.assert_numba_func(apply_func_nb)
 
-        regrouped = self.obj.groupby(by, axis=0, **kwargs)
+        regrouped = self.obj.groupby(by, **kwargs)
         groups = Dict()
         for i, (k, v) in enumerate(regrouped.indices.items()):
             groups[i] = np.asarray(v)
@@ -575,7 +575,7 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
         """
         checks.assert_numba_func(apply_func_nb)
 
-        resampled = self.obj.resample(freq, axis=0, **kwargs)
+        resampled = self.obj.resample(freq, **kwargs)
         groups = Dict()
         for i, (k, v) in enumerate(resampled.indices.items()):
             groups[i] = np.asarray(v)

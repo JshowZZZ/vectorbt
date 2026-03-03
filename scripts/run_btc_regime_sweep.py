@@ -6,7 +6,6 @@ import pandas as pd
 
 from scripts.autowfo import data as autowfo_data
 from scripts.autowfo import artifacts as autowfo_artifacts
-from scripts.autowfo import engine as autowfo_engine
 from scripts.autowfo import evaluator as autowfo_evaluator
 from scripts.autowfo import metrics as autowfo_metrics
 from scripts.autowfo import parallel as autowfo_parallel
@@ -17,6 +16,10 @@ from scripts.autowfo import report as autowfo_report
 from scripts.autowfo import search as autowfo_search
 from scripts.autowfo import split as autowfo_split
 from scripts.autowfo import strategy as autowfo_strategy
+from scripts.autowfo import engine_helpers
+from scripts.autowfo import engine_runtime
+from scripts.autowfo import engine_search
+from scripts.autowfo import engine_finalize
 
 from scripts.autowfo.constants import (
     FILTER_NAME_MAP,
@@ -29,7 +32,7 @@ from scripts.autowfo.constants import (
 
 
 ARTIFACT_ROW_METADATA_FIELDS = list(autowfo_artifacts.ROW_METADATA_FIELDS)
-SWEEP_SCHEMA_FIELDS = autowfo_engine._build_sweep_schema_fields(
+SWEEP_SCHEMA_FIELDS = engine_helpers._build_sweep_schema_fields(
     artifact_row_metadata_fields=ARTIFACT_ROW_METADATA_FIELDS,
 )
 COMBO_KEY_FIELDS = SWEEP_SCHEMA_FIELDS["combo_key_fields"]
@@ -118,11 +121,11 @@ def main():
     out_dir = "artifacts"
     os.makedirs(out_dir, exist_ok=True)
 
-    default_config = autowfo_engine._load_runtime_config(
+    default_config = engine_helpers._load_runtime_config(
         out_dir,
         env_mode=os.getenv("VBT_SWEEP_MODE"),
     )
-    runtime_settings = autowfo_engine._resolve_runtime_settings(
+    runtime_settings = engine_helpers._resolve_runtime_settings(
         default_config=default_config,
         base_symbol=base_symbol,
         default_trade_symbols=default_trade_symbols,
@@ -161,7 +164,7 @@ def main():
     bb_alpha = 2
     atr_window = 14
     base_ma_pairs = [(10, 30), (20, 50)]
-    ma_pairs = autowfo_engine._build_ma_pairs(base_ma_pairs)
+    ma_pairs = engine_helpers._build_ma_pairs(base_ma_pairs)
     lookback_refine_step = 4
     obv_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
     volume_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
@@ -212,7 +215,7 @@ def main():
     run_metadata_path_run = os.path.join(out_dir, f"run_metadata_{run_id}.json")
     db_path = os.path.join(out_dir, "results.db")
     control_path = os.path.join(out_dir, "run_control.json")
-    autowfo_engine._ensure_control_file(control_path)
+    engine_helpers._ensure_control_file(control_path)
 
     combo_path = os.path.join(out_dir, "param_sweep_combo_summary.csv")
     per_symbol_path = os.path.join(out_dir, "param_sweep_symbol_summary.csv")
@@ -239,14 +242,14 @@ def main():
         existing_combo_df = pd.read_csv(combo_path, low_memory=False)
     if os.path.exists(per_symbol_path):
         existing_symbol_df = pd.read_csv(per_symbol_path, low_memory=False)
-    existing_combo_df, existing_symbol_df = autowfo_engine._normalize_existing_results(
+    existing_combo_df, existing_symbol_df = engine_helpers._normalize_existing_results(
         existing_combo_df,
         existing_symbol_df,
         COMBO_KEY_FIELDS,
     )
     indicator_param_options = autowfo_strategy._build_indicator_param_options_coarse()
     indicator_defaults = autowfo_strategy._indicator_defaults(indicator_param_options)
-    combo_keys_all = autowfo_engine._build_combo_keys(
+    combo_keys_all = engine_helpers._build_combo_keys(
         indicator_keys=list(INDICATOR_META.keys()),
         combo_sizes=combo_sizes,
         combo_seed=combo_seed,
@@ -254,13 +257,13 @@ def main():
         combo_segment_size=combo_segment_size,
     )
 
-    regime_variants = autowfo_engine._build_regime_variants(rsi_revert_pairs)
+    regime_variants = engine_helpers._build_regime_variants(rsi_revert_pairs)
 
     # scanning logic (multi-timeframe, incremental, two-space)
     regime_lookup = {regime["regime_name"]: regime for regime in regime_variants}
     timeframe_days_map = {cfg["timeframe"]: cfg["days"] for cfg in timeframe_configs}
 
-    count_coarse_combos = lambda: autowfo_engine._count_coarse_combos(
+    count_coarse_combos = lambda: engine_helpers._count_coarse_combos(
         regime_variants=regime_variants,
         indicator_param_options=indicator_param_options,
         combo_keys_all=combo_keys_all,
@@ -279,7 +282,7 @@ def main():
     # AWF-108(c): checkpoint / progress frequency configurable via sweep_config.json
     _checkpoint_every_n = max(int(default_config.get("checkpoint_every_n", 200) or 200), 1)
     _progress_every_n = max(int(default_config.get("progress_every_n", 25) or 25), 1)
-    lifecycle = autowfo_engine._build_run_lifecycle_callbacks(
+    lifecycle = engine_helpers._build_run_lifecycle_callbacks(
         total_combos=total_combos,
         run_id=run_id,
         status_json_path=status_json_path,
@@ -315,7 +318,7 @@ def main():
     _set_total_combos = lifecycle["set_total_combos_fn"]
 
     emit_progress(stage="running", force=True)
-    sweep_adapters = autowfo_engine._build_sweep_adapter_functions(
+    sweep_adapters = engine_helpers._build_sweep_adapter_functions(
         combo_key_fields=COMBO_KEY_FIELDS,
         strict_config_fields=STRICT_CONFIG_FIELDS,
         indicator_meta=INDICATOR_META,
@@ -332,7 +335,7 @@ def main():
     df_to_html_fn = sweep_adapters["df_to_html_fn"]
     has_all_config_fields_fn = sweep_adapters["has_all_config_fields_fn"]
 
-    _seen_keys_result = autowfo_engine._build_seen_keys(
+    _seen_keys_result = engine_helpers._build_seen_keys(
         existing_combo_df,
         has_all_config_fields_fn=has_all_config_fields_fn,
         combo_key_from_dict_fn=combo_key_from_dict_fn,
@@ -345,13 +348,13 @@ def main():
     # does not invalidate all seen_keys and force a full re-evaluation.
     seen_keys = _seen_keys_result["stripped"]
 
-    apply_quality_filters = lambda df: autowfo_engine._apply_quality_filters(
+    apply_quality_filters = lambda df: engine_helpers._apply_quality_filters(
         df,
         min_avg_daily_trades_target=min_avg_daily_trades_target,
         min_oos_trades_target=min_oos_trades_target,
     )
 
-    shared_pipeline_runtime_context = autowfo_engine._build_shared_pipeline_runtime_context(
+    shared_pipeline_runtime_context = engine_search._build_shared_pipeline_runtime_context(
         base_symbol=base_symbol,
         trade_symbols=trade_symbols,
         exchange=exchange,
@@ -404,13 +407,13 @@ def main():
         config_sha256=config_sha256,
         combo_seed=combo_seed,
     )
-    prepare_timeframe_runtime_context = autowfo_engine._build_prepare_timeframe_runtime_context_from_shared(
+    prepare_timeframe_runtime_context = engine_search._build_prepare_timeframe_runtime_context_from_shared(
         shared_pipeline_runtime_context=shared_pipeline_runtime_context,
         prepare_timeframe_context_fn=autowfo_data._prepare_timeframe_context,
         build_walk_forward_windows_fn=autowfo_split._build_walk_forward_windows,
         compute_data_fingerprint_fn=autowfo_artifacts._compute_data_fingerprint,
     )
-    timeframe_ready_search_context = autowfo_engine._build_timeframe_ready_search_context_from_shared(
+    timeframe_ready_search_context = engine_search._build_timeframe_ready_search_context_from_shared(
         shared_pipeline_runtime_context=shared_pipeline_runtime_context,
         search_mode=search_mode,
         max_workers=max_workers,
@@ -442,12 +445,12 @@ def main():
         apply_quality_filters_fn=apply_quality_filters,
         sort_by_score_impl_fn=autowfo_ranking._sort_by_score,
         expand_float_fn=autowfo_strategy._expand_float,
-        safe_float_fn=autowfo_engine._safe_float,
+        safe_float_fn=engine_helpers._safe_float,
         refine_indicator_params_fn=autowfo_strategy._refine_indicator_params,
-        safe_int_fn=autowfo_engine._safe_int,
+        safe_int_fn=engine_helpers._safe_int,
         pruning_config=pruning_config,
     )
-    finalize_pipeline_context = autowfo_engine._build_finalize_pipeline_context_from_shared(
+    finalize_pipeline_context = engine_finalize._build_finalize_pipeline_context_from_shared(
         shared_pipeline_runtime_context=shared_pipeline_runtime_context,
         combo_path=combo_path,
         per_symbol_path=per_symbol_path,
@@ -455,7 +458,7 @@ def main():
         run_id=run_id,
         timeframe_configs=timeframe_configs,
         timeframe_days_map=timeframe_days_map,
-        safe_int_fn=autowfo_engine._safe_int,
+        safe_int_fn=engine_helpers._safe_int,
         min_avg_daily_trades_target=min_avg_daily_trades_target,
         apply_quality_filters_fn=apply_quality_filters,
         top_by_score_impl_fn=autowfo_ranking._top_by_score,
@@ -485,7 +488,7 @@ def main():
         update_run_registry_fn=autowfo_registry._update_run_registry,
     )
 
-    finalize_result = autowfo_engine._run_timeframe_pipeline(
+    finalize_result = engine_search._run_timeframe_pipeline(
         timeframe_configs=timeframe_configs,
         wf_train_days=wf_train_days,
         wf_test_days=wf_test_days,
@@ -496,18 +499,18 @@ def main():
         get_total_combos_fn=_get_total_combos,
         set_total_combos_fn=_set_total_combos,
         prepare_timeframe_runtime_context=prepare_timeframe_runtime_context,
-        prepare_timeframe_runtime_fn=autowfo_engine._prepare_timeframe_runtime,
+        prepare_timeframe_runtime_fn=engine_runtime._prepare_timeframe_runtime,
         timeframe_ready_search_context=timeframe_ready_search_context,
-        run_timeframe_ready_search_fn=autowfo_engine._run_timeframe_ready_search,
+        run_timeframe_ready_search_fn=engine_search._run_timeframe_ready_search,
         run_timeframe_ready_search_with_refine_tracking_fn=(
-            autowfo_engine._run_timeframe_ready_search_with_refine_tracking
+            engine_search._run_timeframe_ready_search_with_refine_tracking
         ),
         timeframe_to_hours_fn=autowfo_metrics._timeframe_to_hours,
         finalize_pipeline_context=finalize_pipeline_context,
         checkpoint_fn=_checkpoint,
-        run_finalize_pipeline_fn=autowfo_engine._run_finalize_pipeline,
+        run_finalize_pipeline_fn=engine_finalize._run_finalize_pipeline,
     )
-    if not autowfo_engine._handle_finalize_result(
+    if not engine_search._handle_finalize_result(
         finalize_result=finalize_result,
         emit_progress_fn=emit_progress,
     ):

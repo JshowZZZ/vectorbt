@@ -6,6 +6,7 @@ const t = (key, fallback = '') => L[key] || fallback || key
 export const store = reactive({
   theme: localStorage.getItem('autowfo-theme') || 'dark',
   activeTab: 'overview',
+  pendingRunMode: null,   // cross-tab: set by Results "精修" action, consumed by Overview
   toasts: [],
   _toastId: 0,
   confirm: {

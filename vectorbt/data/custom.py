@@ -22,7 +22,18 @@ from vectorbt.utils.datetime_ import (
 )
 
 try:
-    from binance.client import Client as ClientT
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*websockets\.WebSocketClientProtocol is deprecated.*",
+            category=DeprecationWarning
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*websockets\.legacy is deprecated.*",
+            category=DeprecationWarning
+        )
+        from binance.client import Client as ClientT
 except ImportError:
     ClientT = tp.Any
 try:

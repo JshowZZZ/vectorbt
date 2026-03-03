@@ -156,11 +156,28 @@ class ParamLoc(LocBase):
         if mapper.dtype == 'O':
             # If params are objects, we must cast them to string first
             # The original mapper isn't touched
-            mapper = mapper.astype(str)
+            mapper = mapper.map(self._to_string_key)
         self._mapper = mapper
         self._level_name = level_name
 
         LocBase.__init__(self, indexing_func, **kwargs)
+
+    @classmethod
+    def _normalize_object(cls, obj: tp.Any) -> tp.Any:
+        """Normalize object representations for deterministic string keys across NumPy/Pandas versions."""
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, tuple):
+            return tuple(cls._normalize_object(item) for item in obj)
+        if isinstance(obj, list):
+            return [cls._normalize_object(item) for item in obj]
+        if isinstance(obj, dict):
+            return {key: cls._normalize_object(val) for key, val in obj.items()}
+        return obj
+
+    @classmethod
+    def _to_string_key(cls, obj: tp.Any) -> str:
+        return str(cls._normalize_object(obj))
 
     @property
     def mapper(self) -> tp.Series:
@@ -177,14 +194,14 @@ class ParamLoc(LocBase):
         if self.mapper.dtype == 'O':
             # We must also cast the key to string
             if isinstance(key, slice):
-                start = str(key.start) if key.start is not None else None
-                stop = str(key.stop) if key.stop is not None else None
+                start = self._to_string_key(key.start) if key.start is not None else None
+                stop = self._to_string_key(key.stop) if key.stop is not None else None
                 key = slice(start, stop, key.step)
             elif isinstance(key, (list, np.ndarray)):
-                key = list(map(str, key))
+                key = list(map(self._to_string_key, key))
             else:
                 # Tuples, objects, etc.
-                key = str(key)
+                key = self._to_string_key(key)
         # Use pandas to perform indexing
         mapper = pd.Series(np.arange(len(self.mapper.index)), index=self.mapper.values)
         indices = mapper.loc.__getitem__(key)

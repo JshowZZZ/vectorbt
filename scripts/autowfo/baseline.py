@@ -13,8 +13,11 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import engine as autowfo_engine
 from scripts.autowfo import ranking as autowfo_ranking
+from scripts.autowfo import engine_helpers
+from scripts.autowfo import engine_runtime
+from scripts.autowfo import engine_search
+from scripts.autowfo import engine_finalize
 
 
 TOP10_RE = re.compile(r"^param_sweep_top10_(\d{8}_\d{6})\.csv$")
@@ -464,13 +467,13 @@ def _build_ranking_mode_comparison_report(
     min_avg_daily_trades_target = _safe_float(
         config.get(
             "min_avg_daily_trades_target",
-            autowfo_engine.DEFAULT_CONFIG.get("min_avg_daily_trades_target", 5.0),
+            engine_helpers.DEFAULT_CONFIG.get("min_avg_daily_trades_target", 5.0),
         )
     )
     if np.isnan(min_avg_daily_trades_target) or min_avg_daily_trades_target < 0:
         min_avg_daily_trades_target = 0.0
     min_oos_trades_target = _safe_int(
-        config.get("min_oos_trades_target", autowfo_engine.DEFAULT_CONFIG.get("min_oos_trades_target", 1)),
+        config.get("min_oos_trades_target", engine_helpers.DEFAULT_CONFIG.get("min_oos_trades_target", 1)),
         1,
     )
     if min_oos_trades_target < 0:
@@ -482,16 +485,16 @@ def _build_ranking_mode_comparison_report(
 
     candidate_df = combo_df.copy()
     if timeframe_configs:
-        candidate_df = autowfo_engine._select_current_combo_df(candidate_df, timeframe_configs)
+        candidate_df = engine_finalize._select_current_combo_df(candidate_df, timeframe_configs)
 
     def _apply_quality_filters(df: pd.DataFrame) -> pd.DataFrame:
-        return autowfo_engine._apply_quality_filters(
+        return engine_helpers._apply_quality_filters(
             df,
             min_avg_daily_trades_target=min_avg_daily_trades_target,
             min_oos_trades_target=min_oos_trades_target,
         )
 
-    filtered_df, min_avg_daily_trades_filter = autowfo_engine._fallback_activity_filter(
+    filtered_df, min_avg_daily_trades_filter = engine_helpers._fallback_activity_filter(
         combo_df_current=candidate_df,
         min_avg_daily_trades_target=min_avg_daily_trades_target,
         apply_quality_filters_fn=_apply_quality_filters,

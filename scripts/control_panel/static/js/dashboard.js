@@ -46,12 +46,15 @@ export const DashboardTab = {
             >
               {{ t('dashboard_refresh', 'Refresh') }}
             </button>
+            <span v-if="lastGeneratedUtc" class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+              {{ t('dashboard_last_updated', '上次更新') }}: {{ fmtTime(lastGeneratedUtc) }}
+            </span>
             <button
               @click="genReport"
               :disabled="generating"
               class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
             >
-              {{ generating ? t('dashboard_generating', 'Generating...') : t('dashboard_generate_report', 'Generate Report') }}
+              {{ generating ? t('dashboard_generating', 'Generating...') : t('dashboard_force_refresh', '強制重新整理') }}
             </button>
             <a
               href="/dashboard/report"
@@ -437,6 +440,7 @@ export const DashboardTab = {
 
     const payloadSource = ref('live')
     const payloadReasonCode = ref('')
+    const lastGeneratedUtc = ref(null)
     const sourceRows = ref([])
     const sourceErrorRows = ref([])
     const diagnostics = ref(null)
@@ -730,6 +734,7 @@ export const DashboardTab = {
         const payload = await fetchJson(`/dashboard/cross_run.json?top_n=${topN.value}`)
         const summary = payload.summary || {}
 
+        if (payload.generated_utc) lastGeneratedUtc.value = payload.generated_utc
         diagnostics.value = null
         updateTelemetry(payload)
 
@@ -918,6 +923,7 @@ export const DashboardTab = {
       histRows,
       payloadSource,
       payloadReasonCode,
+      lastGeneratedUtc,
       sourceRows,
       sourceErrorRows,
       diagnostics,

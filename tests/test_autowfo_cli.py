@@ -1238,6 +1238,504 @@ def test_cmd_cron_parser_defaults():
     assert args.parallel_jobs == 1
     assert args.workflow == "run"
     assert args.mode == "combo"
+    assert args.scheduler_mode is False
+    assert args.max_runs is None
+    assert args.max_cycle_seconds == 3600
+
+
+def test_cli_version_outputs_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert out == f"autowfo {cli.AUTOWFO_VERSION}"
+
+
+def test_cli_help_lists_all_subcommands():
+    parser = cli.build_parser()
+    help_text = parser.format_help()
+    for command_name in (
+        "run",
+        "baseline",
+        "batch",
+        "plan",
+        "discover",
+        "export-signal",
+        "export-report",
+        "schedule-signals",
+        "report",
+        "repro",
+        "gate-c",
+        "cron",
+    ):
+        assert command_name in help_text
+
+
+def test_cli_export_signal_writes_live_signal_config(tmp_path):
+    pytest.importorskip("duckdb")
+    from scripts.autowfo.analytics import AnalyticsStore
+    from scripts.autowfo.artifact_store import ArtifactStore
+
+    experiment_id = "exp_cli_signal"
+    run_id = "20260301_010000"
+    store = ArtifactStore(experiment_id, base_dir=tmp_path / "artifacts")
+    conn = store.init_results_db(run_id)
+    try:
+        conn.execute(
+            """
+            INSERT INTO combo_results (
+                combo_id, experiment_id, run_id, direction,
+                trigger_asset, action_asset,
+                indicator_params, condition_params, risk_params,
+                oos_sharpe, oos_win_rate, oos_n_trades, oos_total_return,
+                wf_score, created_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "combo_top",
+                experiment_id,
+                run_id,
+                "long",
+                "BTC/USDT",
+                "ETH/USDT",
+                json.dumps({"trigger_indicators": ["RSI"], "action_indicators": ["BB"]}),
+                "{}",
+                "{}",
+                1.2,
+                0.56,
+                12,
+                0.2,
+                0.93,
+                "2026-03-01T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    analytics = AnalyticsStore(tmp_path / "artifacts" / "analytics.duckdb")
+    analytics.update_from_run(experiment_id, run_id, store)
+
+    out_path = tmp_path / "artifacts" / "live_signal_config.json"
+    ret = cli.main(
+        [
+            "export-signal",
+            "--top",
+            "3",
+            "--out",
+            str(out_path),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["experiment_id"] == experiment_id
+    assert payload["trigger_indicator"] == "RSI"
+    assert payload["action_indicator"] == "BB"
+    assert payload["wf_params"]["wf_score"] == 0.93
+
+
+def test_cli_export_report_writes_html_file(tmp_path, monkeypatch):
+    from scripts.autowfo import report_export as report_export_mod
+
+    captured = {}
+
+    def _fake_export_html_report(analytics_store, output_path):
+        _ = analytics_store
+        out_path = Path(output_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text("<html><body><h1>AUTOWFO Research Report</h1></body></html>", encoding="utf-8")
+        captured["output_path"] = str(out_path)
+        return {"ok": True, "output_path": str(out_path)}
+
+    monkeypatch.setattr(report_export_mod, "export_html_report", _fake_export_html_report)
+
+    out_path = tmp_path / "artifacts" / "research_report.html"
+    ret = cli.main(
+        [
+            "export-report",
+            "--out",
+            str(out_path),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert out_path.exists()
+    assert "AUTOWFO Research Report" in out_path.read_text(encoding="utf-8")
+    assert captured["output_path"] == str(out_path)
+
+
+def test_cli_schedule_signals_runs_daemon_with_interval_and_max_ticks(tmp_path, monkeypatch):
+    from scripts.autowfo import signal_scheduler as signal_scheduler_mod
+
+    calls = {}
+
+    class _DummySignalScheduler:
+        def __init__(
+            self,
+            analytics_store,
+            state_path,
+            export_path,
+            positions_path,
+            schedule_interval_seconds,
+            now_func=None,
+        ):
+            calls["analytics_store"] = analytics_store
+            calls["state_path"] = state_path
+            calls["export_path"] = export_path
+            calls["positions_path"] = positions_path
+            calls["schedule_interval_seconds"] = schedule_interval_seconds
+            calls["now_func"] = now_func
+
+        def run_forever(self, max_ticks=None, sleep_func=None):
+            calls["max_ticks"] = max_ticks
+            calls["sleep_func"] = sleep_func
+            return 1
+
+    monkeypatch.setattr(signal_scheduler_mod, "SignalScheduler", _DummySignalScheduler)
+
+    ret = cli.main(
+        [
+            "schedule-signals",
+            "--interval",
+            "120",
+            "--max-ticks",
+            "1",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert calls["schedule_interval_seconds"] == 120
+    assert calls["max_ticks"] == 1
+    assert str(calls["state_path"]).replace("\\", "/").endswith("artifacts/signal_schedule_state.json")
+    assert str(calls["export_path"]).replace("\\", "/").endswith("artifacts/live_signal_config.json")
+    assert str(calls["positions_path"]).replace("\\", "/").endswith("artifacts/paper_positions.json")
+
+
+def test_append_patrol_log_roundtrip(tmp_path):
+    row_a = {
+        "cycle_end_utc": "2026-03-01T00:00:00+00:00",
+        "discovery_tick": {"generated": 10, "enqueued": 4},
+        "scheduler_runs_processed": 2,
+        "scheduler_run_outcomes": [
+            {"processed": True, "ok": True},
+            {"processed": True, "ok": False},
+        ],
+        "queue_remaining": 5,
+    }
+    row_b = {
+        "cycle_end_utc": "2026-03-01T00:10:00+00:00",
+        "discovery_tick": {"generated": 10, "enqueued": 0},
+        "scheduler_runs_processed": 1,
+        "scheduler_run_outcomes": [{"processed": True, "ok": True}],
+        "queue_remaining": 4,
+    }
+
+    cli._append_patrol_log(tmp_path, row_a)
+    cli._append_patrol_log(tmp_path, row_b)
+
+    log_path = tmp_path / "artifacts" / "patrol_log.ndjson"
+    assert log_path.exists()
+    lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 2
+    parsed_a = json.loads(lines[0])
+    parsed_b = json.loads(lines[1])
+    assert parsed_a["tick_generated"] == 10
+    assert parsed_a["tick_enqueued"] == 4
+    assert parsed_a["runs_executed"] == 2
+    assert parsed_a["runs_errors"] == 1
+    assert parsed_b["tick_enqueued"] == 0
+    assert parsed_b["queue_remaining"] == 4
+
+
+def test_append_patrol_log_rotation_keeps_latest_lines(tmp_path):
+    for idx in range(6):
+        cli._append_patrol_log(
+            tmp_path,
+            {
+                "cycle_end_utc": f"2026-03-01T00:{idx:02d}:00+00:00",
+                "discovery_tick": {"generated": idx + 1, "enqueued": 1},
+                "scheduler_runs_processed": 1,
+                "scheduler_run_outcomes": [{"processed": True, "ok": True}],
+                "queue_remaining": 0,
+            },
+            max_lines=5,
+            keep_lines=2,
+        )
+
+    log_path = tmp_path / "artifacts" / "patrol_log.ndjson"
+    lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 2
+    rows = [json.loads(line) for line in lines]
+    assert rows[0]["utc"] == "2026-03-01T00:04:00+00:00"
+    assert rows[1]["utc"] == "2026-03-01T00:05:00+00:00"
+
+
+def test_cmd_cron_scheduler_mode_runs_discovery_then_run_once(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts / "run_registry.json"
+    registry_path.write_text(json.dumps({"runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []}}), encoding="utf-8")
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({"timeframes": [{"timeframe": "1h", "days": 90}]}), encoding="utf-8")
+
+    (artifacts / "scheduler.json").write_text(
+        json.dumps(
+            {
+                "priority_order": ["user_submitted", "discovery", "refine"],
+                "max_concurrent": 1,
+                "schedule_cron": "0 0 * * *",
+                "max_runs_per_patrol": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "pool_config.json").write_text(
+        json.dumps(
+            {
+                "indicator_ids": ["RSI", "BB", "EMA"],
+                "combo_size_range": [2, 2],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from autowfo.commands import cron as cron_cmd
+    from scripts.autowfo import discovery_loop as discovery_loop_mod
+
+    tick_calls = []
+    run_once_calls = []
+
+    class _DummyDiscoveryLoop:
+        def __init__(self, pool_config, scheduler, analytics_store, experiments_root):
+            _ = (pool_config, scheduler, analytics_store, experiments_root)
+
+        def tick(self):
+            tick_calls.append("tick")
+            return {"generated": 3, "enqueued": 2, "skipped_existing": 1, "queue_depth": 2}
+
+    def _fake_run_once(cwd, cli_impl):
+        run_once_calls.append((cwd, cli_impl))
+        return {"processed": True, "ok": True, "result": {"run_id": "run_001"}}
+
+    monkeypatch.setattr(discovery_loop_mod, "DiscoveryLoop", _DummyDiscoveryLoop)
+    monkeypatch.setattr(cron_cmd, "_run_scheduler_queue_once", _fake_run_once)
+
+    ret = cli.main(
+        [
+            "cron",
+            "--template-config",
+            str(template_cfg),
+            "--registry",
+            str(registry_path),
+            "--max-cycles",
+            "1",
+            "--interval",
+            "0",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert len(tick_calls) == 1
+    assert len(run_once_calls) == 1
+
+    log_path = artifacts / "cron_cycle_log.json"
+    assert log_path.exists()
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    assert len(payload) == 1
+    assert payload[0]["scheduler_mode"] is True
+    assert payload[0]["schedule_cron"] == "0 0 * * *"
+    assert payload[0]["max_runs_per_patrol"] == 1
+    assert payload[0]["scheduler_runs_processed"] == 1
+
+
+def test_cmd_cron_scheduler_mode_respects_max_runs_override(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts / "run_registry.json"
+    registry_path.write_text(json.dumps({"runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []}}), encoding="utf-8")
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({"timeframes": [{"timeframe": "1h", "days": 90}]}), encoding="utf-8")
+
+    (artifacts / "scheduler.json").write_text(
+        json.dumps(
+            {
+                "priority_order": ["user_submitted", "discovery", "refine"],
+                "max_concurrent": 1,
+                "schedule_cron": "0 0 * * *",
+                "max_runs_per_patrol": 5,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from autowfo.commands import cron as cron_cmd
+
+    run_once_calls = []
+
+    def _fake_run_once(cwd, cli_impl):
+        run_once_calls.append((cwd, cli_impl))
+        return {"processed": True, "ok": True, "result": {"run_id": f"run_{len(run_once_calls):03d}"}}
+
+    monkeypatch.setattr(cron_cmd, "_run_scheduler_queue_once", _fake_run_once)
+
+    ret = cli.main(
+        [
+            "cron",
+            "--template-config",
+            str(template_cfg),
+            "--registry",
+            str(registry_path),
+            "--scheduler-mode",
+            "--max-runs",
+            "2",
+            "--max-cycles",
+            "1",
+            "--interval",
+            "0",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert len(run_once_calls) == 2
+
+    log_path = artifacts / "cron_cycle_log.json"
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    assert payload[0]["scheduler_mode"] is True
+    assert payload[0]["max_runs_per_patrol"] == 2
+    assert payload[0]["scheduler_runs_processed"] == 2
+
+
+def test_cmd_cron_scheduler_mode_opt_in_signal_scheduling_tick(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts / "run_registry.json"
+    registry_path.write_text(json.dumps({"runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []}}), encoding="utf-8")
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({"timeframes": [{"timeframe": "1h", "days": 90}]}), encoding="utf-8")
+
+    (artifacts / "scheduler.json").write_text(
+        json.dumps(
+            {
+                "priority_order": ["user_submitted", "discovery", "refine"],
+                "max_concurrent": 1,
+                "schedule_cron": "0 0 * * *",
+                "max_runs_per_patrol": 1,
+                "enable_signal_scheduling": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from autowfo.commands import cron as cron_cmd
+    from scripts.autowfo import signal_scheduler as signal_scheduler_mod
+
+    run_once_calls = []
+    signal_tick_calls = []
+
+    def _fake_run_once(cwd, cli_impl):
+        run_once_calls.append((cwd, cli_impl))
+        return {"processed": False, "ok": True, "item": None}
+
+    class _DummySignalScheduler:
+        def __init__(self, *args, **kwargs):
+            _ = (args, kwargs)
+
+        def tick(self):
+            signal_tick_calls.append("tick")
+            return {"ok": True, "action": "skip_no_strategy", "changed": False}
+
+    monkeypatch.setattr(cron_cmd, "_run_scheduler_queue_once", _fake_run_once)
+    monkeypatch.setattr(signal_scheduler_mod, "SignalScheduler", _DummySignalScheduler)
+
+    ret = cli.main(
+        [
+            "cron",
+            "--template-config",
+            str(template_cfg),
+            "--registry",
+            str(registry_path),
+            "--scheduler-mode",
+            "--max-cycles",
+            "1",
+            "--interval",
+            "0",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert len(run_once_calls) == 1
+    assert len(signal_tick_calls) == 1
+
+    payload = json.loads((artifacts / "cron_cycle_log.json").read_text(encoding="utf-8"))
+    assert payload[0]["signal_scheduling"]["enabled"] is True
+    assert payload[0]["signal_scheduling"]["tick"]["ok"] is True
+
+
+def test_cmd_cron_timeout_guard_triggers_break(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    registry_path = artifacts / "run_registry.json"
+    registry_path.write_text(json.dumps({"runs": [], "coverage": {"tested_pairs": [], "untested_pairs": []}}), encoding="utf-8")
+    template_cfg = tmp_path / "template.json"
+    template_cfg.write_text(json.dumps({"timeframes": [{"timeframe": "1h", "days": 90}]}), encoding="utf-8")
+
+    cycle_calls = []
+
+    def _fake_patrol_cycle(**kwargs):
+        cycle_calls.append(kwargs)
+        return {
+            "cycle_start_utc": "2026-03-01T00:00:00Z",
+            "cycle_end_utc": "2026-03-01T00:00:10Z",
+            "plan_jobs": 0,
+            "batch_ok": True,
+            "report_ok": True,
+            "error": None,
+            "top_entities": [],
+        }
+
+    perf_values = iter([0.0, 5.0])
+
+    def _fake_perf_counter():
+        try:
+            return next(perf_values)
+        except StopIteration:
+            return 5.0
+
+    monkeypatch.setattr(cli, "_run_patrol_cycle", _fake_patrol_cycle)
+    monkeypatch.setattr(cli.time, "perf_counter", _fake_perf_counter)
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+
+    ret = cli.main(
+        [
+            "cron",
+            "--template-config",
+            str(template_cfg),
+            "--registry",
+            str(registry_path),
+            "--max-cycles",
+            "5",
+            "--interval",
+            "1",
+            "--max-cycle-seconds",
+            "1",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert ret == 0
+    assert len(cycle_calls) == 1
+
+    log_path = artifacts / "cron_cycle_log.json"
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    assert len(payload) == 1
+    assert payload[0]["timeout_guard_triggered"] is True
 
 
 def test_run_patrol_cycle_plan_error_returns_early(tmp_path):

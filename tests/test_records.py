@@ -12,6 +12,14 @@ from vectorbt.portfolio.enums import order_dt, trade_dt, log_dt
 
 day_dt = np.timedelta64(86400000000000)
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_min' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_max' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'active_.*' does not support grouped data:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Columns only.*Series of columns.*:UserWarning"),
+]
+
 example_dt = np.dtype([
     ('id', np.int64),
     ('col', np.int64),
@@ -714,9 +722,15 @@ class TestMappedArray:
 
     def test_idxmin(self):
         assert mapped_array['a'].idxmin() == mapped_array['a'].to_pd().idxmin()
+        mapped_df = mapped_array.to_pd()
+        expected_idxmin = pd.Series(
+            [col.dropna().idxmin() if col.notna().any() else np.nan for _, col in mapped_df.items()],
+            index=mapped_df.columns,
+            name='idxmin'
+        )
         pd.testing.assert_series_equal(
             mapped_array.idxmin(),
-            mapped_array.to_pd().idxmin().rename('idxmin')
+            expected_idxmin
         )
         pd.testing.assert_series_equal(
             mapped_array_grouped.idxmin(),
@@ -728,9 +742,15 @@ class TestMappedArray:
 
     def test_idxmax(self):
         assert mapped_array['a'].idxmax() == mapped_array['a'].to_pd().idxmax()
+        mapped_df = mapped_array.to_pd()
+        expected_idxmax = pd.Series(
+            [col.dropna().idxmax() if col.notna().any() else np.nan for _, col in mapped_df.items()],
+            index=mapped_df.columns,
+            name='idxmax'
+        )
         pd.testing.assert_series_equal(
             mapped_array.idxmax(),
-            mapped_array.to_pd().idxmax().rename('idxmax')
+            expected_idxmax
         )
         pd.testing.assert_series_equal(
             mapped_array_grouped.idxmax(),

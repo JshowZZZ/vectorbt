@@ -30,6 +30,12 @@ rets = ts.pct_change()
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Changing the frequency will create a copy of this object.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Changing the year frequency will create a copy of this object.*:UserWarning"),
+]
+
 np.random.seed(seed)
 benchmark_rets = pd.DataFrame({
     'a': rets['a'] * np.random.uniform(0.8, 1.2, rets.shape[0]),

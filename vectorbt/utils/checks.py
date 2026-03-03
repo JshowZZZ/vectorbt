@@ -221,6 +221,19 @@ def is_deep_equal(arg1: tp.Any, arg2: tp.Any, check_exact: bool = False, **kwarg
                 for k in arg1.keys():
                     safe_assert(is_deep_equal(arg1[k], arg2[k], **kwargs))
             else:
+                if callable(arg1) and callable(arg2):
+                    code1 = getattr(arg1, "__code__", None)
+                    code2 = getattr(arg2, "__code__", None)
+                    if code1 is not None and code2 is not None:
+                        if (
+                            code1.co_code == code2.co_code
+                            and code1.co_consts == code2.co_consts
+                            and code1.co_names == code2.co_names
+                            and code1.co_varnames == code2.co_varnames
+                            and getattr(arg1, "__defaults__", None) == getattr(arg2, "__defaults__", None)
+                            and getattr(arg1, "__kwdefaults__", None) == getattr(arg2, "__kwdefaults__", None)
+                        ):
+                            return True
                 try:
                     if arg1 == arg2:
                         return True

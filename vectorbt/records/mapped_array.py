@@ -959,7 +959,7 @@ class MappedArray(Wrapping, StatsBuilderMixin, PlotsBuilderMixin, metaclass=Meta
             **kwargs
         )
         if isinstance(out, pd.DataFrame):
-            out.loc['count'].fillna(0., inplace=True)
+            out.loc['count'] = out.loc['count'].fillna(0.)
         else:
             if np.isnan(out.loc['count']):
                 out.loc['count'] = 0.

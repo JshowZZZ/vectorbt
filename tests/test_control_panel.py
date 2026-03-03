@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from scripts import control_panel as cp
+from scripts import control_panel_state as cp_state
 
 
 def _setup_db(path):
@@ -25,6 +26,24 @@ def _setup_db(path):
             "INSERT INTO combo_summary (timeframe, metric) VALUES (?, ?)",
             [("15m", "a"), ("3m", "b"), ("15m", "c")],
         )
+
+
+def test_process_manager_supports_standalone_instantiation():
+    class _RunningProc:
+        def poll(self):
+            return None
+
+    mgr = cp_state.ProcessManager()
+    assert not mgr.is_running()
+    assert not mgr.is_test_running()
+    assert not mgr.is_batch_running()
+
+    mgr.process = _RunningProc()
+    mgr.test_process = _RunningProc()
+    mgr.batch_process = _RunningProc()
+    assert mgr.is_running()
+    assert mgr.is_test_running()
+    assert mgr.is_batch_running()
 
 
 def test_get_results_payload_timeframe_filter(tmp_path, monkeypatch):
@@ -232,6 +251,99 @@ def _setup_batch_env(tmp_path, monkeypatch):
     cp.BATCH_PROCESS = None
     cp.PROCESS = None
     return artifacts
+
+
+def test_overview_next_action_includes_scheduler_queue_depth(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "scheduler.json").write_text(
+        json.dumps(
+            {
+                "priority_order": ["user_submitted", "discovery", "refine"],
+                "max_concurrent": 1,
+                "schedule_cron": "0 2 * * *",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "discovery_pool.json").write_text(
+        json.dumps({"indicator_ids": ["RSI", "EMA", "BB"], "combo_size_range": [2, 2]}),
+        encoding="utf-8",
+    )
+    run_dir = artifacts / "experiments" / "exp_queue" / "runs" / "20260301_020000"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run_meta.json").write_text(
+        json.dumps(
+            {
+                "experiment_id": "exp_queue",
+                "run_id": "20260301_020000",
+                "n_combos": 3,
+                "n_completed": 3,
+                "n_errors": 0,
+                "best_oos_sharpe": 1.1,
+                "duration_seconds": 12.3,
+                "completed_utc": "2026-03-01T02:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from scripts import control_panel_experiments as cp_experiments
+
+    monkeypatch.setattr(
+        cp_experiments,
+        "_scheduler_runtime_status",
+        lambda: {
+            "queue_depth": 2,
+            "next_experiment_id": "exp_queue_next",
+            "is_running": False,
+            "last_error": "",
+        },
+    )
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/overview/next-action.json")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["scheduler_enabled"] is True
+    assert payload["queue_depth"] == 2
+    assert payload["next_experiment_id"] == "exp_queue_next"
+    assert payload["discovery_candidates"] == 3
+    assert payload["latest_run_summary"]["run_id"] == "20260301_020000"
+
+
+def test_overview_patrol_history_endpoint_reads_recent_rows(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    log_path = artifacts / "patrol_log.ndjson"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as f:
+        for idx in range(25):
+            f.write(
+                json.dumps(
+                    {
+                        "utc": f"2026-03-01T00:{idx:02d}:00+00:00",
+                        "tick_generated": 10,
+                        "tick_enqueued": max(0, 10 - idx),
+                        "runs_executed": 1,
+                        "runs_errors": 0,
+                        "queue_remaining": max(0, 24 - idx),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/overview/patrol-history.json")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["total"] == 20
+    assert len(payload["history"]) == 20
+    assert payload["history"][0]["utc"] == "2026-03-01T00:24:00+00:00"
+    assert payload["history"][0]["queue_remaining"] == 0
 
 
 @contextmanager

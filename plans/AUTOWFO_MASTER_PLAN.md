@@ -1,4 +1,4 @@
-# AUTOWFO Master Plan
+﻿# AUTOWFO Master Plan
 
 ## Objective
 Build a long-term, reproducible, and automation-first **platform** for systematically
@@ -170,32 +170,188 @@ indicators, symbols, and time windows to discover robust combinations.
   - AWF-038 done toast | skeleton | modal | tab-transition | error-boundary - Exit criteria: all original features work in new UI; dark/light theme toggle; responsive layout; professional UX.
 - Linked TODO: `AWF-033`, `AWF-034`, `AWF-035`, `AWF-036`, `AWF-037`, `AWF-038`.
 
-### Phase 16: Continuous Loop Upgrades (AWF-039/040/041/042/043/044/045/046/047/048/049/050/051/052/053/054/055/056/057/058/059/060/061/062/063/064/065/066/067/068/069/070/071/072/073/074/075/076/077/078/079/080/081/082/083/084/085/086/087/088/089/090/091/092/093/094/095/096/097/098/099/100/101/102/103/104)
-- Goal: evolve the backtest control panel into a continuous strategy-operations loop.
-- AWF-039~042: data freshness automation, cron notification loop, top-config export, Monte Carlo analytics.
-- AWF-043~047: paper-feedback loop with summary/diagnostics/recommendations and guarded adjusted-batch enqueue.
-- AWF-048~052: i18n consolidation across Results/App shell/remaining tabs and endpoint smoke expansion.
-- AWF-053~104: dashboard reliability + observability hardening (fallback contracts, schema/version checks, telemetry, request correlation, incident timeline, advanced ops filters/export).
-- AWF-105: Config walk-forward guardrail: UI validation hint + frontend save block + backend HTTP 400 enforcement.
-- Prerequisite: Phase 15 AWF-038 complete.
-- Exit criteria: closed-loop operations from Top-combo analysis to adjusted re-enqueue are stable and regression-covered.
-- Linked TODO: `AWF-039`, `AWF-040`, `AWF-041`, `AWF-042`, `AWF-043`, `AWF-044`, `AWF-045`, `AWF-046`, `AWF-047`, `AWF-048`, `AWF-049`, `AWF-050`, `AWF-051`, `AWF-052`, `AWF-053`, `AWF-054`, `AWF-055`, `AWF-056`, `AWF-057`, `AWF-058`, `AWF-059`, `AWF-060`, `AWF-061`, `AWF-062`, `AWF-063`, `AWF-064`, `AWF-065`, `AWF-066`, `AWF-067`, `AWF-068`, `AWF-069`, `AWF-070`, `AWF-071`, `AWF-072`, `AWF-073`, `AWF-074`, `AWF-075`, `AWF-076`, `AWF-077`, `AWF-078`, `AWF-079`, `AWF-080`, `AWF-081`, `AWF-082`, `AWF-083`, `AWF-084`, `AWF-085`, `AWF-086`, `AWF-087`, `AWF-088`, `AWF-089`, `AWF-090`, `AWF-091`, `AWF-092`, `AWF-093`, `AWF-094`, `AWF-095`, `AWF-096`, `AWF-097`, `AWF-098`, `AWF-099`, `AWF-100`, `AWF-101`, `AWF-102`, `AWF-103`, `AWF-104`, `AWF-105`.
+### Phase 16: Continuous Loop Upgrades (AWF-039~AWF-105) ??DONE
+> Goal: Evolve the control panel into a closed-loop strategy-operations platform.
+- AWF-039~042: OHLCV freshness automation, cron notifications, top-config export, Monte Carlo analytics.
+- AWF-043~051: Paper-feedback loop (summary / diagnostics / recommendations / adjusted-batch enqueue) + i18n consolidation.
+- AWF-052~063: Dashboard reliability hardening ??fallback contracts, schema versioning, request correlation, incident timeline, ops filters/export.
+- AWF-064~105: Cross-run payload normalization, error-code taxonomy, request_id correlation, error-event persistence + query/retention/pagination, ops controls, config walk-forward guardrail.
+- Status: **Complete**. All 66 AWFs done; archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
 
-### Phase 17: Re-run Correctness + Top10 Accuracy (AWF-106/107/108) ✅ DONE
-> Goal: Fix two structural correctness bugs uncovered by production observation — seen_keys are always fully invalidated on re-run (causing full re-evaluation every time), and the Results Top10 display shows only the latest run rather than the historical best.
-- **AWF-106 (P1): `stripped_seen_keys` architectural fix.** ✅
-  Root cause: `combo_key` includes `data_start` and `data_end` fields (part of the 57-field `combo_key_fields` list in `engine_helpers.py::_build_sweep_schema_fields`). `_load_or_update_symbol()` appends fresh OHLCV candles on every run → `data_end` advances → all 15,250 seen_keys built from the previous CSV use the old `data_end` → none match new combo_keys → 0 skips → full re-evaluation.
+### Phase 17: Re-run Correctness + Top10 Accuracy (AWF-106/107/108) ??DONE
+> Goal: Fix two structural correctness bugs uncovered by production observation ??seen_keys are always fully invalidated on re-run (causing full re-evaluation every time), and the Results Top10 display shows only the latest run rather than the historical best.
+- **AWF-106 (P1): `stripped_seen_keys` architectural fix.** ??
+  Root cause: `combo_key` includes `data_start` and `data_end` fields (part of the 57-field `combo_key_fields` list in `engine_helpers.py::_build_sweep_schema_fields`). `_load_or_update_symbol()` appends fresh OHLCV candles on every run ??`data_end` advances ??all 15,250 seen_keys built from the previous CSV use the old `data_end` ??none match new combo_keys ??0 skips ??full re-evaluation.
   Fix: `_build_seen_keys()` returns both `full_seen_keys` (with `data_start`/`data_end`, for artifact tracking) and `stripped_seen_keys` (without data-range fields, for skip decisions). Engine search skip check uses `stripped_seen_keys`. CSV output format is unchanged.
-- **AWF-107 (P1): Top10 dual-path display.** ✅
-  Root cause: `_get_results_payload()` uses `_latest_top10_path()` (mtime-based glob → latest `param_sweep_top10_*.csv`) as its primary source; `_pick_top10(combo["rows"])` from the full 45k-row `combo_summary.csv` (which contains the true historical best) only runs as fallback when the latest file is empty.
-  Fix: promote `_pick_top10(combo["rows"])` from full combo_summary.csv to primary `top10` key; expose the latest-run file as a separate `top10_latest_run` key. `results.js` adds a toggle button: 「全歷史最佳」vs「本次結果」. New test `test_get_results_payload_top10_dual_path` validates payload contract.
-- **AWF-108 (P2): Performance micro-optimisations.** ✅
-  (a) Progress emit throttle — emit only every 200 consecutive skips (via `_skip_emit_count` counter in `_run_parallel_combo_search_for_timeframe`) to reduce WebSocket/print overhead.
-  (b) `_build_seen_keys` vectorization — replaced `iterrows()` with `to_dict(orient='records')` for 5-10x speedup on large DataFrames.
-  (c) `checkpoint_every_n` and `progress_every_n` added to `DEFAULT_CONFIG` and wired through `run_btc_regime_sweep.py` → `_build_run_lifecycle_callbacks()` for runtime-configurable tuning.
-- Prerequisite: Phase 16 complete (AWF-105 done). ✅
-- Exit criteria: second run with same config skips all previously evaluated combos; Results Top10 defaults to all-time best combo; performance micro-opts verified with regression tests. ✅ **147 tests passing.**
+- **AWF-107 (P1): Top10 dual-path display.** ??
+  Root cause: `_get_results_payload()` uses `_latest_top10_path()` (mtime-based glob ??latest `param_sweep_top10_*.csv`) as its primary source; `_pick_top10(combo["rows"])` from the full 45k-row `combo_summary.csv` (which contains the true historical best) only runs as fallback when the latest file is empty.
+  Fix: promote `_pick_top10(combo["rows"])` from full combo_summary.csv to primary `top10` key; expose the latest-run file as a separate `top10_latest_run` key. `results.js` adds a toggle button: ?甇瑕?雿喋s?甈∠??? New test `test_get_results_payload_top10_dual_path` validates payload contract.
+- **AWF-108 (P2): Performance micro-optimisations.** ??
+  (a) Progress emit throttle ??emit only every 200 consecutive skips (via `_skip_emit_count` counter in `_run_parallel_combo_search_for_timeframe`) to reduce WebSocket/print overhead.
+  (b) `_build_seen_keys` vectorization ??replaced `iterrows()` with `to_dict(orient='records')` for 5-10x speedup on large DataFrames.
+  (c) `checkpoint_every_n` and `progress_every_n` added to `DEFAULT_CONFIG` and wired through `run_btc_regime_sweep.py` ??`_build_run_lifecycle_callbacks()` for runtime-configurable tuning.
+- Prerequisite: Phase 16 complete (AWF-105 done). ??
+- Exit criteria: second run with same config skips all previously evaluated combos; Results Top10 defaults to all-time best combo; performance micro-opts verified with regression tests. ??**147 tests passing.**
 - Linked TODO: `AWF-106`, `AWF-107`, `AWF-108`.
+
+### Phase 18: Technical Debt Reduction (AWF-109嚚WF-117)
+> Goal: Fix two confirmed correctness bugs and reduce structural debt before UX work begins.
+- **Two confirmed bugs (fix first):**
+  - AWF-109: `control_panel.DEFAULT_CONFIG` diverged from `engine_helpers.DEFAULT_CONFIG` by 8 keys (`ranking`, `wf_valid_days`, `wf_mode`, `min_avg_daily_trades_target`, `min_oos_trades_target`, `max_workers`, `progress_every_n`, `checkpoint_every_n`). UI generates incomplete configs silently.
+  - AWF-110: Control panel Run button calls `run_btc_regime_sweep.py` directly, bypassing `python -m autowfo` ??all AWF-105/106/107/108 CLI guards (walk-forward validation, stripped_seen_keys, Top10 dual-path, progress throttle) are inactive for single runs.
+- AWF-111/112: Cross-platform PYTHON path cleanup; constants.py UTF-8 normalization.
+- AWF-113: control_panel.py secondary decomposition (5715L ??8 responsibility-scoped modules ??00L each, `ProcessManager` class replaces 6 global locks/variables). Same pattern as AWF-018 engine decomposition.
+- AWF-114: cli.py secondary decomposition (2072L ??5 command modules ??00L).
+- AWF-115/116: engine.py stops re-exporting private symbols; sys.path manipulation eliminated.
+- AWF-117: Document archive ??AWF-000嚚?63 moved to `plans/AUTOWFO_TODO_ARCHIVE.md`.
+- Prerequisite: Phase 17 complete. ??
+- Exit criteria: AWF-109/110 bugs fixed; control_panel.py decomposed; all 1291 tests green.
+- Linked TODO: `AWF-109`, `AWF-110`, `AWF-111`, `AWF-112`, `AWF-113`, `AWF-114`, `AWF-115`, `AWF-116`, `AWF-117`.
+
+### Phase 19: UX / Operational Flow Redesign (AWF-118嚚WF-124)
+> Goal: Redesign control panel from technical-module layout to user-workflow layout.
+> Core insight: current 6-tab layout mirrors system internals. User mental model is: **Config ??Run ??Results ??Fill Gaps ??Repeat**. Each step currently requires a different tab with no guided flow between them.
+- AWF-118: Config instant validation ??`wf_step_days < wf_test_days` visible before save.
+- AWF-119: Quick Test panel relocation ??pytest runner moved out of Overview into Config (collapsed).
+- AWF-120: Overview as Operations Hub ??smart next-action guidance card + last-run KPI summary after each run.
+- AWF-121: Unified execution entry point ??single Start button with mode selector (combo/refine/fill-gaps/patrol); removes three-button ambiguity.
+- AWF-122: Coverage one-click gap fill ??plan + enqueue + start via single `/coverage/fill-all-gaps` endpoint.
+- AWF-123: Results "Refine This Combo" shortcut ??top combo ??refine config in 2 clicks.
+- AWF-124: Dashboard auto-update on run complete ??async report regeneration; no manual Generate Report.
+- Prerequisite: Phase 18 AWF-109/110 complete (correct execution paths before UX redesign).
+- Exit criteria: full backtest loop (Config ??Run ??Results ??Coverage ??Dashboard) completable without leaving Overview for routine operations; all 1291 tests green.
+- Linked TODO: `AWF-118`, `AWF-119`, `AWF-120`, `AWF-121`, `AWF-122`, `AWF-123`, `AWF-124`.
+
+### Phase 20: Cross-Asset Foundation ??Plugin System & Experiment Model
+> Goal: Replace monolithic strategy schema with extensible indicator plugin system and introduce the Experiment as the fundamental testable unit.
+> Architecture spec: `plans/AUTOWFO_ARCHITECTURE_V2.md` (approved 2026-02-27).
+- AWF-125: Indicator plugin system (`scripts/autowfo/indicators/` auto-discovery directory, 5 built-in indicators: RSI, MACD, BB, EMA, Volume). Each plugin implements `INDICATOR_ID`, `PARAMS`, `CONDITION_OPERATORS`, and `compute(ohlcv_df, params) -> Series`.
+- AWF-126: Condition operator library (`scripts/autowfo/conditions/` with 4 modules: threshold, crossover, band, momentum ??8 operators total).
+- AWF-127: Experiment definition model (`scripts/autowfo/experiment.py`): JSON schema for trigger/action/risk/wf layers, validation, parameter grid expansion via `itertools.product()`.
+- AWF-128: New artifact directory structure (`artifacts/experiments/{exp_id}/runs/{timestamp}/results.db + run_meta.json`); existing combo_summary.csv artifacts remain untouched.
+- AWF-129: Experiment CRUD API + control panel backend (`control_panel_experiments.py`): create, list, load, delete experiments; queue single experiment run.
+- Prerequisite: Phase 19 complete. AWF-113~116 (decomposition debt) deferred to parallel housekeeping.
+- Exit criteria: Can define an experiment via JSON, load it, expand parameter grid, validate trigger+action config, and write to experiment artifact directory. Unit tests covering indicator compute, condition operators, experiment validation, and grid expansion all green.
+
+### Phase 21: Signal Composer ??Cross-Asset / Cross-Timeframe Execution
+> Goal: Multi-asset, multi-timeframe signal generation integrated with vectorbt.
+- AWF-130: `signal_composer.py`: cross-timeframe alignment algorithm (for each T2 candle close, scan preceding T2-window for any T1 signal). Handles both normal (T1 ??T2) and inverted (T1 > T2) cases.
+- AWF-131: `experiment_runner.py`: wraps existing WFO engine for experiment-based execution. Accepts experiment config, fetches OHLCV for trigger/action assets, generates signals via signal_composer, passes to vectorbt `Portfolio.from_signals()`.
+- AWF-132: Multi-asset data layer: extend `data.py` with multi-asset + multi-timeframe Parquet caching (`artifacts/ohlcv/binance_{ASSET}-{QUOTE}_{TF}.parquet`).
+- AWF-133: Both-direction signal generation: experiments produce long + short entries independently; results tagged by direction; analytics compares direction win rates.
+- Prerequisite: Phase 20 complete.
+- Exit criteria: Full experiment run (trigger BTC 1h RSI ??action ETH 4h BB, both directions) produces verified signals and WFO results stored in SQLite per-run DB.
+
+### Phase 22: Analytics Layer ??DuckDB Cross-Run Intelligence
+> Goal: Two-layer storage with cross-experiment OLAP analytics.
+- AWF-134: Per-run SQLite output from `experiment_runner.py` (WAL mode, `combo_results` table per spec in Architecture V2 禮4.3).
+- AWF-135: `analytics.py`: DuckDB store (`artifacts/analytics.duckdb`), ingest from SQLite after each run, maintain indicator_effectiveness and all_time_best views.
+- AWF-136: Post-run analytics hook in `engine_finalize.py`: call `analytics.update_from_run(experiment_id, run_id)` after run completes (non-blocking, async thread).
+- AWF-137: Control panel analytics endpoints (`control_panel_analytics.py`): indicator leaderboard, asset pair matrix, condition win rates, time stability scores, search coverage map.
+- Prerequisite: Phase 21 complete.
+- Exit criteria: After 2+ experiment runs, DuckDB analytics queries return consistent aggregated results. Indicator leaderboard visible in control panel Analytics tab.
+
+### Phase 23: Mode B Discovery + Scheduler
+> Goal: Automated pool-based indicator exploration and experiment queue scheduling.
+- AWF-138: Mode B pool expansion: C(N, 2..4) indicator combo generation from user-provided pool; integrates with `pruning.py` to manage search space.
+- AWF-139: `scheduler.py`: experiment queue management, priority ordering (user-defined > discovery), nightly batch support (configurable schedule via `artifacts/scheduler.json`).
+- AWF-140: Queue-driven execution: control panel Experiments tab can submit experiment to queue; scheduler runs unattended; Overview shows queue depth and next scheduled run.
+- AWF-141: Discovery loop: scheduler auto-generates Mode B mini-experiments from indicator pool config, adds to queue, accumulates results into analytics.
+- Prerequisite: Phase 22 complete.
+- Exit criteria: Pool config runs end-to-end without user intervention; experiments queue and execute in priority order; analytics accumulates across all runs.
+
+### Phase 24: Control Panel Experiments & Analytics UI
+> Goal: Full control panel redesign with Experiments tab and Analytics tab.
+- AWF-142: Experiments tab UI: list all experiments with status, last run, best OOS Sharpe; create form for Mode A (hypothesis) and Mode B (pool); experiment detail view with run history and best combos.
+- AWF-143: Analytics tab UI: indicator leaderboard table, asset pair heatmap (trigger ? action), condition parameter distribution, time stability chart.
+- AWF-144: Overview redesign: experiment-aware next-action suggestions ("3 experiments queued", "RSI appears in 80% of top combos"), queue depth KPI.
+- AWF-145: End-to-end integration validation: create experiment ??queue ??run ??analytics updated ??results visible ??all from control panel UI without CLI.
+- Prerequisite: Phase 23 complete.
+- Exit criteria: Full discovery loop (define experiment ??run ??analyze ??discover new insights) completable entirely through control panel UI. All existing tests green.
+
+### Phase 20 (Delivery Snapshot)
+- Status: Complete
+- Summary: Indicator plugin/condition library + experiment model + experiment artifacts + CRUD baseline landed.
+- Linked AWFs: `AWF-125`, `AWF-126`, `AWF-127`, `AWF-128`, `AWF-129`.
+
+### Phase 21 (Delivery Snapshot)
+- Status: Complete
+- Summary: Cross-asset data layer and signal composition integrated into experiment runner with dual-direction coverage.
+- Linked AWFs: `AWF-130`, `AWF-131`, `AWF-132`, `AWF-133`.
+
+### Phase 22 (Delivery Snapshot)
+- Status: Complete
+- Summary: Results consumption loop closed (SQLite read APIs) and DuckDB analytics foundation + endpoints established.
+- Linked AWFs: `AWF-134`, `AWF-135`, `AWF-136`, `AWF-137`.
+
+### Phase 23 (Delivery Snapshot)
+- Status: Complete
+- Summary: Mode-B pool discovery, scheduler queue, queue-driven execution, and idempotent discovery loop delivered.
+- Linked AWFs: `AWF-138`, `AWF-139`, `AWF-140`, `AWF-141`.
+
+### Phase 24 (Delivery Snapshot)
+- Status: Complete
+- Summary: Experiments/queue/discovery control-panel flows became operable via browser-facing UI integration.
+- Linked AWFs: `AWF-142`, `AWF-143`, `AWF-144`, `AWF-145`.
+
+### Phase 25 (Delivery Snapshot)
+- Status: Complete
+- Summary: Structural debt closure for control panel/CLI facades, engine export hygiene, and package-path cleanup.
+- Linked AWFs: `AWF-113`, `AWF-114`, `AWF-115`, `AWF-116`.
+
+### Phase 26 (Delivery Snapshot)
+- Status: Complete
+- Summary: Legacy monolith decomposition completed across control-panel/CLI/engine namespace consumers.
+- Linked AWFs: `AWF-146`, `AWF-147`, `AWF-148`.
+
+### Phase 27 (Delivery Snapshot)
+- Status: Complete
+- Summary: End-to-end lifecycle validation plus scheduler stop, discovery cold-start guard, and structured error codes.
+- Linked AWFs: `AWF-149`, `AWF-150`, `AWF-151`, `AWF-152`.
+
+### Phase 28 (Delivery Snapshot)
+- Status: Complete
+- Summary: E2E analytics readback gap fixed and Analytics tab UI delivered on existing analytics endpoints.
+- Linked AWFs: `AWF-153`, `AWF-154`.
+
+### Phase 29 (Delivery Snapshot)
+- Status: Complete
+- Summary: Real-data smoke validation, cron-scheduler integration, command-core split, and overview experiment awareness completed.
+- Linked AWFs: `AWF-155`, `AWF-156`, `AWF-157`, `AWF-158`.
+
+### Phase 30 (Delivery Snapshot)
+- Status: Complete
+- Summary: Full AUTOWFO/control-panel regression closure, signals module slimming, and documentation freeze baseline completed.
+- Linked AWFs: `AWF-159`, `AWF-160`, `AWF-161`.
+
+### Phase 31 (Delivery Snapshot)
+- Status: Complete
+- Summary: Cross-asset live validation, multi-round discovery burn-in, and manual discovery-loop acceptance tooling completed.
+- Linked AWFs: `AWF-162`, `AWF-163`, `AWF-164`.
+
+### Phase 32 (Delivery Snapshot)
+- Status: Complete
+- Summary: Discovery-to-experiment auto-mapping, full-auto scheduler patrol integration, and discovery/coverage observability surfaces delivered.
+- Linked AWFs: `AWF-165`, `AWF-166`, `AWF-167`.
+
+### Phase 33 (Delivery Snapshot)
+- Status: Complete
+- Summary: Patrol stability hardening, patrol-history and growth observability, and final regression/documentation closure delivered.
+- Linked AWFs: `AWF-168`, `AWF-169`, `AWF-170`.
+
+### Phase 34 (Delivery Snapshot)
+- Status: Complete
+- Summary: Patrol log rotation/timeout guardrails, real-data patrol dry-run validation tooling, CLI version/deprecation polish, and final operational regression closure.
+- Linked AWFs: `AWF-171`, `AWF-172`, `AWF-173`.
+
+---
+
+## Steady State
+- Status: Entered (Phase 39 complete).
+- Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
+- Runtime posture: unattended operation supported with anomaly notifications and bounded schedulers.
+- Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
+- Maintenance mode: prioritize dependency drift management and warning cleanup; no architecture-direction changes without new phase approval.
 
 ## Stage Gates (Do Not Skip)
 - Gate 0: Monolith decomposed before protocol freeze (Phase 1). **Passed.**
@@ -270,6 +426,7 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-03-01: Phase 39 completed (AWF-186~188): pandas 2.x environment finalized and fully regressed (`pytest tests -q --tb=short` green), analytics research HTML export (`autowfo export-report` + `/analytics/report.html`) delivered, and Steady State maintenance mode declared.
 - 2026-02-06: Initial long-term AUTOWFO master plan created.
 - 2026-02-06: Added milestone-to-TODO mapping and quantified gate checklists with sign-off ownership.
 - 2026-02-06: Architecture review documented existing implementation inventory; added Milestone 0 (monolith decomposition); updated Milestones 1/4/5 to reflect extract-from-existing approach; added Gate 0; added AWF-000, AWF-002b, AWF-001b; marked AWF-008 as done.
@@ -357,7 +514,7 @@ Each experiment should record:
 - 2026-02-14: AWF-027 automated patrol cycle completed. `cli.py`: (1) `_run_patrol_cycle` orchestrates plan/batch/report with error recovery and `continue_on_error` support; sequential batch path uses correct `_run_batch_job_single` keyword-only API (idx/total/job/state/state_path/lock) with caller-level failure handling; parallel path uses `_run_batch_jobs_parallel` with `failed_jobs` return tracking. (2) `_cmd_cron` configurable `--interval` seconds and `--max-cycles` loop with per-cycle OK/partial/fail status logging. (3) `cron` subparser 15+ arguments covering registry/template-config/plan-out/batch-state/report paths + workflow/mode/workers/top-n/parallel-jobs/interval/max-cycles/target-timeframes/target-symbols/timeframe-days. 5 new tests (patrol no-gaps/with-gaps/plan-error, cron single-cycle, parser defaults). Validation: 280 passed, 0 failed. Next AWF-028.
 - 2026-02-14: AWF-028 experiment notebook export completed.
 - 2026-02-14: Engine decomposition verified at commit `e43fe33` (Gate E passed). 21 verification tests in `tests/test_autowfo_gate_e.py` confirm: (1) all 60+ re-exported callables are `is`-identical to sub-module originals, (2) no missing/extra callables, (3) `DEFAULT_CONFIG` constant identity, (4) sub-modules importable independently (no circular deps), (5) all sub-modules 800 lines, (6) critical signatures (`_run_finalize_pipeline` keyword-only, `_build_completion_output_map` dict contract) stable. AWF-030 complete. Created `scripts/autowfo/notebook.py` with `build_experiment_notebook`: generates 10-cell `.ipynb` (2 markdown + 8 code) including run metadata table, imports, metadata JSON loader, top-10/combo-summary/symbol-summary CSV loaders, leaderboard row display, OOS return/drawdown/composite-score analysis, combo summary statistics with regime distribution, and user notes placeholder. Wired into `engine_finalize._run_finalize_pipeline` after `_persist_run_metadata_and_registry` with non-critical try/except; `completion_outputs` includes `experiment_notebook` path when successful. 30 new tests across helper functions, integration, and finalize wiring. Validation: 310 passed, 0 failed. Phase 13 complete (AWF-025/026/027/028 all done).
-- 2026-02-22: Root cause analysis completed for two production-observed re-run issues. (1) `data_end` in `combo_key` invalidates all seen_keys on every run: `_load_or_update_symbol()` always appends new OHLCV candles → `data_end` advances → all prior seen_keys have old `data_end` → 0 skips → full 8,395+ combo re-evaluation. (2) `_get_results_payload()` reads `_latest_top10_path()` (mtime-based) as primary source for Top10, so the historical best from `combo_summary.csv` is never shown unless the latest run file is empty. AWF-106 (stripped_seen_keys) + AWF-107 (dual Top10 display) + AWF-108 (perf micro-opts) planned and **fully implemented** as Phase 17. Key changes: `engine_helpers.py` — `_strip_data_range_from_combo_key()` + `_build_seen_keys()` dict return + `to_dict(orient='records')` vectorization + `checkpoint_every_n`/`progress_every_n` in `DEFAULT_CONFIG`; `engine_search.py` — stripped-key skip checks + 200-skip emit throttle; `run_btc_regime_sweep.py` — `["stripped"]` unpack + configurable lifecycle params; `control_panel.py` — `_get_results_payload()` dual-path (`top10` all-time + `top10_latest_run`); `results.js` — `top10Mode` toggle; `i18n.js` — mode labels. 147 tests passing.
+- 2026-02-22: Root cause analysis completed for two production-observed re-run issues. (1) `data_end` in `combo_key` invalidates all seen_keys on every run: `_load_or_update_symbol()` always appends new OHLCV candles ??`data_end` advances ??all prior seen_keys have old `data_end` ??0 skips ??full 8,395+ combo re-evaluation. (2) `_get_results_payload()` reads `_latest_top10_path()` (mtime-based) as primary source for Top10, so the historical best from `combo_summary.csv` is never shown unless the latest run file is empty. AWF-106 (stripped_seen_keys) + AWF-107 (dual Top10 display) + AWF-108 (perf micro-opts) planned and **fully implemented** as Phase 17. Key changes: `engine_helpers.py` ??`_strip_data_range_from_combo_key()` + `_build_seen_keys()` dict return + `to_dict(orient='records')` vectorization + `checkpoint_every_n`/`progress_every_n` in `DEFAULT_CONFIG`; `engine_search.py` ??stripped-key skip checks + 200-skip emit throttle; `run_btc_regime_sweep.py` ??`["stripped"]` unpack + configurable lifecycle params; `control_panel.py` ??`_get_results_payload()` dual-path (`top10` all-time + `top10_latest_run`); `results.js` ??`top10Mode` toggle; `i18n.js` ??mode labels. 147 tests passing.
 - 2026-02-19: Phase 15 UI redesign progress corrected. AWF-033~037 all fully implemented (TODO statuses were lagging behind reality). AWF-038 UX polish partially done (toast  button animations partial; loading skeleton  confirmation modal  tab transitions  error boundary . Runtime bug fixes applied: (1) `control_panel.py::_start_run()` subprocess PYTHONPATH missing added `env=_env` with `PYTHONPATH=ROOT`; (2) `strategy.py::_coerce_lb()` NaN lookback `None` dict key `KeyError: None` now falls back to first `data_map` key; (3) Top10 cross-run duplicate combos `_pick_top10` fingerprint dedup (backend) + `_rowFingerprint` (frontend); (4) Added freshness bar (green d / amber d / red >7d) + retest button in Results tab. 11/11 control_panel tests pass; 4/4 strategy schema tests pass. Phase 16 backlog (AWF-039~042) added for continuous operation closure.
 - 2026-02-19: AWF-038 completed. Implemented remaining UX polish for new control panel: first-load skeletons across Overview/Config/Results/Batch/Coverage/Dashboard tabs, global confirmation modal (wired to high-impact actions such as batch start/cancel/clear/remove, top-10 retest, and log clears), smooth tab transition via Vue transition classes, and tab-level error boundary fallback. Frontend static modules pass `node --check`; backend regression `pytest tests/test_control_panel.py -q` remains green (11/11).
 - 2026-02-19: AWF-040 completed. Added cron notification integration in `autowfo/cli.py`: webhook + Telegram dispatch (`--notify-webhook`, `--notify-telegram-token`, `--notify-telegram-chat-id`), Top-N rank-change summary (`NEW` / `UP` / `DOWN` / `SAME`) with persisted snapshot (`artifacts/cron_notify_state.json`), and freshness alert from `artifacts/data_refresh_state.json` when `data_end` is older than 7 days (`--freshness-alert-days`). Added 3 AWF-040 tests and validated with `pytest tests/test_autowfo_cli.py -q` (40 passed).
@@ -389,3 +546,16 @@ Each experiment should record:
 - 2026-02-14: Phase 14 Production Hardening complete. AWF-030 (Gate E closure, 21 tests), AWF-031 (e2e smoke test, 11 tests across 4 integration seams: Data->Context, Context->Windows, Evaluation, Finalize->Artifacts), AWF-032 (cron patrol validation, 5 tests: state timestamps, target filtering, multi-cycle log, max_jobs cap, batch failure recovery). All exit criteria met: Gate E signed off, e2e smoke test automated, patrol cycle validated.
 
 - 2026-02-24: Project status synchronization + upload batch completed. Consolidated large pending changes across AUTOWFO engine split (`engine_search.py` / `engine_finalize.py` / `engine_report.py`), control-panel modular frontend (`api.js`, `i18n.js`, `components.js`, tab modules), and protocol/docs updates (`split_protocol.yaml`, `strategy_schema.json`, `AUTOWFO_TODO.md`, `AGENTSMD_INTEGRATION.md`). Validation run for this upload batch: `pytest tests/test_autowfo_cli.py tests/test_autowfo_cross_run.py tests/test_control_panel.py tests/test_autowfo_e2e.py tests/test_autowfo_gate_e.py -q` -> `172 passed`.
+- 2026-02-25: Design audit completed. Phase 18 (Technical Debt) and Phase 19 (UX Redesign) defined with AWF-109嚚WF-124. Two confirmed correctness bugs identified via code inspection: (1) `control_panel.DEFAULT_CONFIG` missing 8 keys vs `engine_helpers.DEFAULT_CONFIG` ??UI generates incomplete configs silently (AWF-109). (2) Control panel Run button calls `run_btc_regime_sweep.py` directly, bypassing `python -m autowfo` ??all AWF-105/106/107/108 CLI guards inactive for single runs (AWF-110). UX audit revealed 6-tab layout mirrors system internals rather than user workflow (Config?un?esults?ill Gaps?epeat); AWF-118嚚WF-124 define targeted redesign. `AUTOWFO_TODO.md` updated with 16 new task entries, Phase 18/19 Execution Phase descriptions, and updated Current Focus Window.
+- 2026-02-27: **Architecture V2 direction approved.** Role shift: planning/architecture responsibilities assigned to Claude (Sonnet 4.6); implementation delegated to other AI agents. Key decisions confirmed: (1) Cross-asset trigger+action model (trigger asset may differ from action asset); (2) Cross-timeframe signals (T1 ??T2, both directions); (3) Indicator plugin system (`indicators/` auto-discovery directory); (4) Experiment as fundamental testable unit (JSON schema with trigger/action/risk/wf layers); (5) Two-layer storage ??SQLite per-run (fast writes) + DuckDB analytics (cross-run OLAP); (6) Mode C ??both hypothesis-driven (Mode A) and pool-discovery (Mode B) co-exist; (7) Fresh start on existing artifacts acceptable; (8) Freqtrade bridge deferred; (9) vectorbt retained as compute engine; (10) Control panel remains sole user interface. Full spec written to `plans/AUTOWFO_ARCHITECTURE_V2.md`. Phases 20-24 (AWF-125~145) added to MASTER_PLAN. AWF-113~116 decomposition debt deferred to parallel housekeeping.
+- 2026-02-26: Phase 18 (AWF-109~117) and Phase 19 (AWF-118~124) implementation complete. AWF-109: `DEFAULT_CONFIG` single-source (control_panel.py imports from engine_helpers). AWF-110: Run button now calls `python -m autowfo run` via CLI. AWF-111: Cross-platform `_python_path()` helper (Windows/Linux/macOS/fallback). AWF-112: `constants.py` UTF-8 normalization (direct strings, HTML escape at render layer). AWF-118: Config instant validation hints for walk-forward parameters. AWF-119: Quick Test panel moved from Overview to Config (collapsed). AWF-120: Overview operations hub with smart next-action guidance card. AWF-121: Unified execution entry ??combo/refine mode selector on Overview Start Run; Coverage "Start Batch" removed. AWF-122: Coverage "Fill All Gaps" one-click flow + `POST /coverage/fill-all-gaps` endpoint. AWF-123: Results "蝎曆耨" button sets `store.pendingRunMode` and navigates to Overview. AWF-124: Dashboard "銝活?湔" freshness label + "撘瑕??渡?" rename. AWF-117: Archived AWF-000~063 to `plans/AUTOWFO_TODO_ARCHIVE.md`; TODO.md slimmed to AWF-064+; Phase 16 summary condensed. Remaining debt: AWF-113/114 (control_panel.py / cli.py decomposition), AWF-115/116 (engine private exports / sys.path).
+
+- 2026-02-28: Phase 25 structural debt closure completed (AWF-113~116). `scripts/control_panel.py` and `autowfo/cli.py` are now thin facades; responsibility surfaces split into `control_panel_*` and `autowfo/commands/*`; `scripts/autowfo/engine.py` now exports only `DEFAULT_CONFIG`; package-path cleanup landed (`pyproject.toml` include covers `autowfo*` + `scripts*`, plus `scripts/__init__.py` and `scripts/autowfo/__init__.py`), and runtime `sys.path.insert` hack was removed.
+
+- 2026-03-01: Phase 20-29 全部交付，Architecture V2 feature-complete。
+- 2026-03-01: Phase 20-33 全部交付，系統進入生產就緒狀態。
+- 2026-03-01: Phase 34 完成交付，系統達成長期無人值守運行之營運就緒狀態。
+- 2026-03-01: Phase 35 完成交付（AWF-174~176）：新增 `autowfo export-signal` 將 DuckDB 最佳策略導出為 live signal config；導入 paper position 狀態追蹤（`paper_positions.json` + `/paper/*` API）；`/paper/close` 自動寫入 analytics paper feedback，leaderboard 新增 nullable `paper_avg_pnl` 欄位，形成 WFO→paper→analytics 回饋閉環。
+- 2026-03-01: Phase 36 完成交付（AWF-177~179）：paper feedback 新增 `(experiment_id, close_ts)` 去重 idempotency、paper position 狀態機加入重複開倉與無倉平倉防呆（API 回傳 400）；完成 vectorbt core 與新 pandas/NumPy 環境兼容修補（`ParamLoc` object-key normalization、`is_deep_equal` callable 比較、`dir` 穩定化），並通過完整回歸 `pytest tests -q --tb=short`（1426 passed, 0 failed）。
+- 2026-03-01: Phase 37 完成交付（AWF-180~182）：依賴版本鎖定為 `pandas>=2,<3`、`numpy<2.4`、`numba<0.64`；新增 `autowfo schedule-signals` daemon（strategy 變更時自動 close/open + export）；`autowfo cron --scheduler-mode` 新增 `enable_signal_scheduling` opt-in tick，並完成文件凍結與回歸驗證。
+- 2026-03-01: Phase 38 完成交付（AWF-183~185）：新增通知派發層 `notifier.py`（webhook + Telegram optional）與事件型別（STRATEGY_CHANGED/POSITION_OPENED/POSITION_CLOSED/PATROL_ANOMALY/PNL_THRESHOLD_HIT）；paper trading 升級為多策略並行（SignalScheduler top-N 預設 3，新增 `/paper/portfolio.json` unrealized PnL 視圖）；signal scheduler 加入重試與指數退避（上限 30s）並在重試耗盡時派發 PATROL_ANOMALY，完成回歸 `pytest tests -q --tb=short`（1439 passed, 0 failed）。

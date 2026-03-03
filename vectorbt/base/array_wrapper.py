@@ -569,7 +569,7 @@ class ArrayWrapper(Configured, PandasIndexer):
             if checks.is_series(out):
                 out = out.map(lambda x: self.index[x] if x != -1 else np.nan)
             else:
-                out = out.applymap(lambda x: self.index[x] if x != -1 else np.nan)
+                out = out.map(lambda x: self.index[x] if x != -1 else np.nan)
         if to_timedelta:
             # Convert to timedelta
             out = self.to_timedelta(out, silence_warnings=silence_warnings)
@@ -657,7 +657,7 @@ class ArrayWrapper(Configured, PandasIndexer):
             if checks.is_series(out):
                 out = out.map(lambda x: self.index[x] if x != -1 else np.nan)
             elif checks.is_frame(out):
-                out = out.applymap(lambda x: self.index[x] if x != -1 else np.nan)
+                out = out.map(lambda x: self.index[x] if x != -1 else np.nan)
             else:
                 out = self.index[out] if out != -1 else np.nan
         if to_timedelta:
@@ -694,6 +694,16 @@ class Wrapping(Configured, PandasIndexer, AttrResolver):
         Configured.__init__(self, wrapper=wrapper, **kwargs)
         PandasIndexer.__init__(self)
         AttrResolver.__init__(self)
+
+    def __dir__(self) -> tp.List[str]:
+        attrs = list(super().__dir__())
+        if (
+            "__getstate__" in attrs
+            and "__getstate__" not in self.__dict__
+            and "__getstate__" not in type(self).__dict__
+        ):
+            attrs.remove("__getstate__")
+        return attrs
 
     def indexing_func(self: WrappingT, pd_indexing_func: tp.PandasIndexingFunc, **kwargs) -> WrappingT:
         """Perform indexing on `Wrapping`."""

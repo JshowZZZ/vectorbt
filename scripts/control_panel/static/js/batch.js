@@ -28,16 +28,16 @@ export const BatchTab = {
             <label class="space-y-1">
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('batch_workflow', 'Workflow') }}</span>
               <select v-model="form.workflow" @change="onWorkflowChange" class="cfg-input">
-                <option value="baseline">baseline</option>
-                <option value="run">run</option>
+                <option value="baseline">基準</option>
+                <option value="run">執行</option>
               </select>
             </label>
             <label class="space-y-1">
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('batch_mode', 'Mode') }}</span>
               <select v-model="form.mode" :disabled="form.workflow !== 'run'" class="cfg-input">
                 <option value="">{{ t('batch_none', 'none') }}</option>
-                <option value="combo">combo</option>
-                <option value="refine">refine</option>
+                <option value="combo">組合</option>
+                <option value="refine">優化</option>
               </select>
             </label>
             <label class="space-y-1">

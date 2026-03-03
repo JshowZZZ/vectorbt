@@ -12,6 +12,13 @@ from vectorbt.generic import nb
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_min' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_max' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Changing the mapping will create a copy of this object.*:UserWarning"),
+]
+
 day_dt = np.timedelta64(86400000000000)
 
 df = pd.DataFrame({
@@ -554,7 +561,7 @@ class TestAccessors:
 
     @pytest.mark.parametrize(
         "test_freq",
-        ['1h', '3d', '1w'],
+        ['1h', '3d', '1W'],
     )
     def test_resample_apply(self, test_freq):
         pd.testing.assert_series_equal(
@@ -588,7 +595,7 @@ class TestAccessors:
         )
         pd.testing.assert_frame_equal(
             df.vbt.applymap(mult_nb),
-            df.applymap(lambda x: x * 2)
+            df.map(lambda x: x * 2)
         )
 
     def test_filter(self):
@@ -602,7 +609,7 @@ class TestAccessors:
         )
         pd.testing.assert_frame_equal(
             df.vbt.filter(greater_nb),
-            df.applymap(lambda x: x if x > 2 else np.nan)
+            df.map(lambda x: x if x > 2 else np.nan)
         )
 
     def test_apply_and_reduce(self):

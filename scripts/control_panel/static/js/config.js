@@ -1,5 +1,5 @@
-﻿import { ref, computed, watch, onMounted } from 'vue'
-import { fetchJson, postJson } from './api.js'
+﻿import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { fetchJson, postJson, fetchText } from './api.js'
 import { showToast } from './store.js'
 import { L } from './i18n.js'
 
@@ -201,6 +201,44 @@ export const ConfigTab = {
             </div>
           </div>
         </div>
+
+        <div class="rounded-xl border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 overflow-hidden">
+          <button @click="devOpen = !devOpen"
+                  class="w-full flex items-center justify-between px-5 py-3 text-sm font-semibold
+                         text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+            <span>{{ t('config_dev_test_title', 'Quick Test') }}</span>
+            <span class="text-xs text-gray-400">{{ devOpen ? '^' : 'v' }}</span>
+          </button>
+          <div v-show="devOpen" class="px-5 pb-4 space-y-3 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex flex-wrap gap-2 mt-3">
+              <button @click="doTestStart"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-all">
+                {{ t('overview_test_start', 'Start Test') }}
+              </button>
+              <button @click="doTestStop"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
+                             bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all">
+                {{ t('overview_test_stop', 'Stop Test') }}
+              </button>
+              <button @click="doTestClearLog"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
+                             bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all">
+                {{ t('overview_test_clear_log', 'Clear Test Log') }}
+              </button>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_test_stage', 'Stage') }}</span>
+                   <span class="ml-1 font-semibold text-gray-900 dark:text-gray-100">{{ testStatus.stage || '--' }}</span></div>
+              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_test_elapsed', 'Elapsed') }}</span>
+                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ testStatus.elapsed || '--' }}</span></div>
+              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_test_return_code', 'Return Code') }}</span>
+                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ testStatus.return_code ?? '--' }}</span></div>
+              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_test_started', 'Started At') }}</span>
+                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ fmtTime(testStatus.started) }}</span></div>
+            </div>
+            <div class="log-panel rounded-lg p-3 bg-gray-950 text-gray-300 border border-gray-800">{{ testLog || t('overview_test_log_empty', 'No test log yet...') }}</div>
+          </div>
+        </div>
       </template>
     </div>
   `,
@@ -231,6 +269,10 @@ export const ConfigTab = {
     })
     const saving = ref(false)
     const advOpen = ref(false)
+    const devOpen = ref(false)
+    const testStatus = ref({})
+    const testLog = ref('')
+    let testTimer = null
     const availableSymbols = ref([])
     const symbolList = ref([])
 
@@ -358,8 +400,59 @@ export const ConfigTab = {
       }
     }
 
+    function fmtTime(raw) {
+      if (!raw) return '--'
+      const d = Date.parse(raw)
+      return Number.isNaN(d) ? String(raw) : new Date(d).toLocaleString()
+    }
+
+    async function refreshTest() {
+      try {
+        testStatus.value = await fetchJson('/tests/status.json')
+        testLog.value = await fetchText('/tests/log-tail.txt')
+      } catch (_) {
+        // no-op
+      }
+    }
+
+    async function doTestStart() {
+      try {
+        const r = await postJson('/tests/start')
+        showToast(r.message || t('overview_toast_test_started', 'Test started'), 'success')
+        refreshTest()
+      } catch (e) {
+        showToast(String(e), 'error')
+      }
+    }
+
+    async function doTestStop() {
+      try {
+        const r = await postJson('/tests/stop')
+        showToast(r.message || t('overview_toast_test_stopped', 'Test stopped'), 'success')
+        refreshTest()
+      } catch (e) {
+        showToast(String(e), 'error')
+      }
+    }
+
+    async function doTestClearLog() {
+      try {
+        const r = await postJson('/tests/clear-log')
+        showToast(r.message || t('overview_toast_test_log_cleared', 'Test log cleared'), 'success')
+        refreshTest()
+      } catch (e) {
+        showToast(String(e), 'error')
+      }
+    }
+
     onMounted(() => {
       loadCfg()
+      refreshTest()
+      testTimer = setInterval(refreshTest, 5000)
+    })
+
+    onUnmounted(() => {
+      clearInterval(testTimer)
     })
 
     return {
@@ -367,6 +460,9 @@ export const ConfigTab = {
       cfg,
       saving,
       advOpen,
+      devOpen,
+      testStatus,
+      testLog,
       availableSymbols,
       symbolList,
       selectedSymbols,
@@ -375,9 +471,13 @@ export const ConfigTab = {
       wfStepMinForInput,
       wfGuardrailError,
       canSave,
+      fmtTime,
       loadCfg,
       saveCfg,
       loadTopSymbols,
+      doTestStart,
+      doTestStop,
+      doTestClearLog,
       t,
     }
   },

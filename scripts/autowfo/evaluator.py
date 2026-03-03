@@ -5,10 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import engine as autowfo_engine
 from scripts.autowfo import metrics as autowfo_metrics
 from scripts.autowfo import portfolio as autowfo_portfolio
 from scripts.autowfo import strategy as autowfo_strategy
+from scripts.autowfo import engine_runtime as autowfo_engine
+from scripts.autowfo import engine_helpers
+from scripts.autowfo import engine_runtime
+from scripts.autowfo import engine_search
+from scripts.autowfo import engine_finalize
 
 
 SERIES_METRIC_FIELDS = (
@@ -153,7 +157,7 @@ def evaluate_combo_task(task, runtime):
         vol_cond = pd.Series(True, index=vol_zscore.index)
 
     long_regime, short_regime, regime_rsi_long, regime_rsi_short = (
-        autowfo_engine._resolve_regime_signals(
+        engine_runtime._resolve_regime_signals(
             regime=regime,
             vol_cond=vol_cond,
             ctx=ctx,
@@ -162,8 +166,8 @@ def evaluate_combo_task(task, runtime):
     )
 
     trade_mom = ctx["trade_mom_by_lb"][trade_mom_lookback]
-    long_filter, short_filter = autowfo_engine._build_trade_mom_filters(trade_mom)
-    effective_fees, effective_slippage = autowfo_engine._compute_effective_costs(
+    long_filter, short_filter = engine_runtime._build_trade_mom_filters(trade_mom)
+    effective_fees, effective_slippage = engine_runtime._compute_effective_costs(
         fees=fees,
         slippage_bps=slippage_bps,
         spread_bps=spread_bps,
@@ -227,7 +231,7 @@ def evaluate_combo_task(task, runtime):
         segment_long = long_regime_final.loc[segment_close.index]
         segment_short = short_regime_final.loc[segment_close.index]
         segment_trade_mom = trade_mom.loc[segment_close.index]
-        base_long_filter, base_short_filter = autowfo_engine._build_trade_mom_filters(
+        base_long_filter, base_short_filter = engine_runtime._build_trade_mom_filters(
             segment_trade_mom
         )
         selected_policy = "filtered"
@@ -249,7 +253,7 @@ def evaluate_combo_task(task, runtime):
                 policy_long = long_regime_final.loc[policy_close.index]
                 policy_short = short_regime_final.loc[policy_close.index]
                 policy_trade_mom = trade_mom.loc[policy_close.index]
-                policy_base_long_filter, policy_base_short_filter = autowfo_engine._build_trade_mom_filters(
+                policy_base_long_filter, policy_base_short_filter = engine_runtime._build_trade_mom_filters(
                     policy_trade_mom
                 )
                 policy_all_true = _all_true_filter(policy_trade_mom)

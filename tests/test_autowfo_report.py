@@ -1,7 +1,7 @@
 import pandas as pd
 
 from scripts import run_btc_regime_sweep as sweep
-from scripts.autowfo import engine as e
+from scripts.autowfo import engine_helpers as e
 from scripts.autowfo import report as r
 from scripts.autowfo import search as s
 

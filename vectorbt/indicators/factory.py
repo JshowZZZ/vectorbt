@@ -3526,7 +3526,10 @@ Other keyword arguments are passed to `{0}.run`.""".format(_0, _1)
         )
         new_args = {c: test_df[c] for c in input_names}
         try:
-            result = func(**new_args)
+            with warnings.catch_warnings():
+                # Third-party indicator code may emit pandas compatibility warnings on probe runs.
+                warnings.simplefilter("ignore", FutureWarning)
+                result = func(**new_args)
         except Exception as e:
             raise ValueError("Couldn't parse the indicator: " + str(e))
 

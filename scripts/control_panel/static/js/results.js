@@ -443,6 +443,12 @@ export const ResultsTab = {
                 </span>
               </div>
             </template>
+            <template #cell-_refine="{ row }">
+              <button @click.stop="doRefineCombo(row)"
+                      class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-[0.97] whitespace-nowrap">
+                {{ tr('results_refine_btn', '精修') }}
+              </button>
+            </template>
             <template #detail="{ row }">
               <detail-panel :row="row" :get-param-full="getParamFull" :get-tags="getTags" />
             </template>
@@ -538,10 +544,11 @@ export const ResultsTab = {
       sortable: true,
     }))
 
-    // Top10 columns: same as tableColumns + freshness column at the end
+    // Top10 columns: same as tableColumns + freshness + refine action at the end
     const top10Columns = [
       ...tableColumns,
       { key: '_freshness', label: tr('results_top10_freshness', '新鮮度'), sortable: true, numeric: true },
+      { key: '_refine', label: '', sortable: false },
     ]
 
     // AWF-107: active top10 source based on mode toggle
@@ -585,6 +592,14 @@ export const ResultsTab = {
       const rows = Array.isArray(feedbackRows.value) ? feedbackRows.value : []
       return [...rows].reverse().slice(0, 12)
     })
+    function doRefineCombo(row) {
+      // AWF-123: set cross-tab pendingRunMode then navigate to Overview
+      const label = [row.filter_name, row.regime_name, row.indicator_list].filter(Boolean).join(' | ')
+      store.pendingRunMode = 'refine'
+      store.activeTab = 'overview'
+      showToast(tr('results_refine_toast', `精修模式：${label || '已選 combo'}`), 'success', 4000)
+    }
+
     async function retestTop() {
       const confirmed = await confirmAction({
         title: tr('results_retest_confirm_title', '重測 Top 10？'),
@@ -1249,7 +1264,7 @@ export const ResultsTab = {
                feedbackLoading, submittingFeedback, feedbackForm, feedbackRecent, loadFeedbackData, submitFeedback,
                exportFeedbackAdjustedConfig, enqueueFeedbackAdjustedBatch, fmtUtc,
                applyAndRender, resetFilters, loadResults,
-               getTags, getParamShort, getParamFull, toggleDetail, exportCsv }
+               getTags, getParamShort, getParamFull, toggleDetail, exportCsv, doRefineCombo }
   }
 }
 

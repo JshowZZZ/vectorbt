@@ -16,6 +16,10 @@ from vectorbt.utils.random_ import set_seed
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+]
+
 day_dt = np.timedelta64(86400000000000)
 
 price = pd.Series([1., 2., 3., 4., 5.], index=pd.Index([

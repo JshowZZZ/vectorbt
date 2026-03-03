@@ -1,11 +1,37 @@
 import json
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
-from scripts.autowfo import engine as e
+from scripts.autowfo import engine_finalize as _engine_finalize_mod
+from scripts.autowfo import engine_helpers as _engine_helpers_mod
+from scripts.autowfo import engine_report as _engine_report_mod
+from scripts.autowfo import engine_runtime as _engine_runtime_mod
+from scripts.autowfo import engine_search as _engine_search_mod
 from scripts.autowfo import engine_search as _e_search
 from scripts.autowfo import engine_finalize as _e_finalize
+
+
+def _collect_private_callables(module):
+    return {
+        name: getattr(module, name)
+        for name in dir(module)
+        if name.startswith("_") and callable(getattr(module, name))
+    }
+
+
+_symbols = {"DEFAULT_CONFIG": _engine_helpers_mod.DEFAULT_CONFIG}
+for _module in (
+    _engine_helpers_mod,
+    _engine_runtime_mod,
+    _engine_report_mod,
+    _engine_search_mod,
+    _engine_finalize_mod,
+):
+    _symbols.update(_collect_private_callables(_module))
+
+e = SimpleNamespace(**_symbols)
 
 
 def test_load_runtime_config_reads_file_and_env_override(tmp_path):

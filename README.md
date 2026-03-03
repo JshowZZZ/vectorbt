@@ -60,6 +60,27 @@ To install optional dependencies as well:
 pip install -U "vectorbt[full]"
 ```
 
+> [!NOTE]
+> AUTOWFO regression-validated environment currently targets:
+> `pandas>=2.0,<3.0`, `numpy>=1.23,<2.4`, `numba>=0.60,<0.64`.
+> Validated baseline (2026-03-01): `pandas 2.3.3`, `numpy 2.3.5`, `numba 0.63.1`.
+
+### Local CI-Ready Baseline
+
+Run the following locally after clone:
+
+```sh
+python -m pip install -e .
+python -m pip install "pandas>=2.0,<3.0"
+pytest tests -q --tb=short
+pytest tests -q --tb=short -W error::DeprecationWarning
+```
+
+Current baseline (2026-03-02):
+
+* `pytest tests -q --tb=short` -> `1442 passed, 30 warnings`
+* `pytest tests -q --tb=short -W error::DeprecationWarning` -> `1442 passed, 26 warnings`, `0` deprecation failures
+
 ## :sparkles: Usage
 
 VectorBT lets you backtest strategies in just a few lines of Python.

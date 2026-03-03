@@ -11,6 +11,11 @@ from vectorbt.utils.datetime_ import to_timezone
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Symbols have mismatching index.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Symbols have mismatching columns.*:UserWarning"),
+]
+
 
 # ############# Global ############# #
 

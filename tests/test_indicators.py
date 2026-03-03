@@ -38,6 +38,14 @@ except:
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_min' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Metric 'idx_max' returned multiple values.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Raw output is produced by unique parameter combinations.*:UserWarning"),
+    pytest.mark.filterwarnings("ignore:Couldn't parse the output at index .*:UserWarning"),
+]
+
 
 # ############# Global ############# #
 

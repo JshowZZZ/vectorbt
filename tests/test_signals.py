@@ -12,6 +12,10 @@ from vectorbt.generic.enums import range_dt
 
 seed = 42
 
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Object has multiple columns\\. Aggregating.*:UserWarning"),
+]
+
 day_dt = np.timedelta64(86400000000000)
 
 mask = pd.DataFrame([
@@ -1919,7 +1923,7 @@ class TestAccessors:
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
-                np.nan,
+                pd.NaT,
                 1.6666666666666667,
                 100.0,
                 pd.Timedelta('1 days 00:00:00'),
@@ -1929,7 +1933,7 @@ class TestAccessors:
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
-                np.nan
+                pd.NaT
             ],
                 index=stats_index,
                 name='agg_func_mean'
@@ -1949,7 +1953,7 @@ class TestAccessors:
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
-                np.nan,
+                pd.NaT,
                 2,
                 100.0,
                 pd.Timedelta('1 days 00:00:00'),
@@ -1959,7 +1963,7 @@ class TestAccessors:
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
-                np.nan
+                pd.NaT
             ],
                 index=stats_index,
                 name='a'
@@ -2002,7 +2006,7 @@ class TestAccessors:
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
                 pd.Timedelta('3 days 00:00:00'),
-                np.nan
+                pd.NaT
             ],
                 index=pd.Index([
                     'Start', 'End', 'Period', 'Total', 'Rate [%]', 'Total Overlapping',
@@ -2078,15 +2082,16 @@ class TestAccessors:
         ],
     )
     def test_logical_funcs(self, test_func, test_func_pd):
+        bool_mask = np.array([True, False, False, False, False], dtype=bool)
         pd.testing.assert_series_equal(
-            test_func(mask['a'].vbt.signals, True, [True, False, False, False, False]),
-            test_func_pd(test_func_pd(mask['a'], True), [True, False, False, False, False])
+            test_func(mask['a'].vbt.signals, True, bool_mask),
+            test_func_pd(test_func_pd(mask['a'], True), bool_mask)
         )
         pd.testing.assert_frame_equal(
-            test_func(mask['a'].vbt.signals, True, [True, False, False, False, False], concat=True),
+            test_func(mask['a'].vbt.signals, True, bool_mask, concat=True),
             pd.concat((
                 test_func_pd(mask['a'], True),
-                test_func_pd(mask['a'], [True, False, False, False, False])
+                test_func_pd(mask['a'], bool_mask)
             ), axis=1, keys=[0, 1], names=['combine_idx'])
         )
         pd.testing.assert_frame_equal(

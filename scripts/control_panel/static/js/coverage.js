@@ -22,9 +22,10 @@ export const CoverageTab = {
                              bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
                 {{ t('coverage_refresh', 'Refresh') }}
               </button>
-              <button @click="startBatch" :disabled="batchBusy"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50">
-                {{ t('coverage_start_batch', 'Start Batch') }}
+              <button @click="fillAllGaps" :disabled="fillBusy || summary.untested === 0"
+                      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white transition-all disabled:opacity-50">
+                {{ fillBusy ? t('coverage_filling', 'Filling...') : t('coverage_fill_all_gaps', '填補全部缺口') }}
+                <span v-if="!fillBusy && summary.untested > 0" class="ml-1 opacity-75">({{ summary.untested }})</span>
               </button>
             </div>
           </div>
@@ -129,7 +130,7 @@ export const CoverageTab = {
     const workflow = ref('baseline')
     const mode = ref('')
     const workers = ref(null)
-    const batchBusy = ref(false)
+    const fillBusy = ref(false)
     let pollTimer = null
 
     function onWorkflowChange() {
@@ -188,22 +189,26 @@ export const CoverageTab = {
       }
     }
 
-    async function startBatch() {
+    async function fillAllGaps() {
       const confirmed = await confirmAction({
-        title: t('coverage_confirm_start_title', 'Start batch jobs?'),
-        message: t('coverage_confirm_start_message', 'This will execute jobs currently in queue.'),
-        confirmText: t('coverage_start_batch', 'Start Batch'),
-        variant: 'primary',
+        title: t('coverage_confirm_fill_title', '填補全部缺口？'),
+        message: t('coverage_confirm_fill_message', '將所有未測試的 (timeframe × symbol) 組合加入批次佇列。'),
+        confirmText: t('coverage_fill_all_gaps', '填補全部缺口'),
+        variant: 'warn',
       })
       if (!confirmed) return
-      batchBusy.value = true
+      fillBusy.value = true
       try {
-        await postJson('/batch/start')
-        showToast(t('coverage_toast_batch_started', 'Batch started'), 'success')
+        const payload = { workflow: workflow.value }
+        if (workflow.value === 'run' && mode.value) payload.mode = mode.value
+        if (workers.value) payload.workers = workers.value
+        const r = await postJson('/coverage/fill-all-gaps', payload)
+        showToast(r.message || t('coverage_toast_fill_done', '缺口已加入佇列'), 'success')
+        refresh()
       } catch (e) {
         showToast(String(e), 'error')
       } finally {
-        batchBusy.value = false
+        fillBusy.value = false
       }
     }
 
@@ -225,14 +230,14 @@ export const CoverageTab = {
       workflow,
       mode,
       workers,
-      batchBusy,
+      fillBusy,
       onWorkflowChange,
       cellStatus,
       cellClass,
       cellLabel,
       refresh,
       cellClick,
-      startBatch,
+      fillAllGaps,
       t,
     }
   },

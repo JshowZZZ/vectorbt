@@ -3,11 +3,19 @@
 
 """Modules for messaging."""
 
+import warnings
+
 __all__ = []
 __blacklist__ = []
 
 try:
-    import telegram
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*'imghdr' is deprecated.*",
+            category=DeprecationWarning
+        )
+        import telegram
     del telegram
 except ImportError:
     __blacklist__.append('telegram')
