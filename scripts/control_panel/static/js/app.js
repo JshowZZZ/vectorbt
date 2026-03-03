@@ -30,7 +30,7 @@ const App = {
   template: `
     <div class="min-h-screen flex flex-col bg-gray-50 dark:bg-[#0d1117] text-gray-900 dark:text-gray-100 transition-colors">
       <header class="sticky top-0 z-40 flex items-center h-12 px-4 gap-4
-                      bg-white/80 dark:bg-[#161b22]/90 backdrop-blur-md
+                      bg-white/90 dark:bg-[#161b22]/95 backdrop-blur-lg
                       border-b border-gray-200 dark:border-gray-700/60 shadow-sm">
         <div class="font-bold tracking-tight text-sm whitespace-nowrap select-none">
           <span class="text-blue-600 font-bold tracking-tight rounded bg-blue-50/50 dark:bg-blue-900/20 px-1 dark:text-blue-400">AUTOWFO</span>
