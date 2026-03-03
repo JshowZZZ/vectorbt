@@ -33,7 +33,7 @@ const App = {
                       bg-white/80 dark:bg-[#161b22]/90 backdrop-blur-md
                       border-b border-gray-200 dark:border-gray-700/60 shadow-sm">
         <div class="font-bold tracking-tight text-sm whitespace-nowrap select-none">
-          <span class="text-blue-500">AUTOWFO</span>
+          <span class="text-blue-600 font-bold tracking-tight rounded bg-blue-50/50 dark:bg-blue-900/20 px-1 dark:text-blue-400">AUTOWFO</span>
           <span class="text-gray-400 ml-1 font-normal text-xs">Control Panel</span>
         </div>
         <nav class="flex items-center gap-1 flex-1 overflow-x-auto ml-4">
