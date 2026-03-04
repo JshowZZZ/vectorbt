@@ -346,12 +346,22 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ---
 
+### UI-1: Control Panel UX Overhaul (AWF-190~AWF-192)
+> Goal: Modernize control panel navigation, component consistency, and visual polish without changing backend APIs.
+> Motivation: 10-tab horizontal navigation overflows on narrow viewports; inconsistent styling/i18n across tabs; no loading states or user feedback on mutations.
+- AWF-190: Sidebar navigation + responsive layout rebuild (horizontal tabs → collapsible icon sidebar, mobile breakpoints).
+- AWF-191: Shared component library + i18n completion (KpiCard/StatusBadge/EmptyState/SearchInput/Pagination components; i18n 100% coverage audit).
+- AWF-192: Page-level visual polish + micro-interactions (skeleton loading, toast feedback, Chart.js theme-aware colors, empty-state illustrations).
+- Prerequisite: Steady State (Phase 39) — no backend changes required.
+- Exit criteria: All 10 tabs render correctly with sidebar; shared components used consistently; i18n coverage ≥95%; loading/empty/error states present on all data-fetching views; all existing tests green.
+- Linked TODO: `AWF-190`, `AWF-191`, `AWF-192`.
+
 ## Steady State
-- Status: Entered (Phase 39 complete).
+- Status: Entered (Phase 39 complete). Re-opened for UI-1 phase (frontend-only).
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
 - Runtime posture: unattended operation supported with anomaly notifications and bounded schedulers.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
-- Maintenance mode: prioritize dependency drift management and warning cleanup; no architecture-direction changes without new phase approval.
+- Maintenance mode: prioritize dependency drift management and warning cleanup; UI-1 phase is frontend-only and does not alter backend APIs or runtime behavior.
 
 ## Stage Gates (Do Not Skip)
 - Gate 0: Monolith decomposed before protocol freeze (Phase 1). **Passed.**
@@ -426,6 +436,8 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-03-04: UI-1 phase opened (AWF-190~192): control panel UX overhaul — sidebar navigation, shared component library + i18n completion, page-level visual polish. Frontend-only; no backend API changes.
+- 2026-03-02: AWF-189 (Maintenance): warning cleanup + pandas 2.x downgrade verification. Warning count 513→30 (target <50 met). `-W error::DeprecationWarning` gate passes.
 - 2026-03-01: Phase 39 completed (AWF-186~188): pandas 2.x environment finalized and fully regressed (`pytest tests -q --tb=short` green), analytics research HTML export (`autowfo export-report` + `/analytics/report.html`) delivered, and Steady State maintenance mode declared.
 - 2026-02-06: Initial long-term AUTOWFO master plan created.
 - 2026-02-06: Added milestone-to-TODO mapping and quantified gate checklists with sign-off ownership.
