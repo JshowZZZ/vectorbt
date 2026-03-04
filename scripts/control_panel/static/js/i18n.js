@@ -541,7 +541,7 @@ Object.assign(L, {
   overview_confirm_test_stop_title: '要停止測試流程嗎？',
   overview_confirm_test_stop_message: '目前測試流程將被終止。',
   overview_confirm_test_clear_title: '要清空測試紀錄嗎？',
-  overview_confirm_test_clear_message: '此操作無法復原。'
+  overview_confirm_test_clear_message: '此操作無法復原。',
   overview_next_idle: '閒置',
   overview_next_idle_msg: '準備開始新測試',
   overview_next_goto_config: '前往設定',
@@ -934,5 +934,43 @@ export function isParamKey(key) {
   if (PARAM_ORDER.includes(key)) return true
   const lower = key.toLowerCase()
   if (PARAM_EXCLUDE_PREFIXES.some(p => lower.startsWith(p))) return false
-  return /(lookback|window|threshold|ratio|_long|_short)$/.test(lower)
-}
+  return /(lookback|window|threshold|ratio|_long|_short)$/.test(lower)\n}
+
+Object.assign(L, {
+  term_sharpe: '夏普比率',
+  term_max_dd: '最大回撤',
+  term_win_rate: '勝率',
+  term_oos: '樣本外',
+  term_is: '樣本內',
+  term_combo: '參數組合',
+  term_run: '回測執行',
+  term_leaderboard: '排行榜',
+  term_return: '報酬率',
+  term_trade_count: '交易次數',
+  term_wfo: '前推優化',
+  term_trigger: '觸發指標',
+  term_action: '動作指標',
+  term_timeframe: '時間框架',
+  term_coverage: '覆蓋率',
+  term_queue: '佇列',
+  term_enqueue: '加入佇列',
+  term_discovery: '自動探索',
+  term_patrol: '巡邏排程',
+  term_paper_position: '模擬倉位',
+  term_portfolio: '投資組合',
+  app_group_monitoring: '監控大廳',
+  app_group_strategy: '策略與探索',
+  app_group_execution: '執行與排程',
+  app_group_analytics: '分析與報告',
+  app_tab_overview: '總覽',
+  app_tab_dashboard: '儀表板',
+  app_tab_config: '設定',
+  app_tab_discovery: '探索',
+  app_tab_experiments: '實驗',
+  app_tab_scheduler: '排程',
+  app_tab_batch: '批次',
+  app_tab_results: '結果',
+  app_tab_analytics: '分析',
+  app_tab_coverage: '覆蓋率',
+  datatable_empty: '暫無資料'
+})

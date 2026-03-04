@@ -217,6 +217,9 @@ export const DataTable = {
   props: {
     columns: Array,   // [{ key, label, numeric, sortable, width }]
     rows: Array,
+    emptyIcon: { type: String, default: '\u2205' },
+    emptyTitle: { type: String, default: '' },
+    emptyAction: { type: String, default: '' },
     pageSize: { type: Number, default: 25 },
     sortKey: { type: String, default: '' },
     sortDir: { type: String, default: 'desc' },
@@ -267,8 +270,15 @@ export const DataTable = {
           <tbody>
             <template v-if="pagedRows.length === 0">
               <tr>
-                <td :colspan="expandable ? columns.length + 1 : columns.length" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                  {{ t('datatable_no_data', '無資料') }}
+                <td :colspan="columns.length + (expandable ? 1 : 0)">
+                  <div v-if="emptyTitle" class="py-12 flex flex-col items-center justify-center text-center px-4">
+                    <div class="text-4xl text-gray-300 dark:text-gray-600 mb-3">{{ emptyIcon }}</div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{{ emptyTitle }}</h3>
+                    <p v-if="emptyAction" class="text-xs text-gray-500 dark:text-gray-400 max-w-sm">{{ emptyAction }}</p>
+                  </div>
+                  <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                    {{ t('datatable_empty', '暫無資料') }}
+                  </div>
                 </td>
               </tr>
             </template>
@@ -470,43 +480,6 @@ export const ProgressBar = {
 }
 
 // ═══ Action Button ═══
-export const ActionBtn = {
-  name: 'ActionBtn',
-  props: {
-    variant: { type: String, default: 'default' }, // primary, success, danger, default
-    size: { type: String, default: 'md' },
-    loading: { type: Boolean, default: false },
-    disabled: { type: Boolean, default: false },
-    icon: { type: String, default: '' },
-  },
-  template: `
-    <button :disabled="disabled || loading"
-            class="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg
-                   transition-all duration-150 border
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   active:scale-[0.97]"
-            :class="[sizeClass, variantClass]">
-      <span v-if="loading" class="animate-spin text-sm">⟳</span>
-      <span v-else-if="icon">{{ icon }}</span>
-      <slot />
-    </button>
-  `,
-  setup(props) {
-    const sizeClass = computed(() => ({
-      sm: 'px-2.5 py-1 text-xs',
-      md: 'px-3.5 py-2 text-sm',
-      lg: 'px-5 py-2.5 text-base',
-    }[props.size] || 'px-3.5 py-2 text-sm'))
-    const variantClass = computed(() => ({
-      primary: 'bg-blue-600 hover:bg-blue-700 border-blue-600 text-white shadow-sm shadow-blue-500/25',
-      success: 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-sm shadow-emerald-500/25',
-      danger:  'bg-red-600 hover:bg-red-700 border-red-600 text-white shadow-sm shadow-red-500/25',
-      warn:    'bg-amber-600 hover:bg-amber-700 border-amber-600 text-white shadow-sm shadow-amber-500/25',
-      default: 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200',
-    }[props.variant] || 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'))
-    return { sizeClass, variantClass }
-  }
-}
 
 // ═══ Detail Panel (row expand content for Results tab) ═══
 export const DetailPanel = {
@@ -622,5 +595,52 @@ export const DetailPanel = {
     )
 
     return { tags, paramPairs, oosMetrics, avgMetrics, otherFields }
+  }
+}
+
+
+export const ActionButton = {
+  name: 'ActionButton',
+  props: {
+    label: String,
+    loading: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    variant: { type: String, default: 'primary' },
+    icon: String
+  },
+  emits: ['click'],
+  template: `
+    <button
+      @click="$emit('click', $event)"
+      :disabled="disabled || loading"
+      :class="[
+        'relative inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-150',
+        'disabled:opacity-50 disabled:cursor-not-allowed',
+        variantClasses
+      ]"
+    >
+      <span v-if="loading" class="animate-spin flex-shrink-0">
+        <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </span>
+      <span v-else-if="icon" class="flex-shrink-0">{{ icon }}</span>
+      <span :class="{'opacity-0': loading && !label}">{{ label || ' ' }}</span>
+      <span v-if="loading && label" class="absolute inset-0 flex items-center justify-center bg-inherit rounded-lg">
+        <svg class="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </span>
+    </button>
+  `,
+  computed: {
+    variantClasses() {
+      if (this.variant === 'primary') return 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm focus:ring-2 focus:ring-blue-500/30'
+      if (this.variant === 'danger') return 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm focus:ring-2 focus:ring-rose-500/30'
+      if (this.variant === 'success') return 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm focus:ring-2 focus:ring-emerald-500/30'
+      return 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-gray-500/30'
+    }
   }
 }
