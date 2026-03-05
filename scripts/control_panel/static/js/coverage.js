@@ -141,11 +141,15 @@ export const CoverageTab = {
     }
 
     function cellStatus(tf, sym) {
-      return cells.value.get(tf + '||' + sym) || 'untested'
+      return (cells.value.get(tf + '||' + sym) || {}).status || 'untested'
+    }
+
+    function cellTestedAt(tf, sym) {
+      return (cells.value.get(tf + '||' + sym) || {}).last_tested_utc || null
     }
 
     function cellClass(status) {
-      if (status === 'tested') return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+      if (status === 'tested') return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-pointer hover:ring-1 hover:ring-emerald-400/50'
       if (status === 'queued') return 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
       return 'bg-gray-500/10 text-gray-500 border border-gray-500/20 hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/30'
     }
@@ -164,7 +168,7 @@ export const CoverageTab = {
         const next = new Map()
         ;(payload.cells || []).forEach(cell => {
           if (cell.timeframe && cell.symbol) {
-            next.set(cell.timeframe + '||' + cell.symbol, cell.status || 'untested')
+            next.set(cell.timeframe + '||' + cell.symbol, cell)
           }
         })
         cells.value = next
@@ -177,7 +181,20 @@ export const CoverageTab = {
     }
 
     async function cellClick(tf, sym, status) {
-      if (status === 'tested') return
+      if (status === 'tested') {
+        const testedAt = cellTestedAt(tf, sym)
+        const timeLabel = testedAt
+          ? t('coverage_cell_tested_at', '最後測試') + ': ' + testedAt.replace('T', ' ').replace(/\.\d+Z$|Z$/, ' UTC')
+          : t('coverage_cell_tested_no_time', '測試時間未記錄')
+        await confirmAction({
+          title: tf + ' × ' + sym,
+          message: t('coverage_cell_status_tested', '狀態：已測試') + '\n' + timeLabel,
+          confirmText: t('coverage_cell_close', '關閉'),
+          cancelText: t('coverage_cell_close', '關閉'),
+          variant: 'info',
+        })
+        return
+      }
       try {
         const payload = { timeframe: tf, symbol: sym, workflow: workflow.value }
         if (workflow.value === 'run' && mode.value) payload.mode = mode.value
@@ -234,6 +251,7 @@ export const CoverageTab = {
       fillBusy,
       onWorkflowChange,
       cellStatus,
+      cellTestedAt,
       cellClass,
       cellLabel,
       refresh,
