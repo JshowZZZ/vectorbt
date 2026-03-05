@@ -17,16 +17,12 @@ export const CoverageTab = {
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ t('coverage_title', 'Coverage Matrix') }}</h2>
             <div class="flex gap-2">
-              <button @click="refresh"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                             bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-                {{ t('coverage_refresh', 'Refresh') }}
-              </button>
-              <button @click="fillAllGaps" :disabled="fillBusy || summary.untested === 0"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white transition-all disabled:opacity-50">
-                {{ fillBusy ? t('coverage_filling', 'Filling...') : t('coverage_fill_all_gaps', '填補全部缺口') }}
-                <span v-if="!fillBusy && summary.untested > 0" class="ml-1 opacity-75">({{ summary.untested }})</span>
-              </button>
+              <action-button @click="refresh" variant="secondary"
+                             :label="t('coverage_refresh', 'Refresh')">
+              </action-button>
+              <action-button @click="fillAllGaps" :loading="fillBusy" :disabled="summary.untested === 0" variant="warning"
+                             :label="fillBusy ? t('coverage_filling', 'Filling...') : (summary.untested > 0 ? t('coverage_fill_prefix', '填補') + ' ' + summary.untested + ' ' + t('coverage_fill_unit', '個未測試組合') : t('coverage_fill_all_gaps', '填補全部缺口'))">
+              </action-button>
             </div>
           </div>
 
@@ -62,7 +58,12 @@ export const CoverageTab = {
               {{ t('coverage_untested', 'untested') }}=<strong class="text-gray-500">{{ summary.untested || 0 }}</strong>
             </span>
             <div class="flex-1"></div>
-            <span class="font-semibold text-gray-900 dark:text-white">{{ t('coverage_percent', 'coverage') }}={{ summary.coverage_pct || 0 }}%</span>
+            <span class="font-semibold text-gray-900 dark:text-white">
+              {{ t('coverage_percent', 'coverage') }}={{ summary.coverage_pct || 0 }}%
+              <span class="text-xs font-normal text-gray-500 dark:text-gray-400">
+                （{{ summary.tested || 0 }} / {{ summary.total || 0 }} {{ t('coverage_of_combos', '個組合') }}）
+              </span>
+            </span>
           </div>
 
           <div class="flex gap-3">
@@ -192,7 +193,7 @@ export const CoverageTab = {
     async function fillAllGaps() {
       const confirmed = await confirmAction({
         title: t('coverage_confirm_fill_title', '填補全部缺口？'),
-        message: t('coverage_confirm_fill_message', '將所有未測試的 (timeframe × symbol) 組合加入批次佇列。'),
+        message: t('coverage_confirm_fill_prefix', '確認將') + ' ' + summary.value.untested + ' ' + t('coverage_confirm_fill_suffix', '個未測試組合加入批次佇列？'),
         confirmText: t('coverage_fill_all_gaps', '填補全部缺口'),
         variant: 'warn',
       })

@@ -456,6 +456,11 @@ Object.assign(L, {
   coverage_toast_batch_started: 'Batch started',
   coverage_confirm_start_title: 'Start batch jobs?',
   coverage_confirm_start_message: 'This will execute jobs currently in queue.',
+  coverage_fill_prefix: 'Fill',
+  coverage_fill_unit: 'untested combos',
+  coverage_of_combos: 'combos',
+  coverage_confirm_fill_prefix: 'Queue',
+  coverage_confirm_fill_suffix: 'untested combos?',
 })
 
 // Traditional Chinese UI override (keep this block last so it wins)
@@ -589,6 +594,11 @@ Object.assign(L, {
   'coverage_confirm_fill_title': '確認填補',
   'coverage_confirm_fill_message': '確認填補所有空缺？',
   'coverage_fill_all_gaps': '填補所有空缺',
+  'coverage_fill_prefix': '填補',
+  'coverage_fill_unit': '個未測試組合',
+  'coverage_of_combos': '個組合',
+  'coverage_confirm_fill_prefix': '確認將',
+  'coverage_confirm_fill_suffix': '個未測試組合加入批次佇列？',
   'coverage_filling': '填補中',
   'coverage_toast_fill_done': '填補完成',
   'config_dev_test_title': '開發測試',
