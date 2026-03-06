@@ -611,7 +611,7 @@ Object.assign(L, {
   'coverage_toast_fill_done': '填補完成',
   'config_dev_test_title': '開發測試',
   'config_wf_guardrail_hint': '防護提示',
-  'analytics_refresh': '重新整理',,
+  'analytics_refresh': '重新整理',
 
   config_title: '回測設定',
   config_reload: '重新載入',
