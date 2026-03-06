@@ -431,6 +431,10 @@ Object.assign(L, {
   coverage_title: 'Coverage Matrix',
   coverage_refresh: 'Refresh',
   coverage_start_batch: 'Start Batch',
+  coverage_exec_mode: 'Execution Mode',
+  coverage_exec_full: 'Full pipeline (recommended)',
+  coverage_exec_combo: 'Scan only',
+  coverage_exec_refine: 'Refine only',
   coverage_workflow: 'Workflow',
   coverage_mode: 'Mode',
   coverage_none: 'none',
@@ -702,6 +706,10 @@ Object.assign(L, {
   coverage_title: '覆蓋矩陣',
   coverage_refresh: '重新整理',
   coverage_start_batch: '啟動批次',
+  coverage_exec_mode: '執行方式',
+  coverage_exec_full: '完整流程（建議）',
+  coverage_exec_combo: '只廣搜',
+  coverage_exec_refine: '只精煉',
   coverage_workflow: '流程',
   coverage_mode: '模式',
   coverage_none: '無',
@@ -952,7 +960,8 @@ export function isParamKey(key) {
   if (PARAM_ORDER.includes(key)) return true
   const lower = key.toLowerCase()
   if (PARAM_EXCLUDE_PREFIXES.some(p => lower.startsWith(p))) return false
-  return /(lookback|window|threshold|ratio|_long|_short)$/.test(lower)\n}
+  return /(lookback|window|threshold|ratio|_long|_short)$/.test(lower)
+}
 
 Object.assign(L, {
   term_sharpe: '夏普比率',

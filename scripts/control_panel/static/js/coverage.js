@@ -28,18 +28,11 @@ export const CoverageTab = {
 
           <div class="flex flex-wrap items-end gap-3">
             <label class="space-y-1">
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_workflow', 'Workflow') }}</span>
-              <select v-model="workflow" @change="onWorkflowChange" class="cfg-input">
-                <option value="baseline">baseline</option>
-                <option value="run">run</option>
-              </select>
-            </label>
-            <label class="space-y-1">
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_mode', 'Mode') }}</span>
-              <select v-model="mode" :disabled="workflow !== 'run'" class="cfg-input">
-                <option value="">{{ t('coverage_none', 'none') }}</option>
-                <option value="combo">combo</option>
-                <option value="refine">refine</option>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_exec_mode', '執行方式') }}</span>
+              <select v-model="execMode" class="cfg-input">
+                <option value="baseline">{{ t('coverage_exec_full', '完整流程') }}</option>
+                <option value="run_combo">{{ t('coverage_exec_combo', '只廣搜') }}</option>
+                <option value="run_refine">{{ t('coverage_exec_refine', '只精煉') }}</option>
               </select>
             </label>
             <label class="space-y-1">
@@ -48,7 +41,7 @@ export const CoverageTab = {
             </label>
           </div>
 
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_hint', 'Click an untested cell to enqueue a focused job for that timeframe-symbol pair.') }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('coverage_hint', 'Click an untested cell to enqueue a job for that timeframe-symbol pair.') }}</p>
 
           <div class="flex flex-wrap gap-4 text-xs">
             <span class="text-gray-600 dark:text-gray-300">
@@ -128,16 +121,15 @@ export const CoverageTab = {
     const syms = ref([])
     const cells = ref(new Map())
     const summary = ref({})
-    const workflow = ref('baseline')
-    const mode = ref('')
+    const execMode = ref('baseline')
     const workers = ref(null)
     const fillBusy = ref(false)
     let pollTimer = null
 
-    function onWorkflowChange() {
-      if (workflow.value !== 'run') {
-        mode.value = ''
-      }
+    function execPayload() {
+      if (execMode.value === 'run_combo') return { workflow: 'run', mode: 'combo' }
+      if (execMode.value === 'run_refine') return { workflow: 'run', mode: 'refine' }
+      return { workflow: 'baseline' }
     }
 
     function cellStatus(tf, sym) {
@@ -196,8 +188,8 @@ export const CoverageTab = {
         return
       }
       try {
-        const payload = { timeframe: tf, symbol: sym, workflow: workflow.value }
-        if (workflow.value === 'run' && mode.value) payload.mode = mode.value
+        const ep = execPayload()
+        const payload = { timeframe: tf, symbol: sym, ...ep }
         if (workers.value) payload.workers = workers.value
         await postJson('/coverage/enqueue', payload)
         showToast(t('coverage_toast_enqueued_pair', 'Enqueued pair') + ': ' + tf + ' x ' + sym, 'success')
@@ -217,8 +209,8 @@ export const CoverageTab = {
       if (!confirmed) return
       fillBusy.value = true
       try {
-        const payload = { workflow: workflow.value }
-        if (workflow.value === 'run' && mode.value) payload.mode = mode.value
+        const ep = execPayload()
+        const payload = { ...ep }
         if (workers.value) payload.workers = workers.value
         const r = await postJson('/coverage/fill-all-gaps', payload)
         showToast(r.message || t('coverage_toast_fill_done', '缺口已加入佇列'), 'success')
@@ -245,11 +237,9 @@ export const CoverageTab = {
       syms,
       cells,
       summary,
-      workflow,
-      mode,
+      execMode,
       workers,
       fillBusy,
-      onWorkflowChange,
       cellStatus,
       cellTestedAt,
       cellClass,
