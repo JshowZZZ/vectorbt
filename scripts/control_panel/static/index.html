@@ -4,6 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AUTOWFO Control Panel</title>
+  <meta name="description" content="AUTOWFO strategy operations console for monitoring runs, reviewing results, and driving the next action." />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="color-scheme" content="dark light" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+
+  <!-- Keep the console signal clean until a local Tailwind build pipeline exists. -->
+  <script>
+    (function () {
+      const originalWarn = console.warn.bind(console)
+      console.warn = function (...args) {
+        const message = String(args[0] || '')
+        if (message.includes('cdn.tailwindcss.com should not be used in production')) {
+          return
+        }
+        originalWarn(...args)
+      }
+    })()
+  </script>
 
   <!-- Tailwind CSS (Play CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,7 +37,7 @@
             warn:   '#f59e0b',
           },
           fontFamily: {
-            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            sans: ['Space Grotesk', 'Noto Sans TC', 'system-ui', '-apple-system', 'sans-serif'],
             mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
           },
         },
@@ -26,10 +45,10 @@
     }
   </script>
 
-  <!-- Google Fonts: Inter + JetBrains Mono -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap&subset=chinese-traditional" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>

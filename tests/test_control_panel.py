@@ -234,6 +234,23 @@ def test_read_static_text_fallback(tmp_path, monkeypatch):
     assert cp._read_static_text("index.html", fallback="fallback") == "hello"
 
 
+def test_favicon_endpoint_serves_static_svg(tmp_path, monkeypatch):
+    static_dir = tmp_path / "scripts" / "control_panel" / "static"
+    static_dir.mkdir(parents=True)
+    favicon = static_dir / "favicon.svg"
+    favicon.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/favicon.ico")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8")
+
+    assert response.status == 200
+    assert response.getheader("Content-Type") == "image/svg+xml"
+    assert "<svg" in body
+
+
 def test_normalize_top_n_bounds_and_defaults():
     assert cp._normalize_top_n("bad") == cp.DASHBOARD_TOP_N_DEFAULT
     assert cp._normalize_top_n(-5) == cp.DASHBOARD_TOP_N_MIN

@@ -162,6 +162,14 @@ class Handler(BaseHTTPRequestHandler):
                 _read_static_text("index.html", fallback=INDEX_HTML),
                 headers=static_no_cache_headers,
             )
+        if path in {"/favicon.ico", "/favicon.svg"}:
+            favicon_path = STATIC_DIR / "favicon.svg"
+            if favicon_path.exists():
+                return self._send_with_headers(
+                    favicon_path.read_bytes(),
+                    "image/svg+xml",
+                    headers=static_no_cache_headers,
+                )
         static_path = _resolve_static_path(path)
         if static_path is not None:
             mime, _ = mimetypes.guess_type(str(static_path))

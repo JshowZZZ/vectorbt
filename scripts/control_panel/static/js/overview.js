@@ -1,4 +1,4 @@
-﻿import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { fetchJson, postJson } from './api.js'
 import { store, showToast, confirmAction } from './store.js'
 import { L } from './i18n.js'
@@ -12,192 +12,325 @@ const STAGE_I18N = {
   idle: 'status_idle',
 }
 
+const MODE_OPTIONS = [
+  {
+    id: 'combo',
+    label: 'Combo 掃描',
+    hint: '從完整候選組合開始跑，適合第一次覆蓋整個搜尋空間。',
+  },
+  {
+    id: 'refine',
+    label: 'Refine 精修',
+    hint: '聚焦已有亮點的候選，縮短迭代時間並快速驗證想法。',
+  },
+]
+
 export const OverviewTab = {
   name: 'OverviewTab',
   template: `
     <div class="space-y-6 animate-fade-in">
       <div v-if="loading" class="space-y-4">
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+          <div class="xl:col-span-5 skeleton skeleton-card h-64"></div>
+          <div class="xl:col-span-3 skeleton skeleton-card h-64"></div>
+          <div class="xl:col-span-4 skeleton skeleton-card h-64"></div>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div v-for="n in 5" :key="'overview-kpi-sk-' + n" class="skeleton skeleton-card h-20"></div>
+          <div v-for="n in 5" :key="'overview-kpi-sk-' + n" class="skeleton skeleton-card h-24"></div>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="lg:col-span-2 skeleton skeleton-card h-56"></div>
-          <div class="skeleton skeleton-card h-56"></div>
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+          <div class="xl:col-span-8 skeleton skeleton-card h-72"></div>
+          <div class="xl:col-span-4 skeleton skeleton-card h-72"></div>
         </div>
-        <div class="skeleton skeleton-card h-44"></div>
+        <div class="skeleton skeleton-card h-60"></div>
       </div>
+
       <template v-else>
-        <div class="rounded-xl p-4 border flex items-start gap-3"
-             :class="{
-               'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50': nextAction.variant === 'blue',
-               'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700/50': nextAction.variant === 'green',
-               'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50': nextAction.variant === 'gray',
-             }">
-          <div class="text-2xl leading-none mt-0.5">{{ nextAction.icon }}</div>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ nextAction.title }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ nextAction.message }}</div>
-          </div>
-          <button v-if="nextAction.actionLabel" @click="goToTab(nextAction.actionTab)"
-                  class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all active:scale-[0.97]">
-            {{ nextAction.actionLabel }}
-          </button>
-        </div>
-
-        <div v-if="experimentNext.scheduler_enabled"
-             class="rounded-xl p-4 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">測試序列</h3>
-            <span class="text-xs font-mono text-blue-500">{{ experimentNext.queue_depth || 0 }}</span>
-          </div>
-          <div class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <div>下一個: <span class="font-mono">{{ experimentNext.next_experiment_id || '--' }}</span></div>
-            <div>執行中: <span class="font-mono">{{ experimentNext.is_running ? 'true' : 'false' }}</span></div>
-            <div>探索中: <span class="font-mono">{{ experimentNext.discovery_candidates || 0 }}</span></div>
-          </div>
-          <div v-if="experimentNext.latest_run_summary" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            最新: <span class="font-mono">{{ experimentNext.latest_run_summary.experiment_id }}</span>
-            / <span class="font-mono">{{ experimentNext.latest_run_summary.run_id }}</span>
-          </div>
-        </div>
-
-        <div class="rounded-xl p-4 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">巡邏計畫歷史</h3>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ patrolTrendText }}</span>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="data-table">
-              <thead>
-                <tr class="bg-gray-50 dark:bg-gray-800/80">
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">時間 (UTC)</th>
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">產生</th>
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">已加入佇列</th>
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">執行次數</th>
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-b border-gray-200 dark:border-gray-700">佇列</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!patrolHistory.length">
-                  <td colspan="5" class="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500">沒有 巡邏計畫歷史紀錄</td>
-                </tr>
-                <tr v-for="row in patrolHistory" :key="row.utc + '-' + row.runs_executed" class="border-b border-gray-100 dark:border-gray-800">
-                  <td class="px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300">{{ row.utc || '--' }}</td>
-                  <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ row.tick_generated }}</td>
-                  <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ row.tick_enqueued }}</td>
-                  <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ row.runs_executed }}</td>
-                  <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ row.queue_remaining }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div v-for="kpi in kpis" :key="kpi.label"
-               class="kpi-card rounded-xl p-4 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-              {{ kpi.label }}
+        <section class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+          <div class="xl:col-span-5 cp-hero-panel rounded-3xl p-5 md:p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-700/80 dark:text-blue-200/80">
+                  Current Situation
+                </div>
+                <h2 class="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{{ nextAction.title }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ nextAction.message }}</p>
+              </div>
+              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/75 text-3xl shadow-sm dark:bg-slate-950/40">
+                {{ nextAction.icon }}
+              </div>
             </div>
-            <div class="text-2xl font-bold tabular-nums" :class="kpi.color">{{ kpi.value }}</div>
-          </div>
-        </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="lg:col-span-2 rounded-xl p-5 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('overview_progress_title', 'Run Progress') }}</h3>
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+            <div class="mt-5 grid grid-cols-2 gap-3">
+              <div v-for="item in executionSummary"
+                   :key="item.label"
+                   class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm dark:border-slate-900/40 dark:bg-slate-950/30">
+                <div class="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{{ item.label }}</div>
+                <div class="mt-2 text-sm font-semibold text-slate-950 dark:text-white" :class="item.valueClass">{{ item.value }}</div>
+              </div>
+            </div>
+
+            <div class="mt-5 flex flex-wrap gap-2">
+              <action-button v-if="nextAction.actionLabel"
+                             @click="goToTab(nextAction.actionTab)"
+                             variant="primary"
+                             :icon="nextAction.actionIcon"
+                             :label="nextAction.actionLabel">
+              </action-button>
+              <action-button @click="goToTab('config')"
+                             variant="default"
+                             icon="⚙"
+                             label="檢查設定">
+              </action-button>
+              <action-button @click="goToTab('results')"
+                             variant="default"
+                             icon="◨"
+                             label="查看結果">
+              </action-button>
+            </div>
+          </div>
+
+          <div class="xl:col-span-3 cp-panel rounded-3xl p-5 md:p-6">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Queue Snapshot</div>
+                <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">測試序列</h3>
+              </div>
+              <span class="inline-flex rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-200">
+                {{ experimentNext.queue_depth || 0 }} jobs
+              </span>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800/80 dark:bg-slate-900/60">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Next Experiment</div>
+                <div class="mt-1 text-sm font-semibold text-slate-950 dark:text-white font-mono">{{ experimentNext.next_experiment_id || '--' }}</div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                  <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Scheduler</div>
+                  <div class="mt-1 text-sm font-semibold text-slate-950 dark:text-white">{{ experimentNext.scheduler_enabled ? 'Enabled' : 'Disabled' }}</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                  <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Discovery Pool</div>
+                  <div class="mt-1 text-sm font-semibold text-slate-950 dark:text-white">{{ experimentNext.discovery_candidates || 0 }}</div>
+                </div>
+              </div>
+              <div class="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 dark:border-slate-800/80 dark:bg-slate-900/40">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Latest Run</div>
+                <div v-if="experimentNext.latest_run_summary" class="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                  <div class="font-mono font-semibold">{{ experimentNext.latest_run_summary.experiment_id }}</div>
+                  <div class="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{{ experimentNext.latest_run_summary.run_id }}</div>
+                </div>
+                <div v-else class="mt-1 text-sm text-slate-500 dark:text-slate-400">尚無最近的實驗執行紀錄。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="xl:col-span-4 cp-panel rounded-3xl p-5 md:p-6">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Operator Checklist</div>
+            <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">下一步操作建議</h3>
+            <div class="mt-4 space-y-3">
+              <div v-for="item in runChecklist"
+                   :key="item.title"
+                   class="flex items-start gap-3 rounded-2xl border px-4 py-3"
+                   :class="item.cardClass">
+                <span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" :class="item.badgeClass">
+                  {{ item.badge }}
+                </span>
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-slate-950 dark:text-white">{{ item.title }}</div>
+                  <div class="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{{ item.description }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+          <kpi-card v-for="kpi in kpis"
+                    :key="kpi.label"
+                    :title="kpi.label"
+                    :value="kpi.value"
+                    :subtitle="kpi.subtitle"
+                    :icon="kpi.icon"
+                    :color="kpi.color">
+          </kpi-card>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+          <div class="xl:col-span-8 cp-panel rounded-3xl p-5 md:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Run Progress</div>
+                <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ t('overview_progress_title', '執行進度') }}</h3>
+              </div>
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full"
                     :class="stageClass">
                 <span class="w-1.5 h-1.5 rounded-full" :class="stageDotClass"></span>
                 {{ stageLabel(status.stage) }}
               </span>
             </div>
-            <div class="mb-3">
-              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+
+            <div class="mb-4">
+              <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
                 <span>{{ status.done || 0 }} / {{ status.total || 0 }} {{ t('overview_done_total_suffix', 'combos') }}</span>
                 <span>{{ status.percent || 0 }}%</span>
               </div>
-              <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+              <div class="h-3 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-700 ease-out"
                      :class="pctNum >= 100 ? 'bg-emerald-500' : 'bg-blue-500'"
                      :style="{ width: Math.min(100, pctNum) + '%' }"></div>
               </div>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_skipped', 'Skipped') }}</span>
-                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ status.skipped || 0 }}</span></div>
-              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_remaining', 'Remaining') }}</span>
-                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ status.remaining || 0 }}</span></div>
-              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_elapsed', 'Elapsed') }}</span>
-                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ status.elapsed || '00:00:00' }}</span></div>
-              <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_eta', 'ETA') }}</span>
-                   <span class="ml-1 font-mono text-gray-900 dark:text-gray-100">{{ status.eta || '00:00:00' }}</span></div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{{ t('overview_skipped', 'Skipped') }}</div>
+                <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ status.skipped || 0 }}</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{{ t('overview_remaining', 'Remaining') }}</div>
+                <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ status.remaining || 0 }}</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{{ t('overview_elapsed', 'Elapsed') }}</div>
+                <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ status.elapsed || '00:00:00' }}</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+                <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{{ t('overview_eta', 'ETA') }}</div>
+                <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ status.eta || '00:00:00' }}</div>
+              </div>
             </div>
-            <div class="mt-2 text-[10px] text-gray-400 dark:text-gray-500">
-              {{ t('overview_updated', 'Updated') }}: {{ fmtTime(status.updated) }}
+
+            <div class="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-600 dark:border-slate-800/80 dark:bg-slate-900/50 dark:text-slate-300">
+              <span class="font-semibold text-slate-900 dark:text-white">判讀提示：</span>
+              執行中先看進度、剩餘與 ETA；完成後直接前往「結果」與「分析」頁檢查是否有值得精修的候選。
+              <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {{ t('overview_updated', 'Updated') }}: {{ fmtTime(status.updated) }}
+              </div>
             </div>
           </div>
 
-          <div class="rounded-xl p-5 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">{{ t('overview_quick_actions', 'Quick Actions') }}</h3>
-            <div class="flex flex-col gap-2">
-              <div class="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 text-xs font-medium">
-                <button v-for="m in ['combo', 'refine']" :key="m"
-                        @click="runMode = m"
-                        class="flex-1 py-1.5 transition-colors"
-                        :class="runMode === m
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'">
-                  {{ m }}
-                </button>
-              </div>
-              <button @click="doStart" :disabled="actionLoading"
-                      class="w-full px-4 py-2.5 rounded-lg text-sm font-semibold
-                             bg-blue-600 hover:bg-blue-700 text-white
-                             shadow-sm shadow-blue-500/25 transition-all active:scale-[0.97]
-                             disabled:opacity-50">
-                {{ t('overview_action_start', 'Start Run') }}
-              </button>
-              <div class="grid grid-cols-2 gap-2">
-                <button @click="doPause" :disabled="actionLoading"
-                        class="px-3 py-2 rounded-lg text-xs font-medium border
-                               bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600
-                               text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600
-                               transition-all active:scale-[0.97] disabled:opacity-50">
-                  {{ t('overview_action_pause', 'Pause') }}
-                </button>
-                <button @click="doResume" :disabled="actionLoading"
-                        class="px-3 py-2 rounded-lg text-xs font-medium border
-                               bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600
-                               text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600
-                               transition-all active:scale-[0.97] disabled:opacity-50">
-                  {{ t('overview_action_resume', 'Resume') }}
-                </button>
-              </div>
-              <button @click="doClearLog" :disabled="actionLoading"
-                      class="w-full px-3 py-2 rounded-lg text-xs font-medium border
-                             bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600
-                             text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600
-                             transition-all active:scale-[0.97] disabled:opacity-50">
-                {{ t('overview_action_clear_log', 'Clear Log') }}
+          <div class="xl:col-span-4 cp-panel rounded-3xl p-5 md:p-6">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Quick Actions</div>
+            <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">{{ t('overview_quick_actions', '快速操作') }}</h3>
+
+            <div class="mt-4 space-y-2">
+              <button v-for="option in modeOptions"
+                      :key="option.id"
+                      @click="selectRunMode(option.id)"
+                      class="w-full rounded-2xl border px-4 py-3 text-left transition-all"
+                      :class="runMode === option.id
+                        ? 'border-blue-500/40 bg-blue-500/10 shadow-sm'
+                        : 'border-slate-200/80 bg-white/70 hover:border-slate-300 hover:bg-white dark:border-slate-800/80 dark:bg-slate-900/40 dark:hover:border-slate-700 dark:hover:bg-slate-900/70'">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-sm font-semibold text-slate-950 dark:text-white">{{ option.label }}</div>
+                  <span class="text-xs font-medium" :class="runMode === option.id ? 'text-blue-700 dark:text-blue-200' : 'text-slate-500 dark:text-slate-400'">
+                    {{ runMode === option.id ? '已選擇' : '點擊切換' }}
+                  </span>
+                </div>
+                <div class="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{{ option.hint }}</div>
               </button>
             </div>
-            <div class="flex flex-wrap gap-2 mt-4 text-xs">
-              <a href="/status" target="_blank" class="text-blue-500 hover:text-blue-400 hover:underline">{{ t('overview_link_status', 'Status') }}</a>
-              <a href="/report" target="_blank" class="text-blue-500 hover:text-blue-400 hover:underline">{{ t('overview_link_report', 'Report') }}</a>
-              <a href="/log" target="_blank" class="text-blue-500 hover:text-blue-400 hover:underline">{{ t('overview_link_log', 'Run Log') }}</a>
-              <a href="/log.txt" target="_blank" class="text-blue-500 hover:text-blue-400 hover:underline">{{ t('overview_link_log_download', 'Log TXT') }}</a>
+
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <action-button @click="doStart"
+                             :loading="actionLoading"
+                             variant="primary"
+                             icon="▶"
+                             :label="t('overview_action_start', '開始回測')"
+                             class="sm:col-span-2">
+              </action-button>
+              <action-button @click="doPause"
+                             :loading="actionLoading"
+                             variant="default"
+                             icon="Ⅱ"
+                             :label="t('overview_action_pause', '暫停')">
+              </action-button>
+              <action-button @click="doResume"
+                             :loading="actionLoading"
+                             variant="default"
+                             icon="↻"
+                             :label="t('overview_action_resume', '繼續')">
+              </action-button>
+              <action-button @click="doClearLog"
+                             :loading="actionLoading"
+                             variant="default"
+                             icon="⌫"
+                             :label="t('overview_action_clear_log', '清空紀錄')"
+                             class="sm:col-span-2">
+              </action-button>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+              <div class="font-semibold">操作提醒</div>
+              <div class="mt-1">
+                若只是檢查設定或結果，優先使用「設定」「結果」「分析」頁。只有確定參數與資料視窗後，再從這裡啟動新的執行。
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs">
+              <a href="/status" target="_blank" class="rounded-full border border-slate-200/80 px-3 py-1.5 text-slate-600 hover:text-slate-950 hover:bg-slate-50 dark:border-slate-700/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-900/80">
+                狀態
+              </a>
+              <a href="/report" target="_blank" class="rounded-full border border-slate-200/80 px-3 py-1.5 text-slate-600 hover:text-slate-950 hover:bg-slate-50 dark:border-slate-700/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-900/80">
+                報告
+              </a>
+              <a href="/log" target="_blank" class="rounded-full border border-slate-200/80 px-3 py-1.5 text-slate-600 hover:text-slate-950 hover:bg-slate-50 dark:border-slate-700/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-900/80">
+                執行紀錄
+              </a>
+              <a href="/log.txt" target="_blank" class="rounded-full border border-slate-200/80 px-3 py-1.5 text-slate-600 hover:text-slate-950 hover:bg-slate-50 dark:border-slate-700/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-900/80">
+                Log TXT
+              </a>
             </div>
           </div>
-        </div>
+        </section>
 
+        <section class="cp-panel rounded-3xl p-5 md:p-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Patrol History</div>
+              <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">巡邏計畫歷史</h3>
+            </div>
+            <div class="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+              {{ patrolTrendText }}
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="data-table">
+              <thead>
+                <tr class="bg-slate-50/90 dark:bg-slate-900/80">
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-800">時間 (UTC)</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-800">產生</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-800">已加入佇列</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-800">執行次數</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-800">佇列</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!patrolHistory.length">
+                  <td colspan="5" class="px-3 py-8 text-center text-sm text-slate-400 dark:text-slate-500">沒有巡邏計畫歷史紀錄</td>
+                </tr>
+                <tr v-for="row in patrolHistory"
+                    :key="row.utc + '-' + row.runs_executed"
+                    class="border-b border-slate-100 dark:border-slate-900">
+                  <td class="px-3 py-3 text-xs font-mono text-slate-700 dark:text-slate-300">{{ row.utc || '--' }}</td>
+                  <td class="px-3 py-3 text-xs text-slate-700 dark:text-slate-300">{{ row.tick_generated }}</td>
+                  <td class="px-3 py-3 text-xs text-slate-700 dark:text-slate-300">{{ row.tick_enqueued }}</td>
+                  <td class="px-3 py-3 text-xs text-slate-700 dark:text-slate-300">{{ row.runs_executed }}</td>
+                  <td class="px-3 py-3 text-xs text-slate-700 dark:text-slate-300">{{ row.queue_remaining }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </template>
     </div>
   `,
   setup() {
     const t = (key, fallback = '') => L[key] || fallback || key
-
     const loading = ref(true)
     const status = ref({})
     const experimentNext = ref({})
@@ -206,14 +339,15 @@ export const OverviewTab = {
     const runMode = ref('combo')
     let statusTimer = null
 
-    // Consume cross-tab pendingRunMode set by Results "精修" action
-    watch(() => store.pendingRunMode, mode => {
-      if (mode) {
+    watch(
+      () => store.pendingRunMode,
+      mode => {
+        if (!mode) return
         runMode.value = mode
         store.pendingRunMode = null
         showToast(t('overview_toast_refine_mode', `已切換為 ${mode} 模式`), 'success')
       }
-    })
+    )
 
     const pctNum = computed(() => Number(status.value.percent) || 0)
 
@@ -223,46 +357,95 @@ export const OverviewTab = {
       const total = Number(status.value.total) || 0
       if (stage === 'running' || stage === 'combo' || stage === 'refine') {
         return {
-          variant: 'blue',
           icon: '🔄',
           title: t('overview_next_running', '執行進行中'),
-          message: `${done} / ${total} ` + t('overview_next_running_msg', '組合已完成，請等待結束後查看結果'),
-          actionLabel: null,
-          actionTab: null,
+          message: `${done} / ${total} ` + t('overview_next_running_msg', '組合已完成，請等待結束後查看結果。'),
+          actionLabel: '前往結果',
+          actionTab: 'results',
+          actionIcon: '◨',
         }
       }
       if (stage === 'complete' || stage === 'done') {
         return {
-          variant: 'green',
           icon: '✅',
           title: t('overview_next_complete', '執行完成'),
-          message: t('overview_next_complete_msg', '結果已生成，可查看排名或前往覆蓋矩陣填補缺口'),
+          message: t('overview_next_complete_msg', '結果已生成，建議先看結果頁，再到分析與覆蓋率頁確認下一輪要精修的方向。'),
           actionLabel: t('overview_next_goto_results', '查看結果'),
           actionTab: 'results',
+          actionIcon: '◨',
         }
       }
       return {
-        variant: 'gray',
         icon: '⚙️',
-        title: t('overview_next_idle', '尚未開始'),
-        message: t('overview_next_idle_msg', '請先確認設定，然後在此頁啟動執行'),
+        title: t('overview_next_idle', '準備開始新測試'),
+        message: t('overview_next_idle_msg', '請先確認設定、選擇執行模式，然後再啟動新的執行。'),
         actionLabel: t('overview_next_goto_config', '前往設定'),
         actionTab: 'config',
+        actionIcon: '⚙',
       }
     })
 
-    function goToTab(tabId) {
-      store.activeTab = tabId
-    }
+    const executionSummary = computed(() => [
+      {
+        label: '階段',
+        value: stageLabel(status.value.stage),
+        valueClass: '',
+      },
+      {
+        label: '進度',
+        value: `${status.value.percent || 0}%`,
+        valueClass: pctNum.value >= 100 ? 'text-emerald-600 dark:text-emerald-300' : 'text-blue-600 dark:text-blue-300',
+      },
+      {
+        label: '模式',
+        value: runMode.value === 'refine' ? 'Refine 精修' : 'Combo 掃描',
+        valueClass: '',
+      },
+      {
+        label: '更新',
+        value: fmtTime(status.value.updated),
+        valueClass: 'text-xs',
+      },
+    ])
 
     const kpis = computed(() => {
       const s = status.value
       return [
-        { label: t('overview_kpi_done', 'Done'), value: String(s.done || 0), color: 'text-gray-900 dark:text-gray-100' },
-        { label: t('overview_kpi_total', 'Total'), value: String(s.total || 0), color: 'text-gray-900 dark:text-gray-100' },
-        { label: t('overview_kpi_skipped', 'Skipped'), value: String(s.skipped || 0), color: '' },
-        { label: t('overview_kpi_progress', 'Progress'), value: (s.percent || 0) + '%', color: pctNum.value >= 100 ? 'text-profit' : 'text-blue-500' },
-        { label: t('overview_kpi_elapsed', 'Elapsed'), value: s.elapsed || '00:00:00', color: '' },
+        {
+          label: t('overview_kpi_done', '完成'),
+          value: String(s.done || 0),
+          subtitle: '已完成的組合數',
+          icon: '✓',
+          color: 'green',
+        },
+        {
+          label: t('overview_kpi_total', '總數'),
+          value: String(s.total || 0),
+          subtitle: '本輪預計測試的組合',
+          icon: 'Σ',
+          color: 'gray',
+        },
+        {
+          label: t('overview_kpi_skipped', '已跳過'),
+          value: String(s.skipped || 0),
+          subtitle: '略過或不再重跑的組合',
+          icon: '↷',
+          color: 'gray',
+        },
+        {
+          label: t('overview_kpi_progress', '進度'),
+          value: (s.percent || 0) + '%',
+          subtitle: '目前整體完成比例',
+          icon: '◔',
+          color: pctNum.value >= 100 ? 'green' : 'blue',
+        },
+        {
+          label: t('overview_kpi_elapsed', '耗時'),
+          value: s.elapsed || '00:00:00',
+          subtitle: '本輪執行已經花費時間',
+          icon: '⏱',
+          color: 'gray',
+        },
       ]
     })
 
@@ -271,6 +454,49 @@ export const OverviewTab = {
       const recent = patrolHistory.value.slice(0, 5).map(row => Number(row.runs_executed) || 0)
       return 'runs trend: ' + recent.join(' -> ')
     })
+
+    const runChecklist = computed(() => {
+      const stage = String(status.value.stage || '').toLowerCase()
+      return [
+        {
+          badge: '1',
+          title: '確認設定與資料範圍',
+          description: '先到設定頁確認時間框架、資料天數與 guardrails，避免跑出不打算採納的結果。',
+          cardClass: 'border-slate-200/80 bg-white/70 dark:border-slate-800/80 dark:bg-slate-900/40',
+          badgeClass: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900',
+        },
+        {
+          badge: '2',
+          title: '選擇合適的執行模式',
+          description: runMode.value === 'refine'
+            ? '你目前選的是 Refine 精修，適合用在已經有明顯候選之後。'
+            : '你目前選的是 Combo 掃描，適合先建立完整基準。 ',
+          cardClass: 'border-blue-200/80 bg-blue-50/80 dark:border-blue-900/60 dark:bg-blue-950/20',
+          badgeClass: 'bg-blue-600 text-white',
+        },
+        {
+          badge: stage === 'complete' || stage === 'done' ? '✓' : '3',
+          title: '完成後先看結果，再看分析',
+          description: stage === 'complete' || stage === 'done'
+            ? '本輪已完成，建議直接切去結果頁篩選，再到分析頁檢查是否值得展開下一輪。'
+            : '執行完成後，先從結果頁看排名與風險報酬，再用分析頁確認長期趨勢。',
+          cardClass: stage === 'complete' || stage === 'done'
+            ? 'border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/20'
+            : 'border-slate-200/80 bg-white/70 dark:border-slate-800/80 dark:bg-slate-900/40',
+          badgeClass: stage === 'complete' || stage === 'done'
+            ? 'bg-emerald-600 text-white'
+            : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+        },
+      ]
+    })
+
+    function goToTab(tabId) {
+      store.activeTab = tabId
+    }
+
+    function selectRunMode(mode) {
+      runMode.value = mode
+    }
 
     function stageLabel(raw) {
       const stage = String(raw || '').trim().toLowerCase()
@@ -281,30 +507,30 @@ export const OverviewTab = {
     }
 
     const stageClass = computed(() => {
-      const s = String(status.value.stage || '').toLowerCase()
-      if (s === 'running' || s === 'combo' || s === 'refine') return 'bg-blue-500/15 text-blue-400'
-      if (s === 'complete' || s === 'done') return 'bg-emerald-500/15 text-emerald-400'
-      return 'bg-gray-500/15 text-gray-400'
+      const stage = String(status.value.stage || '').toLowerCase()
+      if (stage === 'running' || stage === 'combo' || stage === 'refine') return 'bg-blue-500/15 text-blue-500 dark:text-blue-300'
+      if (stage === 'complete' || stage === 'done') return 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-300'
+      return 'bg-slate-500/15 text-slate-500 dark:text-slate-300'
     })
 
     const stageDotClass = computed(() => {
-      const s = String(status.value.stage || '').toLowerCase()
-      if (s === 'running' || s === 'combo' || s === 'refine') return 'bg-blue-400 animate-pulse'
-      if (s === 'complete' || s === 'done') return 'bg-emerald-400'
-      return 'bg-gray-400'
+      const stage = String(status.value.stage || '').toLowerCase()
+      if (stage === 'running' || stage === 'combo' || stage === 'refine') return 'bg-blue-400 animate-pulse'
+      if (stage === 'complete' || stage === 'done') return 'bg-emerald-400'
+      return 'bg-slate-400'
     })
 
     function fmtTime(raw) {
       if (!raw) return '--'
-      const d = Date.parse(raw)
-      return Number.isNaN(d) ? String(raw) : new Date(d).toLocaleString()
+      const parsed = Date.parse(raw)
+      return Number.isNaN(parsed) ? String(raw) : new Date(parsed).toLocaleString()
     }
 
     async function refreshStatus() {
       try {
         status.value = await fetchJson('/status.json')
       } catch (_) {
-        // no-op
+        status.value = {}
       }
     }
 
@@ -319,8 +545,7 @@ export const OverviewTab = {
     async function refreshPatrolHistory() {
       try {
         const payload = await fetchJson('/overview/patrol-history.json')
-        const rows = Array.isArray(payload?.history) ? payload.history : []
-        patrolHistory.value = rows.slice(0, 20)
+        patrolHistory.value = Array.isArray(payload?.history) ? payload.history.slice(0, 20) : []
       } catch (_) {
         patrolHistory.value = []
       }
@@ -336,8 +561,8 @@ export const OverviewTab = {
         const response = await postJson(url)
         showToast(response.message || t(toastKey, toastFallback), 'success')
         refreshStatus()
-      } catch (e) {
-        showToast(String(e), 'error')
+      } catch (error) {
+        showToast(String(error), 'error')
       } finally {
         actionLoading.value = false
       }
@@ -349,28 +574,30 @@ export const OverviewTab = {
         const response = await postJson('/start', { search_mode: runMode.value })
         showToast(response.message || t('overview_toast_started', 'Backtest started'), 'success')
         refreshStatus()
-      } catch (e) {
-        showToast(String(e), 'error')
+      } catch (error) {
+        showToast(String(error), 'error')
       } finally {
         actionLoading.value = false
       }
     }
 
-    const doPause = () => doAction('/pause', 'overview_toast_paused', 'Paused', {
-      title: t('overview_confirm_pause_title', 'Pause current run?'),
-      message: t('overview_confirm_pause_message', 'This will pause the active process.'),
-      confirmText: t('overview_action_pause', 'Pause'),
-      variant: 'warn',
-    })
+    const doPause = () =>
+      doAction('/pause', 'overview_toast_paused', 'Paused', {
+        title: t('overview_confirm_pause_title', 'Pause current run?'),
+        message: t('overview_confirm_pause_message', 'This will pause the active process.'),
+        confirmText: t('overview_action_pause', 'Pause'),
+        variant: 'warn',
+      })
 
     const doResume = () => doAction('/resume', 'overview_toast_resumed', 'Resumed')
 
-    const doClearLog = () => doAction('/clear-log', 'overview_toast_log_cleared', 'Run log cleared', {
-      title: t('overview_confirm_clear_log_title', 'Clear run log?'),
-      message: t('overview_confirm_clear_log_message', 'This action cannot be undone.'),
-      confirmText: t('overview_action_clear_log', 'Clear Log'),
-      variant: 'danger',
-    })
+    const doClearLog = () =>
+      doAction('/clear-log', 'overview_toast_log_cleared', 'Run log cleared', {
+        title: t('overview_confirm_clear_log_title', 'Clear run log?'),
+        message: t('overview_confirm_clear_log_message', 'This action cannot be undone.'),
+        confirmText: t('overview_action_clear_log', 'Clear Log'),
+        variant: 'danger',
+      })
 
     onMounted(() => {
       Promise.all([refreshStatus(), refreshExperimentNext(), refreshPatrolHistory()]).finally(() => {
@@ -388,25 +615,29 @@ export const OverviewTab = {
     })
 
     return {
-      loading,
-      status,
-      experimentNext,
-      patrolHistory,
-      patrolTrendText,
       actionLoading,
-      runMode,
-      pctNum,
-      kpis,
-      nextAction,
-      goToTab,
-      stageClass,
-      stageDotClass,
-      fmtTime,
-      stageLabel,
-      doStart,
+      doClearLog,
       doPause,
       doResume,
-      doClearLog,
+      doStart,
+      executionSummary,
+      experimentNext,
+      fmtTime,
+      goToTab,
+      kpis,
+      loading,
+      modeOptions: MODE_OPTIONS,
+      nextAction,
+      patrolHistory,
+      patrolTrendText,
+      pctNum,
+      runChecklist,
+      runMode,
+      selectRunMode,
+      stageClass,
+      stageDotClass,
+      stageLabel,
+      status,
       t,
     }
   },
