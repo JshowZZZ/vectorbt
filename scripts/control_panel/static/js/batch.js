@@ -44,11 +44,9 @@ export const BatchTab = {
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('batch_workers', 'Workers') }}</span>
               <input v-model.number="form.workers" type="number" min="1" :placeholder="t('batch_optional', 'optional')" class="cfg-input w-20" />
             </label>
-            <button @click="enqueue" :disabled="enqueuing"
-                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white
-                           shadow-sm shadow-blue-500/25 transition-all active:scale-[0.97] disabled:opacity-50 mt-5">
-              {{ enqueuing ? t('batch_enqueuing', 'Enqueuing...') : t('batch_enqueue', 'Enqueue') }}
-            </button>
+            <action-button @click="enqueue" :loading="enqueuing" variant="primary"
+                           :label="t('batch_enqueue', 'Enqueue')" class="mt-5">
+            </action-button>
           </div>
         </div>
 
@@ -56,19 +54,15 @@ export const BatchTab = {
           <div class="flex flex-wrap items-center gap-3">
             <div class="flex-1 text-xs font-mono text-gray-600 dark:text-gray-300">{{ summaryText }}</div>
             <div class="flex gap-2">
-              <button @click="startBatch" :disabled="batchBusy"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50">
-                {{ t('batch_start', 'Start Batch') }}
-              </button>
-              <button @click="cancelBatch" :disabled="batchBusy"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-all disabled:opacity-50">
-                {{ t('batch_cancel', 'Cancel') }}
-              </button>
-              <button @click="clearQueue" :disabled="batchBusy"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                             bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
-                {{ t('batch_clear_queue', 'Clear Queue') }}
-              </button>
+              <action-button @click="startBatch" :loading="batchBusy" variant="primary"
+                             :label="t('batch_start', 'Start Batch')">
+              </action-button>
+              <action-button @click="cancelBatch" :loading="batchBusy" variant="danger"
+                             :label="t('batch_cancel', 'Cancel')">
+              </action-button>
+              <action-button @click="clearQueue" :loading="batchBusy" variant="secondary"
+                             :label="t('batch_clear_queue', 'Clear Queue')">
+              </action-button>
             </div>
           </div>
         </div>
@@ -111,16 +105,13 @@ export const BatchTab = {
                   <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono max-w-[200px] truncate" :title="job.config">{{ job.config }}</td>
                   <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ fmtTime(job.started_utc) }}</td>
                   <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ fmtTime(job.finished_utc) }}</td>
-                  <td class="px-3 py-2">
-                    <button v-if="canRemove(job.status)" @click="removeJob(job.id)"
-                            class="px-2 py-1 rounded text-xs font-medium border border-gray-300 dark:border-gray-600
-                                   bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all">
-                      {{ t('batch_remove', 'Remove') }}
-                    </button>
-                    <button v-else-if="canCancel(job.status)" @click="cancelBatch"
-                            class="px-2 py-1 rounded text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-all">
-                      {{ t('batch_cancel', 'Cancel') }}
-                    </button>
+                  <td class="px-3 py-2 flex gap-2">
+                    <action-button v-if="canRemove(job.status)" @click="removeJob(job.id)" variant="secondary"
+                                   :label="t('batch_remove', 'Remove')" class="!px-2 !py-1 !text-xs">
+                    </action-button>
+                    <action-button v-else-if="canCancel(job.status)" @click="cancelBatch" variant="danger"
+                                   :label="t('batch_cancel', 'Cancel')" class="!px-2 !py-1 !text-xs">
+                    </action-button>
                   </td>
                 </tr>
               </tbody>

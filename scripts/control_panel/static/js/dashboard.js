@@ -39,23 +39,15 @@ export const DashboardTab = {
                 <option :value="30">30</option>
               </select>
             </label>
-            <button
-              @click="refresh"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                     bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-            >
-              {{ t('dashboard_refresh', 'Refresh') }}
-            </button>
+            <action-button @click="refresh" variant="secondary"
+                           :label="t('dashboard_refresh', 'Refresh')">
+            </action-button>
             <span v-if="lastGeneratedUtc" class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
               {{ t('dashboard_last_updated', '上次更新') }}: {{ fmtTime(lastGeneratedUtc) }}
             </span>
-            <button
-              @click="genReport"
-              :disabled="generating"
-              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
-            >
-              {{ generating ? t('dashboard_generating', 'Generating...') : t('dashboard_force_refresh', '強制重新整理') }}
-            </button>
+            <action-button @click="genReport" :loading="generating" variant="primary"
+                           :label="t('dashboard_force_refresh', '強制重新整理')">
+            </action-button>
             <a
               href="/dashboard/report"
               target="_blank"
@@ -108,18 +100,18 @@ export const DashboardTab = {
           <div class="px-4 py-3 border-b border-red-200 dark:border-red-800/60 flex items-center justify-between gap-3">
             <div class="text-sm font-semibold text-red-700 dark:text-red-300">{{ t('dashboard_error_panel_title', 'Last Endpoint Failure') }}</div>
             <div class="flex items-center gap-2">
-              <button
+              <action-button
                 @click="copyDiagnostics"
-                class="px-2 py-1 rounded text-[11px] border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
-              >
-                {{ t('dashboard_error_panel_copy_json', 'Copy JSON') }}
-              </button>
-              <button
+                variant="secondary"
+                class="!px-2 !py-1 !text-[11px] !border-red-300 !text-red-700 dark:!border-red-700 dark:!text-red-300 hover:!bg-red-100 dark:hover:!bg-red-900/30"
+                :label="t('dashboard_error_panel_copy_json', 'Copy JSON')">
+              </action-button>
+              <action-button
                 @click="clearDiagnostics"
-                class="px-2 py-1 rounded text-[11px] border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
-              >
-                {{ t('dashboard_error_panel_clear', 'Clear') }}
-              </button>
+                variant="secondary"
+                class="!px-2 !py-1 !text-[11px] !border-red-300 !text-red-700 dark:!border-red-700 dark:!text-red-300 hover:!bg-red-100 dark:hover:!bg-red-900/30"
+                :label="t('dashboard_error_panel_clear', 'Clear')">
+              </action-button>
             </div>
           </div>
           <div class="px-4 py-3 space-y-2 text-xs">
@@ -152,30 +144,27 @@ export const DashboardTab = {
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard_recent_errors_title', 'Recent Errors') }}</h3>
               <div class="flex items-center gap-2">
-                <button
+                <action-button
                   @click="refreshRecentErrors"
-                  :disabled="loadingRecentErrors"
-                  class="px-2.5 py-1 rounded text-xs font-medium border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50"
-                >
-                  {{ loadingRecentErrors ? t('dashboard_recent_errors_refreshing', 'Refreshing...') : t('dashboard_recent_errors_refresh', 'Refresh') }}
-                </button>
-                <button
+                  :loading="loadingRecentErrors"
+                  variant="secondary"
+                  class="!px-2.5 !py-1 !text-xs"
+                  :label="t('dashboard_recent_errors_refresh', 'Refresh')">
+                </action-button>
+                <action-button
                   @click="clearRecentErrors"
-                  :disabled="loadingRecentErrors"
-                  class="px-2.5 py-1 rounded text-xs font-medium border border-red-300 dark:border-red-700
-                         text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all disabled:opacity-50"
-                >
-                  {{ t('dashboard_recent_errors_clear', 'Clear') }}
-                </button>
-                <button
+                  :loading="loadingRecentErrors"
+                  variant="secondary"
+                  class="!px-2.5 !py-1 !text-xs !border-red-300 !text-red-700 dark:!border-red-700 dark:!text-red-300 hover:!bg-red-50 dark:hover:!bg-red-900/30"
+                  :label="t('dashboard_recent_errors_clear', 'Clear')">
+                </action-button>
+                <action-button
                   @click="exportRecentErrors"
-                  :disabled="loadingRecentErrors"
-                  class="px-2.5 py-1 rounded text-xs font-medium border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50"
-                >
-                  {{ t('dashboard_recent_errors_export', 'Export') }}
-                </button>
+                  :loading="loadingRecentErrors"
+                  variant="secondary"
+                  class="!px-2.5 !py-1 !text-xs"
+                  :label="t('dashboard_recent_errors_export', 'Export')">
+                </action-button>
               </div>
             </div>
 
@@ -291,26 +280,26 @@ export const DashboardTab = {
             </table>
           </div>
           <div v-if="recentPagination.hasMore" class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-            <button
+            <action-button
               @click="loadMoreRecentErrors"
-              :disabled="loadingRecentErrors"
-              class="px-2.5 py-1 rounded text-xs font-medium border border-gray-300 dark:border-gray-600
-                     bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50"
-            >
-              {{ loadingRecentErrors ? t('dashboard_recent_errors_loading_more', 'Loading...') : t('dashboard_recent_errors_load_more', 'Load More') }}
-            </button>
+              :loading="loadingRecentErrors"
+              variant="secondary"
+              class="w-full !text-xs !py-1.5"
+              :label="t('dashboard_recent_errors_load_more', 'Load More')">
+            </action-button>
           </div>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div
+          <kpi-card
             v-for="kpi in summaryKpis"
             :key="kpi.label"
-            class="kpi-card rounded-xl p-3 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50"
+            :title="kpi.label"
+            :value="kpi.value"
+            :color="kpi.color"
+            class="h-full"
           >
-            <div class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">{{ kpi.label }}</div>
-            <div class="text-lg font-bold tabular-nums" :class="kpi.color || ''">{{ kpi.value }}</div>
-          </div>
+          </kpi-card>
         </div>
 
         <div class="rounded-xl border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 overflow-hidden">

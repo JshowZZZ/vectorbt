@@ -136,27 +136,33 @@ export const ErrorBoundary = {
 export const KpiCard = {
   name: 'KpiCard',
   props: {
-    label: String,
+    title: String,
+    label: String, // alias for title
     value: [String, Number],
+    subtitle: String,
     icon: { type: String, default: '' },
-    trend: { type: String, default: '' }, // 'up', 'down', ''
+    trend: { type: String, default: '' }, // 'up', 'down', 'flat', ''
+    color: { type: String, default: '' }, // 'blue', 'green', 'red', 'gray' or explicit class
     href: { type: String, default: '' },
   },
   template: `
-    <div class="kpi-card rounded-xl p-4 border
-                bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50">
-      <div class="flex items-center gap-2 mb-1">
-        <span v-if="icon" class="text-base">{{ icon }}</span>
-        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{{ label }}</span>
+    <div class="kpi-card rounded-xl p-4 border bg-white dark:bg-gray-800/60 transition-all hover:shadow-md"
+         :class="containerClass">
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80" :class="labelClass">
+          <span v-if="icon" class="text-base">{{ icon }}</span>
+          <span>{{ title || label }}</span>
+        </div>
+        <div v-if="trendIcon" :class="trendClass" class="text-xs font-bold">{{ trendIcon }}</div>
       </div>
-      <div class="flex items-baseline gap-2">
+      <div class="flex items-baseline justify-between gap-2">
         <a v-if="href" :href="href" target="_blank"
-           class="text-xl font-bold text-blue-600 dark:text-blue-400 hover:underline truncate">{{ display }}</a>
-        <span v-else class="text-xl font-bold truncate"
-              :class="colorClass">{{ display }}</span>
-        <span v-if="trend === 'up'" class="text-xs text-profit">▲</span>
-        <span v-if="trend === 'down'" class="text-xs text-loss">▼</span>
+           class="text-2xl font-bold hover:underline truncate"
+           :class="valueClass">{{ display }}</a>
+        <span v-else class="text-2xl font-bold truncate"
+              :class="valueClass">{{ display }}</span>
       </div>
+      <div v-if="subtitle" class="text-xs mt-1 opacity-70" :class="labelClass">{{ subtitle }}</div>
     </div>
   `,
   setup(props) {
@@ -167,13 +173,39 @@ export const KpiCard = {
       }
       return String(props.value)
     })
-    const colorClass = computed(() => {
-      if (typeof props.value !== 'number' || !Number.isFinite(props.value)) return 'text-gray-900 dark:text-gray-100'
-      if (props.value > 0) return 'text-profit'
-      if (props.value < 0) return 'text-loss'
-      return 'text-gray-900 dark:text-gray-100'
+    
+    // Map props.color to Tailwind classes
+    const colorMap = {
+      blue:  { border: 'border-blue-200 dark:border-blue-700/50', text: 'text-blue-600 dark:text-blue-400', label: 'text-blue-800 dark:text-blue-200' },
+      green: { border: 'border-emerald-200 dark:border-emerald-700/50', text: 'text-emerald-600 dark:text-emerald-400', label: 'text-emerald-800 dark:text-emerald-200' },
+      red:   { border: 'border-rose-200 dark:border-rose-700/50', text: 'text-rose-600 dark:text-rose-400', label: 'text-rose-800 dark:text-rose-200' },
+      gray:  { border: 'border-gray-200 dark:border-gray-700/50', text: 'text-gray-900 dark:text-gray-100', label: 'text-gray-500 dark:text-gray-400' },
+    }
+
+    const resolvedColor = computed(() => colorMap[props.color] || colorMap.gray)
+
+    const containerClass = computed(() => resolvedColor.value.border)
+    const valueClass = computed(() => {
+        // Fallback for overview usage passing text-profit/loss directly
+        if (props.color && (props.color.includes('text-') || props.color.startsWith('text '))) return props.color
+        return resolvedColor.value.text
     })
-    return { display, colorClass }
+    const labelClass = computed(() => resolvedColor.value.label)
+
+    const trendIcon = computed(() => {
+      if (props.trend === 'up') return '▲'
+      if (props.trend === 'down') return '▼'
+      if (props.trend === 'flat') return '—'
+      return ''
+    })
+    
+    const trendClass = computed(() => {
+      if (props.trend === 'up') return 'text-emerald-500'
+      if (props.trend === 'down') return 'text-rose-500'
+      return 'text-gray-400'
+    })
+
+    return { display, containerClass, valueClass, labelClass, trendIcon, trendClass }
   }
 }
 

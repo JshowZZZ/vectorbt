@@ -23,18 +23,12 @@ export const ConfigTab = {
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ t('config_title', 'Sweep Config') }}</h2>
           <div class="flex gap-2">
-            <button @click="loadCfg"
-                    class="px-3 py-1.5 rounded-lg text-xs font-medium border
-                           border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800
-                           text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-              {{ t('config_reload', 'Reload') }}
-            </button>
-            <button @click="saveCfg" :disabled="saving || !canSave"
-                    class="px-4 py-1.5 rounded-lg text-xs font-semibold
-                           bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/25
-                           transition-all active:scale-[0.97] disabled:opacity-50">
-              {{ saving ? t('config_saving', 'Saving...') : t('config_save', 'Save Config') }}
-            </button>
+            <action-button @click="loadCfg" :loading="loading" variant="secondary"
+                           :label="t('config_reload', 'Reload')">
+            </action-button>
+            <action-button @click="saveCfg" :loading="saving" :disabled="!canSave" variant="primary"
+                           :label="t('config_save', 'Save Config')">
+            </action-button>
           </div>
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -139,10 +133,11 @@ export const ConfigTab = {
               <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <span>sym</span> {{ t('config_section_symbols', 'Trade Symbols') }}
               </h3>
-              <button @click="loadTopSymbols"
-                      class="text-xs text-blue-500 hover:text-blue-400 font-medium transition-colors">
-                {{ t('config_load_top_symbols', 'Load Top 10') }}
-              </button>
+              <action-button @click="loadTopSymbols"
+                             variant="secondary"
+                             class="!px-2 !py-0.5 !text-[10px] !bg-transparent !border-0 !text-blue-500 hover:!text-blue-400 !shadow-none"
+                             :label="t('config_load_top_symbols', 'Load Top 10')">
+              </action-button>
             </div>
             <div class="flex flex-wrap gap-2">
               <label v-for="sym in availableSymbols" :key="sym"
@@ -211,20 +206,19 @@ export const ConfigTab = {
           </button>
           <div v-show="devOpen" class="px-5 pb-4 space-y-3 border-t border-gray-200 dark:border-gray-700">
             <div class="flex flex-wrap gap-2 mt-3">
-              <button @click="doTestStart"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-all">
-                {{ t('overview_test_start', 'Start Test') }}
-              </button>
-              <button @click="doTestStop"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                             bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all">
-                {{ t('overview_test_stop', 'Stop Test') }}
-              </button>
-              <button @click="doTestClearLog"
-                      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                             bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all">
-                {{ t('overview_test_clear_log', 'Clear Test Log') }}
-              </button>
+              <action-button @click="doTestStart"
+                             variant="secondary"
+                             class="!bg-indigo-600 !text-white hover:!bg-indigo-700 !border-0"
+                             :label="t('overview_test_start', 'Start Test')">
+              </action-button>
+              <action-button @click="doTestStop"
+                             variant="secondary"
+                             :label="t('overview_test_stop', 'Stop Test')">
+              </action-button>
+              <action-button @click="doTestClearLog"
+                             variant="secondary"
+                             :label="t('overview_test_clear_log', 'Clear Test Log')">
+              </action-button>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div><span class="text-gray-500 dark:text-gray-400">{{ t('overview_test_stage', 'Stage') }}</span>

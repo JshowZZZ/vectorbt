@@ -50,15 +50,12 @@ export const ResultsTab = {
             <span class="text-xs text-gray-600 dark:text-gray-400">OOS &gt; 0</span>
           </label>
           <div class="flex gap-2 ml-auto mt-5">
-            <button @click="applyAndRender"
-                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all">
-              {{ tr('results_apply_filters', '套用篩選') }}
-            </button>
-            <button @click="resetFilters"
-                    class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                           bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-              {{ tr('results_reset_filters', '重設') }}
-            </button>
+            <action-button @click="applyAndRender" :loading="loading" variant="primary"
+                           :label="tr('results_apply_filters', '套用篩選')">
+            </action-button>
+            <action-button @click="resetFilters" variant="secondary"
+                           :label="tr('results_reset_filters', '重設')">
+            </action-button>
           </div>
         </div>
       </div>
@@ -105,16 +102,12 @@ export const ResultsTab = {
             <span class="text-xs text-gray-500 dark:text-gray-400">{{ tr('advanced_seed', 'Seed') }}</span>
             <input v-model.number="advancedParams.seed" type="number" step="1" class="cfg-input w-24" />
           </label>
-          <button @click="loadAdvancedAnalysis" :disabled="advancedLoading"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-cyan-300 dark:border-cyan-700
-                         bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-200 hover:bg-cyan-100 dark:hover:bg-cyan-900/35 transition-all disabled:opacity-50">
-            {{ advancedLoading ? tr('advanced_running', 'Running...') : tr('advanced_run_monte_carlo', 'Run Monte Carlo') }}
-          </button>
-          <button @click="downloadAdvancedJson" :disabled="downloadingAdvanced || !advancedAnalysis"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
-            {{ downloadingAdvanced ? tr('advanced_downloading', 'Downloading...') : tr('advanced_download_json', 'Download Analysis JSON') }}
-          </button>
+          <action-button @click="loadAdvancedAnalysis" :loading="advancedLoading" variant="primary"
+                         :label="tr('advanced_run_monte_carlo', 'Run Monte Carlo')">
+          </action-button>
+          <action-button @click="downloadAdvancedJson" :loading="downloadingAdvanced" :disabled="!advancedAnalysis" variant="secondary"
+                         :label="tr('advanced_download_json', 'Download Analysis JSON')">
+          </action-button>
         </div>
         <div v-if="advancedAnalysis" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
@@ -155,11 +148,9 @@ export const ResultsTab = {
       <div class="rounded-xl p-4 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 space-y-3">
         <div class="flex flex-wrap items-center gap-2">
           <div class="text-sm font-semibold text-gray-900 dark:text-white mr-2">{{ tr('feedback_loop_title', 'Paper Feedback Loop') }}</div>
-          <button @click="loadFeedbackData" :disabled="feedbackLoading"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-300 dark:border-amber-700
-                         bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/35 transition-all disabled:opacity-50">
-            {{ feedbackLoading ? tr('feedback_refreshing', 'Refreshing...') : tr('feedback_refresh', 'Refresh Feedback') }}
-          </button>
+          <action-button @click="loadFeedbackData" :loading="feedbackLoading" variant="secondary"
+                         :label="tr('feedback_refresh', 'Refresh Feedback')">
+          </action-button>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -195,21 +186,15 @@ export const ResultsTab = {
             <span class="text-xs text-gray-500 dark:text-gray-400">{{ tr('feedback_min_samples', 'Min Samples') }}</span>
             <input v-model.number="feedbackRecommendationMinSamples" type="number" min="1" step="1" class="cfg-input w-24" />
           </label>
-          <button @click="loadFeedbackData" :disabled="feedbackLoading"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-sky-300 dark:border-sky-700
-                         bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-sky-900/35 transition-all disabled:opacity-50">
-            {{ feedbackLoading ? tr('feedback_loading', 'Loading...') : tr('feedback_refresh_recommendations', 'Refresh Recommendations') }}
-          </button>
-          <button @click="exportFeedbackAdjustedConfig" :disabled="exportingFeedbackAdjusted"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 dark:border-emerald-700
-                         bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/35 transition-all disabled:opacity-50">
-            {{ exportingFeedbackAdjusted ? tr('feedback_exporting', 'Exporting...') : tr('feedback_export_adjusted_config', 'Export Adjusted Config') }}
-          </button>
-          <button @click="enqueueFeedbackAdjustedBatch" :disabled="enqueuingFeedbackBatch"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-300 dark:border-violet-700
-                         bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/35 transition-all disabled:opacity-50">
-            {{ enqueuingFeedbackBatch ? tr('feedback_enqueuing', 'Enqueuing...') : tr('feedback_enqueue_adjusted_batch', 'Enqueue Adjusted Batch') }}
-          </button>
+          <action-button @click="loadFeedbackData" :loading="feedbackLoading" variant="secondary"
+                         :label="tr('feedback_refresh_recommendations', 'Refresh Recommendations')">
+          </action-button>
+          <action-button @click="exportFeedbackAdjustedConfig" :loading="exportingFeedbackAdjusted" variant="secondary"
+                         :label="tr('feedback_export_adjusted_config', 'Export Adjusted Config')">
+          </action-button>
+          <action-button @click="enqueueFeedbackAdjustedBatch" :loading="enqueuingFeedbackBatch" variant="primary"
+                         :label="tr('feedback_enqueue_adjusted_batch', 'Enqueue Adjusted Batch')">
+          </action-button>
         </div>
 
         <div v-if="feedbackBatchPlan" class="rounded-lg border border-violet-200 dark:border-violet-800/60 bg-violet-50/60 dark:bg-violet-900/10 p-3 space-y-1">
@@ -227,11 +212,11 @@ export const ResultsTab = {
             {{ tr('feedback_guardrail_warnings', 'guardrails') }}: {{ formatFeedbackGuardrailWarnings(feedbackBatchPlan.warnings) }}
           </div>
           <div class="pt-1">
-            <button @click="openBatchTabFromFeedbackPlan"
-                    class="px-2.5 py-1 rounded text-[11px] font-medium border border-violet-300 dark:border-violet-700
-                           bg-white dark:bg-gray-800 text-violet-700 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all">
-              {{ tr('feedback_open_batch_queue', 'Open Batch Queue') }}
-            </button>
+            <action-button @click="openBatchTabFromFeedbackPlan"
+                           variant="secondary"
+                           class="!px-2.5 !py-1 !text-[11px] !border-violet-300 dark:!border-violet-700 !text-violet-700 dark:!text-violet-200 hover:!bg-violet-100 dark:hover:!bg-violet-900/30"
+                           :label="tr('feedback_open_batch_queue', 'Open Batch Queue')">
+            </action-button>
           </div>
         </div>
 
@@ -247,11 +232,11 @@ export const ResultsTab = {
           <input v-model.number="feedbackForm.qty" type="number" step="0.0001" :placeholder="tr('feedback_placeholder_qty', 'qty (optional)')" class="cfg-input" />
           <input v-model.trim="feedbackForm.paperRunId" :placeholder="tr('feedback_placeholder_paper_run_id', 'paper_run_id (optional)')" class="cfg-input" />
           <input v-model.trim="feedbackForm.note" :placeholder="tr('feedback_placeholder_note', 'note (optional)')" class="cfg-input md:col-span-2" />
-          <button @click="submitFeedback" :disabled="submittingFeedback"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 dark:border-emerald-700
-                         bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/35 transition-all disabled:opacity-50">
-            {{ submittingFeedback ? tr('feedback_submitting', 'Submitting...') : tr('feedback_submit', 'Submit Feedback') }}
-          </button>
+          <action-button @click="submitFeedback" :loading="submittingFeedback"
+                         variant="secondary"
+                         class="!border-emerald-300 dark:!border-emerald-700 !bg-emerald-50 dark:!bg-emerald-900/20 !text-emerald-700 dark:!text-emerald-200 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/35"
+                         :label="tr('feedback_submit', 'Submit Feedback')">
+          </action-button>
         </div>
 
         <div class="overflow-x-auto">
@@ -369,26 +354,24 @@ export const ResultsTab = {
       </div>
       <!-- Export buttons -->
       <div class="flex gap-2">
-        <button @click="exportCsv('filtered_combos.csv', filtered, TOP_COLS)"
-                class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                       bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-          {{ tr('results_export_filtered_csv', '匯出篩選結果 CSV') }}
-        </button>
-        <button @click="exportCsv('top10.csv', top10Display, TOP_COLS)"
-                class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600
-                       bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-          {{ tr('results_export_top10_csv', '匯出 Top10 CSV') }}
-        </button>
-        <button @click="exportTopSignalConfig" :disabled="exportingSignal"
-                class="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 dark:border-emerald-700
-                       bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/35 transition-all disabled:opacity-50">
-          {{ exportingSignal ? tr('results_exporting_live_config', '匯出中...') : tr('results_export_top1_live_config', '匯出 Top1 Live Config') }}
-        </button>
-        <button @click="downloadFeedbackSpec" :disabled="downloadingFeedbackSpec"
-                class="px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 dark:border-indigo-700
-                       bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/35 transition-all disabled:opacity-50">
-          {{ downloadingFeedbackSpec ? tr('feedback_downloading_spec', '下載中...') : tr('feedback_spec_button', 'Paper Feedback 規格') }}
-        </button>
+        <action-button @click="exportCsv('filtered_combos.csv', filtered, TOP_COLS)"
+                       variant="secondary"
+                       :label="tr('results_export_filtered_csv', '匯出篩選結果 CSV')">
+        </action-button>
+        <action-button @click="exportCsv('top10.csv', top10Display, TOP_COLS)"
+                       variant="secondary"
+                       :label="tr('results_export_top10_csv', '匯出 Top10 CSV')">
+        </action-button>
+        <action-button @click="exportTopSignalConfig" :loading="exportingSignal"
+                       variant="secondary"
+                       class="!border-emerald-300 dark:!border-emerald-700 !bg-emerald-50 dark:!bg-emerald-900/20 !text-emerald-700 dark:!text-emerald-200 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/35"
+                       :label="tr('results_export_top1_live_config', '匯出 Top1 Live Config')">
+        </action-button>
+        <action-button @click="downloadFeedbackSpec" :loading="downloadingFeedbackSpec"
+                       variant="secondary"
+                       class="!border-indigo-300 dark:!border-indigo-700 !bg-indigo-50 dark:!bg-indigo-900/20 !text-indigo-700 dark:!text-indigo-200 hover:!bg-indigo-100 dark:hover:!bg-indigo-900/35"
+                       :label="tr('feedback_spec_button', 'Paper Feedback 規格')">
+        </action-button>
       </div>
 
       <!-- Top 10 -->
@@ -409,10 +392,11 @@ export const ResultsTab = {
                 {{ tr('results_top10_mode_latest', '本次結果') }}
               </button>
             </div>
-            <button @click="retestTop" :disabled="retesting"
-                    class="px-3 py-1 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-50">
-              {{ retesting ? tr('results_retesting', '重測中...') : tr('results_retest_top10', '重測 Top 10') }}
-            </button>
+            <action-button @click="retestTop" :loading="retesting"
+                           variant="primary"
+                           class="!px-3 !py-1"
+                           :label="tr('results_retest_top10', '重測 Top 10')">
+            </action-button>
           </div>
         </div>
         <div class="overflow-x-auto">
@@ -444,10 +428,11 @@ export const ResultsTab = {
               </div>
             </template>
             <template #cell-_refine="{ row }">
-              <button @click.stop="doRefineCombo(row)"
-                      class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-[0.97] whitespace-nowrap">
-                {{ tr('results_refine_btn', '精修') }}
-              </button>
+              <action-button @click="doRefineCombo(row)"
+                             variant="secondary"
+                             class="!px-2.5 !py-1 !text-xs !bg-indigo-600 !text-white hover:!bg-indigo-700 !border-0 whitespace-nowrap"
+                             :label="tr('results_refine_btn', '精修')">
+              </action-button>
             </template>
             <template #detail="{ row }">
               <detail-panel :row="row" :get-param-full="getParamFull" :get-tags="getTags" />
@@ -1236,17 +1221,29 @@ export const ResultsTab = {
       showToast(tr('results_export_success_prefix', '已匯出') + ' ' + filename, 'success')
     }
 
+    let themeObserver = null
+
     onMounted(() => {
       loadResults()
       loadAdvancedAnalysis()
       loadFeedbackData()
       pollTimer = setInterval(loadResults, 30000)
+
+      // Observe theme changes for chart updates
+      themeObserver = new MutationObserver(() => updateCharts())
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      })
     })
+
     watch(() => filters.value.timeframe, () => {
       loadAdvancedAnalysis()
     })
+
     onUnmounted(() => {
       clearInterval(pollTimer)
+      if (themeObserver) themeObserver.disconnect()
       if (scatterChart) scatterChart.destroy()
       if (histChart) histChart.destroy()
       if (frontierChart) frontierChart.destroy()
