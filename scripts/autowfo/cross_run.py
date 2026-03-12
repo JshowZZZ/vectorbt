@@ -55,6 +55,8 @@ def _safe_float(value: Any) -> Optional[float]:
         num = float(value)
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(num):
+        return None
     return num
 
 
