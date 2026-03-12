@@ -357,11 +357,11 @@ indicators, symbols, and time windows to discover robust combinations.
 - Linked TODO: `AWF-190`, `AWF-191`, `AWF-192`.
 
 ## Steady State
-- Status: Entered (Phase 39 complete). Re-opened for UI-1 phase (frontend-only).
+- Status: Entered (Phase 39 complete). UI-1 phase completed and closed.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
 - Runtime posture: unattended operation supported with anomaly notifications and bounded schedulers.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
-- Maintenance mode: prioritize dependency drift management and warning cleanup; UI-1 phase is frontend-only and does not alter backend APIs or runtime behavior.
+- Maintenance mode: prioritize dependency drift management and warning cleanup.
 
 ## Stage Gates (Do Not Skip)
 - Gate 0: Monolith decomposed before protocol freeze (Phase 1). **Passed.**
@@ -436,6 +436,7 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-03-05: UI-1 phase completed (AWF-190~192): sidebar navigation verified, 107 action-button migrations, KpiCard component, skeleton loading on 4 main views, Chart.js MutationObserver theme adaptation, CSS cleanup. All 14 JS files syntax-check pass; 1427 tests green. System returns to Steady State.
 - 2026-03-04: UI-1 phase opened (AWF-190~192): control panel UX overhaul — sidebar navigation, shared component library + i18n completion, page-level visual polish. Frontend-only; no backend API changes.
 - 2026-03-02: AWF-189 (Maintenance): warning cleanup + pandas 2.x downgrade verification. Warning count 513→30 (target <50 met). `-W error::DeprecationWarning` gate passes.
 - 2026-03-01: Phase 39 completed (AWF-186~188): pandas 2.x environment finalized and fully regressed (`pytest tests -q --tb=short` green), analytics research HTML export (`autowfo export-report` + `/analytics/report.html`) delivered, and Steady State maintenance mode declared.

@@ -1,0 +1,627 @@
+﻿# AUTOWFO Architecture V2
+**Status**: Approved by user ??2026-02-27
+**Role**: This document is the authoritative spec for implementation AI.
+**Architect**: Claude (planning only; implementation delegated to other AI)
+
+---
+
+## 1. Vision & Goals
+
+### 1.1 What This System Is
+A **strategy discovery platform** that systematically backtests cross-asset, cross-timeframe signal strategies using vectorbt. The goal is to accumulate evidence of which indicator combinations, parameter ranges, and entry/exit conditions have historically produced robust out-of-sample (OOS) performance. All interaction happens through a **control panel UI** ??no CLI for users.
+
+### 1.2 What This System Is NOT
+- Not a live trading system (that's Freqtrade, deferred)
+- Not a prediction model
+- Not a portfolio optimizer
+
+### 1.3 Core Properties
+1. **Automated**: Runs without human intervention; queue-driven
+2. **Accumulative**: Every run adds evidence; nothing is wasted
+3. **Data-driven**: Analytics layer reveals what works across experiments
+4. **Extensible**: Adding a new indicator = adding one `.py` file
+5. **Fresh-start safe**: Existing artifacts can be discarded and rerun from scratch
+
+---
+
+## 2. Fundamental Concepts
+
+### 2.1 Experiment
+> An **Experiment** is a complete description of one testable idea.
+
+An experiment specifies:
+- **Trigger layer**: Which asset, timeframe, and indicators signal a potential entry
+- **Action layer**: Which asset, timeframe, and conditions confirm the trade
+- **Risk parameters**: Stop-loss, take-profit, max hold bars
+- **WFO settings**: Train/test/step window sizes
+
+Experiments are immutable after creation. Re-running the same experiment is encouraged to verify time-stability (Layer 2 accumulation).
+
+### 2.2 Mode A ??Hypothesis-Driven
+User defines a specific experiment (which indicators, which conditions). The system finds the best parameter values via Walk-Forward Optimization (WFO).
+
+**Example**: "I want to test: if BTC 1h RSI drops below X, and ETH 4h is near Bollinger lower band, go long ETH."
+
+### 2.3 Mode B ??Discovery-Driven (Pool Exploration)
+User provides an indicator pool (e.g., [RSI, MACD, BB, Volume, EMA]). The system generates all indicator combinations C(N, 2..4) and tests each as a mini-experiment. Pruning.py limits the search space.
+
+**Example**: "I want to discover which 2-3 indicators from this pool best predict ETH 4h moves."
+
+### 2.4 Mode C ??Both (Default)
+Both modes co-exist. User-defined experiments run as specified. Discovery runs explore the indicator pool in parallel. Analytics layer synthesizes findings from both.
+
+### 2.5 Cross-Asset Strategy Model
+```
+Trigger: [Asset A] + [Timeframe T1] + [Indicator conditions] ??SIGNAL
+                              ??Action:  [Asset B] + [Timeframe T2] + [Confirm conditions] ??TRADE
+```
+
+- Trigger asset and Action asset can be the **same or different**
+- Trigger timeframe (T1) and Action timeframe (T2) can be **different**
+- Typical pattern: T1 ??T2 (higher-frequency trigger, lower-frequency action)
+- Inverted pattern also supported (T1 > T2): trigger signal stays valid until next T1 candle close
+
+**Cross-Timeframe Alignment Rule**:
+> At each Action-timeframe (T2) candle close, check if any Trigger-timeframe (T1) signal fired within the preceding T2 window. If yes AND Action conditions are met ??generate trade signal.
+
+### 2.6 Direction
+Both LONG and SHORT are searched for every experiment. Results are tagged by direction. Analytics compares win rates across directions.
+
+### 2.7 Condition Operators
+Simple operators only (no ML, no complex multi-step logic):
+- `below(threshold)` ??indicator value < threshold
+- `above(threshold)` ??indicator value > threshold
+- `crossover` ??indicator crosses above reference
+- `crossunder` ??indicator crosses below reference
+- `near_lower(pct)` ??value within pct% of lower band
+- `near_upper(pct)` ??value within pct% of upper band
+- `above_avg(multiplier)` ??value > multiplier ? N-period average
+- `pct_move(pct, direction)` ??N-bar % change exceeds threshold
+
+---
+
+## 3. Experiment Configuration Schema
+
+### 3.1 JSON Format (per experiment)
+```json
+{
+  "experiment_id": "exp_btc1h_eth4h_rsi_bb_v1",
+  "description": "BTC RSI trigger ??ETH Bollinger lower band entry",
+  "version": 1,
+  "created_utc": "2026-03-01T00:00:00Z",
+  "mode": "hypothesis",
+
+  "trigger": {
+    "asset": "BTC/USDT",
+    "timeframe": "1h",
+    "indicators": ["RSI", "MACD"],
+    "conditions": {
+      "RSI": {
+        "operator": "below",
+        "param_name": "rsi_period",
+        "param_values": [14, 21],
+        "threshold_values": [25, 30, 35]
+      },
+      "MACD": {
+        "operator": "crossunder",
+        "fast_values": [12],
+        "slow_values": [26],
+        "signal_values": [9]
+      }
+    },
+    "require_all": true
+  },
+
+  "action": {
+    "asset": "ETH/USDT",
+    "timeframe": "4h",
+    "indicators": ["BB", "Volume"],
+    "conditions": {
+      "BB": {
+        "operator": "near_lower",
+        "period_values": [20],
+        "std_values": [2.0],
+        "pct_values": [0.02, 0.05]
+      },
+      "Volume": {
+        "operator": "above_avg",
+        "period_values": [20],
+        "multiplier_values": [1.5, 2.0]
+      }
+    },
+    "require_all": true,
+    "direction": "both"
+  },
+
+  "risk": {
+    "stoploss_pct_values": [-3, -5, -8],
+    "take_profit_pct_values": [5, 10, 15],
+    "max_hold_bars_values": [24, 48, 96]
+  },
+
+  "wf": {
+    "train_days": 90,
+    "test_days": 30,
+    "step_days": 30
+  }
+}
+```
+
+### 3.2 Pool Config Format (Mode B)
+```json
+{
+  "experiment_id": "pool_eth4h_discovery_v1",
+  "mode": "discovery",
+  "description": "Discover best 2-3 indicator combos for ETH 4h",
+  "action": {
+    "asset": "ETH/USDT",
+    "timeframe": "4h",
+    "direction": "both"
+  },
+  "indicator_pool": ["RSI", "MACD", "BB", "EMA", "Volume", "ATR"],
+  "combo_sizes": [2, 3],
+  "max_combos": 500,
+  "wf": {
+    "train_days": 90,
+    "test_days": 30,
+    "step_days": 30
+  }
+}
+```
+
+---
+
+## 4. Storage Architecture
+
+### 4.1 Two-Layer Design
+| Layer | Technology | Purpose | When Written |
+|-------|-----------|---------|--------------|
+| Per-run results | SQLite (WAL mode) | Fast writes during WFO search | During run |
+| Cross-run analytics | DuckDB | OLAP queries across all runs/experiments | After run finishes |
+
+DuckDB can query SQLite files directly, so no ETL pipeline needed.
+
+### 4.2 Directory Structure
+```
+artifacts/
+??? experiments/
+??  ??? exp_btc1h_eth4h_rsi_bb_v1/
+??  ??  ??? config.json                    ??immutable experiment config
+??  ??  ??? runs/
+??  ??  ??  ??? 20260301_020000/
+??  ??  ??  ??  ??? results.db             ??SQLite: combo results for this run
+??  ??  ??  ??  ??? run_meta.json          ??run metadata (duration, n_combos, etc.)
+??  ??  ??  ??? 20260315_080000/
+??  ??  ??      ??? results.db
+??  ??  ??      ??? run_meta.json
+??  ??  ??? analytics_cache.json           ??cached summary (regenerated by analytics)
+??  ??? pool_eth4h_discovery_v1/
+??      ??? config.json
+??      ??? runs/
+??          ??? ...
+??? ohlcv/
+??  ??? binance_BTC-USDT_1h.parquet
+??  ??? binance_ETH-USDT_4h.parquet
+??  ??? ...
+??? analytics.duckdb                       ??cross-experiment analytics store
+??? queue.json                             ??experiment run queue
+??? scheduler.json                         ??scheduler state
+```
+
+### 4.3 SQLite Schema (per run)
+```sql
+CREATE TABLE combo_results (
+  combo_id TEXT PRIMARY KEY,
+  experiment_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  direction TEXT NOT NULL,           -- 'long' / 'short'
+  trigger_asset TEXT,
+  action_asset TEXT NOT NULL,
+  indicator_params TEXT NOT NULL,    -- JSON string
+  condition_params TEXT NOT NULL,    -- JSON string
+  risk_params TEXT NOT NULL,         -- JSON string
+  oos_sharpe REAL,
+  oos_win_rate REAL,
+  oos_n_trades INTEGER,
+  oos_total_return REAL,
+  wf_score REAL,                     -- composite WFO score
+  created_utc TEXT
+);
+
+CREATE INDEX idx_experiment ON combo_results(experiment_id);
+CREATE INDEX idx_wf_score ON combo_results(wf_score DESC);
+```
+
+### 4.4 DuckDB Analytics Views
+```sql
+-- Cross-experiment indicator win rates
+CREATE VIEW indicator_effectiveness AS
+SELECT
+  json_extract(indicator_params, '$.trigger_indicators') as trigger_indicators,
+  json_extract(indicator_params, '$.action_indicators') as action_indicators,
+  COUNT(*) as n_combos,
+  AVG(oos_win_rate) as avg_win_rate,
+  AVG(oos_sharpe) as avg_sharpe,
+  COUNT(DISTINCT experiment_id) as n_experiments
+FROM combo_results
+WHERE oos_n_trades >= 10
+GROUP BY 1, 2
+ORDER BY avg_sharpe DESC;
+
+-- Best combos across all time
+CREATE VIEW all_time_best AS
+SELECT * FROM combo_results
+WHERE oos_n_trades >= 10
+ORDER BY wf_score DESC
+LIMIT 100;
+```
+
+---
+
+## 5. Module Architecture
+
+### 5.1 New Module Map
+```
+scripts/
+??? control_panel.py              ??HTTP routing facade (??00 lines)
+??? control_panel_config.py       ??config read/write
+??? control_panel_batch.py        ??batch queue management
+??? control_panel_results.py      ??results payload
+??? control_panel_experiments.py  ??NEW: experiment CRUD
+??? control_panel_analytics.py    ??NEW: analytics queries
+??? autowfo/
+    ??? indicators/               ??NEW: plugin directory
+    ??  ??? __init__.py           ??auto-discovery loader
+    ??  ??? rsi.py
+    ??  ??? macd.py
+    ??  ??? bb.py
+    ??  ??? ema.py
+    ??  ??? volume.py
+    ??  ??? custom_example.py     ??template for user-defined indicators
+    ??? conditions/               ??NEW: condition operator library
+    ??  ??? __init__.py
+    ??  ??? threshold.py          ??below / above
+    ??  ??? crossover.py          ??crossover / crossunder
+    ??  ??? band.py               ??near_lower / near_upper
+    ??  ??? momentum.py           ??above_avg / pct_move
+    ??? signal_composer.py        ??NEW: cross-asset + cross-timeframe signal generation
+    ??? experiment.py             ??NEW: experiment definition + validation
+    ??? experiment_runner.py      ??NEW: wraps WFO engine for experiment execution
+    ??? analytics.py              ??NEW: DuckDB cross-run analytics
+    ??? scheduler.py              ??NEW: experiment queue + scheduling
+    ??? data.py                   ??KEEP: OHLCV fetch + cache (extend for multi-asset)
+    ??? split.py                  ??KEEP: WFO window splitting
+    ??? metrics.py                ??KEEP: OOS metric computation
+    ??? ranking.py                ??KEEP: combo ranking
+    ??? search.py                 ??KEEP: combo search + seen-key dedup
+    ??? pruning.py                ??KEEP: pruning for large search spaces
+    ??? engine_helpers.py         ??KEEP: DEFAULT_CONFIG, seen-key logic
+    ??? engine_runtime.py         ??KEEP: per-combo vectorbt execution
+    ??? engine_finalize.py        ??KEEP: post-run finalization
+    ??? engine_search.py          ??KEEP: orchestrates search loop
+```
+
+### 5.2 Modules to Refactor/Replace
+| Old Module | Disposition | Notes |
+|-----------|------------|-------|
+| `strategy_schema.py` | REFACTOR ??`indicators/` + `conditions/` | Single-asset strategy schema replaced by plugin system |
+| `strategy.py` | REFACTOR ??individual `indicators/*.py` | Each indicator becomes its own plugin file |
+| `evaluator.py` | REFACTOR ??`signal_composer.py` | Extend for cross-asset alignment |
+| `artifacts.py` | REFACTOR | New directory structure |
+| `registry.py` | REPLACE ??`experiment.py` | New experiment model |
+
+---
+
+## 6. Indicator Plugin Interface
+
+### 6.1 Contract
+Every indicator plugin must implement:
+
+```python
+# scripts/autowfo/indicators/rsi.py
+
+INDICATOR_ID = "RSI"
+DISPLAY_NAME = "Relative Strength Index"
+PARAMS = {
+    "rsi_period": {"type": "int", "default": 14, "min": 5, "max": 50}
+}
+CONDITION_OPERATORS = ["below", "above", "crossover", "crossunder"]
+
+def compute(ohlcv_df: pd.DataFrame, params: dict) -> pd.Series:
+    """
+    Returns a pd.Series (same index as ohlcv_df) with indicator values.
+    """
+    period = params.get("rsi_period", 14)
+    # ... vectorbt or pandas-ta computation
+    return rsi_series
+```
+
+### 6.2 Auto-Discovery
+`indicators/__init__.py` scans the directory at import time:
+
+```python
+import importlib, pathlib
+REGISTRY = {}
+
+for path in pathlib.Path(__file__).parent.glob("*.py"):
+    if path.name.startswith("_"):
+        continue
+    mod = importlib.import_module(f"scripts.autowfo.indicators.{path.stem}")
+    REGISTRY[mod.INDICATOR_ID] = mod
+```
+
+Adding a new indicator requires only creating a new `.py` file ??no registration step.
+
+### 6.3 Parameter Range Expansion
+During experiment execution, `experiment_runner.py` calls `itertools.product()` over all `*_values` arrays in the experiment config to generate the full parameter grid. The grid is passed to `search.py` which handles seen-key dedup and pruning.
+
+---
+
+## 7. Signal Composition (Cross-Asset / Cross-Timeframe)
+
+### 7.1 Signal Composer Responsibility
+`signal_composer.py` takes:
+- Trigger OHLCV (asset A, timeframe T1)
+- Action OHLCV (asset B, timeframe T2)
+- Experiment config (trigger conditions, action conditions)
+
+And produces:
+- `entry_long_signal`: boolean Series aligned to T2 index
+- `entry_short_signal`: boolean Series aligned to T2 index
+- `exit_signal`: boolean Series aligned to T2 index (from stop-loss / take-profit / max hold)
+
+### 7.2 Cross-Timeframe Alignment Algorithm
+```
+For each T2 candle at time t:
+  1. Find all T1 candles in window (t - T2_duration, t]
+  2. Compute trigger indicator values for those T1 candles
+  3. Apply trigger conditions ??get T1_signal (bool)
+  4. If any T1 candle in window has T1_signal=True:
+     ??Check action conditions on T2 candle at t
+     ??If action conditions True: emit entry signal at t
+```
+
+For inverted timeframes (T1 > T2): T1 signal validity extends to the next T1 candle close.
+
+### 7.3 vectorbt Integration
+Signal Series are passed to vectorbt's `Portfolio.from_signals()`:
+```python
+import vectorbt as vbt
+
+pf = vbt.Portfolio.from_signals(
+    close=action_ohlcv["close"],
+    entries=entry_long_signal,
+    exits=exit_signal,
+    short_entries=entry_short_signal,
+    short_exits=exit_signal,
+    init_cash=config["init_cash_usdt"],
+    size=config["order_size_pct"],
+    fees=config["slippage_bps"] / 10000,
+)
+```
+
+---
+
+## 8. Analytics Layer
+
+### 8.1 Knowledge Accumulation Model
+```
+Layer 1: Parameter-level WFO     ??Best params for each combo
+Layer 2: Time-stability           ??Same experiment rerun across time windows
+Layer 3: Cross-experiment         ??Which indicators win across different experiments
+Layer 4: Condition effectiveness  ??Which operators + thresholds work for which assets
+```
+
+### 8.2 Key Analytics Queries (exposed via control panel)
+1. **Indicator leaderboard**: Which indicators appear most in top-performing combos?
+2. **Asset pair matrix**: Which trigger?ction pairs have highest avg OOS Sharpe?
+3. **Condition win rates**: For RSI "below", what threshold values work best?
+4. **Time stability score**: How consistent is a combo's OOS performance across runs?
+5. **Search coverage**: Which (asset, timeframe, indicator) spaces are untested?
+
+### 8.3 Analytics Computation Trigger
+- After each run completes: `analytics.py::update_from_run(experiment_id, run_id)`
+- On demand: user clicks "Refresh Analytics" in control panel
+- Scheduled: nightly batch at 02:00 local time
+
+---
+
+## 9. Control Panel ??Page Redesign
+
+### 9.1 Tab Structure (new)
+| Tab | Purpose |
+|-----|---------|
+| **Overview** | System status, queue depth, recent run summary, next-action suggestions |
+| **Experiments** | NEW: Create/view/run experiments; Mode A hypothesis + Mode B pool config |
+| **Config** | Global WFO params, data refresh, cost settings |
+| **Analytics** | NEW: Indicator leaderboard, asset pair matrix, time stability scores |
+| **Results** | Top combos (all-time + per-experiment) |
+| **Coverage** | What's been tested, what gaps remain |
+| **Batch** | Queue management, schedule editor |
+| **Dashboard** | Cross-run report (existing) |
+
+### 9.2 Experiments Tab
+- **List view**: Table of all experiments with status (queued / running / done), last run UTC, best OOS Sharpe
+- **Create experiment**: Form for hypothesis-driven (Mode A) or pool config (Mode B)
+- **Experiment detail**: Per-experiment run history, parameter sensitivity charts, best combos
+- **Quick actions**: Rerun, Clone, Add to queue
+
+### 9.3 Analytics Tab
+- Indicator effectiveness table (sortable by avg_sharpe, win_rate)
+- Asset pair heatmap (trigger asset ? action asset ??avg OOS Sharpe)
+- Condition parameter distribution charts
+- Time stability: run-over-run correlation of top-10 combos
+
+---
+
+## 10. Development Phases
+
+### Phase A ??Core Data Model & Plugin System
+**Status**: Delivered (AWF-125~129)
+**Goal**: Replace monolithic strategy schema with extensible plugin system.
+**Deliverables**:
+- `indicators/` directory with 5 built-in indicators (RSI, MACD, BB, EMA, Volume)
+- `conditions/` directory with 4 operator modules
+- `experiment.py`: Experiment definition, JSON schema validation, config loading
+- Updated directory structure under `artifacts/experiments/`
+- Tests: 100% coverage on indicator compute, condition operators, experiment validation
+
+**Exit Criteria**: Can define an experiment via JSON, load it, expand the parameter grid, and verify signal computation for a simple same-asset case.
+
+---
+
+### Phase B ??Signal Composer (Cross-Asset / Cross-Timeframe)
+**Status**: Delivered (AWF-130~133)
+**Goal**: Multi-asset, multi-timeframe signal generation feeding vectorbt.
+**Deliverables**:
+- `signal_composer.py`: Cross-timeframe alignment algorithm, both-direction signal generation
+- Updated `experiment_runner.py`: Uses signal composer instead of legacy evaluator
+- Data layer: `data.py` extended to fetch and cache multiple assets + timeframes in Parquet
+- Tests: Alignment correctness tests with synthetic OHLCV data, verified against manual calculation
+
+**Exit Criteria**: Full experiment run (trigger BTC 1h RSI ??action ETH 4h BB) produces correct signals verified against hand-computed examples.
+
+---
+
+### Phase C ??Storage & Analytics Layer
+**Status**: Delivered (AWF-134~137)
+**Goal**: Two-layer storage (SQLite per run + DuckDB analytics).
+**Deliverables**:
+- Per-run SQLite output from `experiment_runner.py`
+- `analytics.py`: DuckDB ingestion from SQLite, core views (indicator_effectiveness, all_time_best)
+- Post-run hook in `engine_finalize.py` to trigger analytics update
+- Tests: DuckDB query correctness, analytics update idempotency
+
+**Exit Criteria**: After running 2+ experiments, analytics queries return consistent aggregated results. DuckDB can query SQLite files directly.
+
+---
+
+### Phase D ??Mode B (Discovery) + Scheduler
+**Status**: Delivered (AWF-138~141)
+**Goal**: Automated pool-based exploration and experiment queue management.
+**Deliverables**:
+- `scheduler.py`: Queue-based scheduler, priority ordering, nightly batch support
+- Mode B pool expansion: C(N, 2..4) indicator combo generation with pruning
+- Control panel batch integration: experiments added to queue from Experiments tab
+- Tests: Scheduler queue ordering, pool expansion correctness, pruning integration
+
+**Exit Criteria**: A pool config runs end-to-end without user intervention, discovers combos, stores results, updates analytics.
+
+---
+
+### Phase E ??Control Panel Redesign
+**Status**: Delivered (AWF-142~145)
+**Goal**: New Experiments tab, Analytics tab, updated Overview.
+**Deliverables**:
+- `control_panel_experiments.py`: Experiment CRUD endpoints
+- `control_panel_analytics.py`: Analytics query endpoints
+- Frontend: Experiments tab, Analytics tab (indicator leaderboard, asset pair heatmap)
+- Refreshed Overview: experiment-aware next-action suggestions
+- Tests: All new endpoints covered
+
+**Exit Criteria**: User can create an experiment, add to queue, run it, view results, and see analytics ??all from control panel UI.
+
+---
+
+## 11. Post-V2 Stability Hardening
+
+Phase 27~34 extended Architecture V2 from feature-complete to production-ready operation without changing core architecture direction:
+
+- Phase 27: E2E lifecycle validation, scheduler graceful stop, discovery cold-start fallback, structured API error codes.
+- Phase 28: E2E analytics readback fix and Analytics tab UI completion.
+- Phase 29: Real-data smoke path, cron->scheduler integration, command-core decomposition, overview experiment awareness.
+- Phase 30: Full AUTOWFO/control-panel regression closure, structural cleanup, and documentation freeze baseline.
+- Phase 31: Cross-asset live validation, multi-round discovery burn-in, manual discovery-loop acceptance tooling.
+- Phase 32: Discovery-to-experiment auto-mapping, unattended patrol loop, discovery/coverage observability surfaces.
+- Phase 33: Multi-cycle patrol stability verification, append-only patrol telemetry (`patrol_log.ndjson`), overview patrol-history and analytics growth observability.
+- Phase 34: Operational guardrails (patrol log rotation + cycle timeout), real-data patrol dry-run validation tooling, and CLI/runtime warning hygiene.
+- Phase 35: Live-signal export bootstrap plus paper-trading write-back loop (`/paper/*` + leaderboard `paper_avg_pnl`) closed strategy-to-paper feedback chain.
+- Phase 36: Paper feedback dedupe/idempotency and paper position state-machine guards, plus pandas/NumPy compatibility patches in vectorbt core (`indexing`, `checks`, `dir` behavior) to restore full regression stability.
+- Phase 37: Environment lock finalized for vectorbt-core regression reliability (`pandas>=2,<3`, `numpy<2.4`, `numba<0.64`) and scheduler-mode patrol gained opt-in signal-scheduling automation.
+- Phase 38: Notification dispatcher layer (webhook/Telegram optional), multi-strategy top-N paper scheduling, portfolio-level unrealized PnL read model, and scheduler retry/backoff anomaly signaling.
+
+Resulting operational status:
+- Discovery -> queue -> run -> analytics loop is unattended-capable under scheduler-mode patrol.
+- Results and analytics read paths are closed and exposed through control panel APIs/UI.
+- Stability/observability instrumentation exists for production operations and post-run diagnostics.
+
+## 12. Steady State Declaration
+
+Architecture V2 is now in steady-state maintenance after Phase 20~39 delivery.
+
+Delivered capability set (non-exhaustive):
+- Experiment model + plugin indicators + condition operators
+- Cross-asset/cross-timeframe signal composition + experiment runner
+- SQLite per-run + DuckDB analytics + control panel read paths
+- Discovery/scheduler unattended loop with queue orchestration
+- Paper-trading feedback loop (`/paper/*`) with multi-strategy top-N scheduling
+- Operational observability: patrol logs/history, growth metrics, anomaly notifications
+- Export surfaces: live signal config and self-contained research HTML report
+
+Environment requirements (validated baseline):
+- `pandas>=2.0,<3.0` (validated on 2.3.3)
+- `numpy>=1.23,<2.4` (validated on 2.3.5)
+- `numba>=0.60,<0.64` (validated on 0.63.1)
+
+Maintenance guidance:
+- Focus only on dependency compatibility, warning reduction, and reliability hardening.
+- Keep API success contracts backward-compatible.
+- No architecture-direction changes without a new explicitly approved phase.
+
+## 13. Existing Code Reuse Map
+
+### Keep As-Is (verified working, no changes needed)
+- `split.py` ??WFO window splitting
+- `metrics.py` ??OOS metric computation
+- `ranking.py` ??combo ranking
+- `pruning.py` ??search space pruning
+- `engine_helpers.py` ??DEFAULT_CONFIG, seen-key logic (extend for new fields)
+- `engine_runtime.py` ??per-combo vectorbt execution (adapt signal inputs)
+- `engine_finalize.py` ??post-run finalization (add analytics hook)
+- `engine_search.py` ??search loop (adapt for experiment-based combo grid)
+- `search.py` ??seen-key dedup
+
+### Keep With Extensions
+- `data.py` ??Add multi-asset, multi-timeframe Parquet caching
+- `engine_helpers.py` ??Add experiment config fields to DEFAULT_CONFIG
+
+### Refactor Required
+- `strategy_schema.py` ??decompose into `indicators/` + `conditions/`
+- `strategy.py` ??per-indicator logic moves to `indicators/*.py`
+- `evaluator.py` ??cross-asset version in `signal_composer.py`
+- `artifacts.py` ??new directory structure
+- `registry.py` ??new experiment model in `experiment.py`
+
+### Legacy AWF-113~116 Status
+AWF-113 (control_panel.py decomposition), AWF-114 (cli.py decomposition), AWF-115 (engine facade), and AWF-116 (sys.path cleanup) are **Delivered** in Phase 25/26 closure work.
+
+---
+
+## 14. Key Constraints & Guardrails
+
+1. **No ML models**: All signal logic must be human-interpretable rule-based conditions
+2. **No blocking I/O on UI thread**: All runs happen in background processes/threads
+3. **Experiment immutability**: Config JSON is written once; reruns create new `runs/` subdirectory
+4. **Analytics idempotency**: Running analytics update twice must produce identical results
+5. **Control panel as sole interface**: No new CLI commands for users
+6. **vectorbt as compute engine**: No replacement with other backtest frameworks
+7. **Freqtrade deferred**: No bridge code until explicitly requested
+
+---
+
+## 15. Open Questions (Deferred)
+
+| Question | Status | Notes |
+|----------|--------|-------|
+| Freqtrade bridge design | Deferred | Out of scope until Phase E complete |
+| Real-time signal generation | Deferred | Research-only focus for now |
+| Multi-exchange support | Deferred | Binance only initially |
+| Experiment versioning (config changes) | TBD | Increment `version` field in config JSON |
+| Max queue depth / rate limiting | TBD | Scheduler design decision |
+
+---
+
+*Last updated: 2026-03-01*
+*Next: Steady-state maintenance only (dependency drift tracking, warning cleanup, and regression confidence).*
+
+
