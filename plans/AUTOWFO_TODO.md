@@ -7,7 +7,7 @@
 
 ## Active Phase
 
-No active phase. Phase 41 completed and the system returned to Steady State.
+No active phase. Phase 42 completed and the system returned to Steady State.
 
 ## Backlog
 
@@ -20,4 +20,5 @@ No items.
 ## Notes
 - Phase 40 (`AWF-193`~`AWF-198`) closed after namespace and packaging convergence.
 - Phase 41 (`AWF-199`~`AWF-204`) closed after control-panel runtime/service hardening.
-- AWF-113~AWF-204 completed items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
+- Phase 42 (`AWF-205`~`AWF-210`) closed after storage contract hardening and migration-readiness validation.
+- AWF-113~AWF-210 completed items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.

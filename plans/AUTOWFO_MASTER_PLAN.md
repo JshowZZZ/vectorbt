@@ -30,7 +30,7 @@ indicators, symbols, and time windows to discover robust combinations.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-03-12. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; Gates A+D remain passed.
+> Updated 2026-03-13. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores now carry explicit schema-version contracts; Gates A+D remain passed.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -372,10 +372,18 @@ indicators, symbols, and time windows to discover robust combinations.
 - Validation: focused control-panel regression, runtime reconfiguration coverage, CLI startup override coverage, and full repository regression completed before closure.
 - Linked TODO: `AWF-199`, `AWF-200`, `AWF-201`, `AWF-202`, `AWF-203`, `AWF-204`.
 
+### Phase 42: Storage Contract Hardening and Migration Readiness (AWF-205~AWF-210) [Done]
+- Goal: put explicit schema-version contracts around AUTOWFO's mutable state files and experiment artifacts so upgrades remain backward-compatible and diagnosable.
+- Artifact contract: `run_meta.json` now persists `schema_version`, while legacy unversioned run metadata remains readable via normalization on read.
+- Mutable-state contract: scheduler queue, paper positions, and signal-scheduler state now write versioned payloads and still accept legacy on-disk shapes during load.
+- Analytics contract: DuckDB analytics store now maintains an `analytics_metadata` table with a persisted schema version for future migration/rebuild decisions.
+- Validation: focused storage suites, experiment/control-panel consumer suites, and full repository regression completed before closure.
+- Linked TODO: `AWF-205`, `AWF-206`, `AWF-207`, `AWF-208`, `AWF-209`, `AWF-210`.
+
 ## Steady State
-- Status: Re-entered after Phase 41 closure. UI-1, namespace/package convergence, and control-panel runtime hardening completed and closed.
+- Status: Re-entered after Phase 42 closure. UI-1, namespace/package convergence, control-panel runtime hardening, and storage-contract hardening completed and closed.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
-- Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, and explicit control-panel root/artifacts startup contract.
+- Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, explicit control-panel root/artifacts startup contract, and versioned mutable-state/artifact payloads.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
 - Maintenance mode: prioritize dependency drift management and warning cleanup.
 
@@ -590,3 +598,4 @@ Each experiment should record:
 - 2026-03-01: Phase 38 完成交付（AWF-183~185）：新增通知派發層 `notifier.py`（webhook + Telegram optional）與事件型別（STRATEGY_CHANGED/POSITION_OPENED/POSITION_CLOSED/PATROL_ANOMALY/PNL_THRESHOLD_HIT）；paper trading 升級為多策略並行（SignalScheduler top-N 預設 3，新增 `/paper/portfolio.json` unrealized PnL 視圖）；signal scheduler 加入重試與指數退避（上限 30s）並在重試耗盡時派發 PATROL_ANOMALY，完成回歸 `pytest tests -q --tb=short`（1439 passed, 0 failed）。
 - 2026-03-12: Phase 40 完成交付（AWF-193~198）：AUTOWFO runtime 與 control panel namespace 收斂到 `autowfo.*`；`scripts.autowfo.*` 與 `scripts.control_panel*` 退出產品級 import surface；control panel 正式以 `python -m autowfo.control_panel` 啟動；`pyproject.toml` 僅打包 `vectorbt*` + `autowfo*` 並分發 packaged static assets；README、MASTER_PLAN、TODO 與 AWF 報告同步完成收尾。
 - 2026-03-13: Phase 41 完成交付（AWF-199~204）：新增 `autowfo.control_panel.runtime` 統一路徑、process、data-refresh、scheduler 狀態；control panel 啟動入口支援 `--host/--port/--root/--artifacts-dir` 與環境變數覆寫；既有路由模組透過 alias/runtime 同步維持相容；README、RUNBOOK、MASTER_PLAN、TODO、AWF 報告與完整回歸同步完成收尾。
+- 2026-03-13: Phase 42 完成交付（AWF-205~210）：新增 `autowfo.storage_contract` 統一 storage schema-version 常數；`run_meta.json`、scheduler queue、paper position、signal scheduler state 與 analytics DuckDB metadata 全部帶入顯式版本標記；legacy payload 透過 reader normalization 保持可讀；MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。

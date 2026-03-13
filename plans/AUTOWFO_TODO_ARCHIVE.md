@@ -176,3 +176,9 @@
 | AWF-202 | 41 | done | Scheduler runtime convergence + mutable-state sync | `plans/reports/AWF-202-report.md` |
 | AWF-203 | 41 | done | Regression validation for runtime contract | `plans/reports/AWF-203-report.md` |
 | AWF-204 | 41 | done | Runbook / README / plan closure + steady-state update | `plans/reports/AWF-204-report.md` |
+| AWF-205 | 42 | done | Phase 42 documentation freeze + storage contract scope | `plans/reports/AWF-205-report.md` |
+| AWF-206 | 42 | done | Experiment artifact schema-version contract | `plans/reports/AWF-206-report.md` |
+| AWF-207 | 42 | done | Queue and paper-state schema-version contract | `plans/reports/AWF-207-report.md` |
+| AWF-208 | 42 | done | Analytics metadata contract | `plans/reports/AWF-208-report.md` |
+| AWF-209 | 42 | done | Regression + legacy-migration validation | `plans/reports/AWF-209-report.md` |
+| AWF-210 | 42 | done | Plan closure + steady-state update | `plans/reports/AWF-210-report.md` |
