@@ -15,4 +15,5 @@ docs/api-markdown
 build
 artifacts
 .agentsmd
+.claude/
 AGENTS.md.base.render.*
