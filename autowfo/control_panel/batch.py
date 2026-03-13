@@ -65,6 +65,9 @@ def _sync_cp_globals(cp):
     for name in _MUTABLE_GLOBALS:
         if name in g:
             setattr(cp, name, g[name])
+    sync_runtime = getattr(cp, "_sync_runtime_from_aliases", None)
+    if callable(sync_runtime):
+        sync_runtime(*_MUTABLE_GLOBALS)
 
 
 def _with_cp(fn):

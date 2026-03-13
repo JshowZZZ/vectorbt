@@ -12,8 +12,33 @@ def _cp():
     return _sys.modules.get("autowfo.control_panel.server")
 
 
+def _runtime():
+    cp = _cp()
+    return getattr(cp, "RUNTIME", None) if cp is not None else None
+
+
+def _paths():
+    runtime = _runtime()
+    return runtime.paths if runtime is not None else None
+
+
+def _data_refresh_runtime():
+    runtime = _runtime()
+    return runtime.data_refresh if runtime is not None else None
+
+
+def _sync_runtime_aliases():
+    cp = _cp()
+    sync = getattr(cp, "_sync_runtime_aliases", None) if cp is not None else None
+    if callable(sync):
+        sync()
+
+
 def _data_refresh_state_path():
-    return _cp().ARTIFACTS / "data_refresh_state.json"
+    paths = _paths()
+    if paths is None:
+        return None
+    return paths.artifacts / "data_refresh_state.json"
 
 
 def _default_data_refresh_state():
@@ -35,7 +60,10 @@ def _default_data_refresh_state():
 
 def _read_data_refresh_state():
     cp = _cp()
-    state = cp._read_json_file(_data_refresh_state_path(), _default_data_refresh_state())
+    state_path = _data_refresh_state_path()
+    if cp is None or state_path is None:
+        return _default_data_refresh_state()
+    state = cp._read_json_file(state_path, _default_data_refresh_state())
     if not isinstance(state, dict):
         state = _default_data_refresh_state()
     template = _default_data_refresh_state()
@@ -51,12 +79,17 @@ def _read_data_refresh_state():
 
 
 def _write_data_refresh_state(state):
-    cp = _cp()
+    paths = _paths()
     payload = _default_data_refresh_state()
     if isinstance(state, dict):
         payload.update(state)
-    cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    _data_refresh_state_path().write_text(
+    if paths is None:
+        return payload
+    paths.artifacts.mkdir(parents=True, exist_ok=True)
+    state_path = _data_refresh_state_path()
+    if state_path is None:
+        return payload
+    state_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -112,7 +145,11 @@ def _resolve_data_refresh_plan(cfg):
 
 def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=None):
     cp = _cp()
-    with cp.DATA_REFRESH_LOCK:
+    paths = _paths()
+    data_refresh = _data_refresh_runtime()
+    if cp is None or paths is None or data_refresh is None:
+        return _default_data_refresh_state(), False
+    with data_refresh.lock:
         state = _read_data_refresh_state()
         now_utc = datetime.now(timezone.utc).replace(microsecond=0)
         last_refresh = cp._parse_iso(state.get("last_refresh_utc"))
@@ -120,9 +157,9 @@ def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=N
             if last_refresh.tzinfo is None:
                 last_refresh = last_refresh.replace(tzinfo=timezone.utc)
             elapsed = (now_utc - last_refresh.astimezone(timezone.utc)).total_seconds()
-            if elapsed < cp.DATA_REFRESH_INTERVAL_SECONDS:
+            if elapsed < data_refresh.interval_seconds:
                 state["next_refresh_utc"] = (
-                    last_refresh.astimezone(timezone.utc) + timedelta(seconds=cp.DATA_REFRESH_INTERVAL_SECONDS)
+                    last_refresh.astimezone(timezone.utc) + timedelta(seconds=data_refresh.interval_seconds)
                 ).replace(microsecond=0).isoformat()
                 _write_data_refresh_state(state)
                 return state, False
@@ -147,7 +184,7 @@ def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=N
                 timeframes=timeframes,
                 symbols=symbols,
                 base_symbol=base_symbol,
-                cache_dir=str(cp.ARTIFACTS / "cache_ccxt"),
+                cache_dir=str(paths.artifacts / "cache_ccxt"),
                 cache_format=cache_format,
             )
             if not isinstance(refresh_payload, dict):
@@ -158,7 +195,7 @@ def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=N
             refreshed_state["updated_utc"] = now_utc.isoformat()
             refreshed_state["last_refresh_utc"] = now_utc.isoformat()
             refreshed_state["next_refresh_utc"] = (
-                now_utc + timedelta(seconds=cp.DATA_REFRESH_INTERVAL_SECONDS)
+                now_utc + timedelta(seconds=data_refresh.interval_seconds)
             ).replace(microsecond=0).isoformat()
             refreshed_state["exchange"] = exchange
             refreshed_state["base_symbol"] = base_symbol
@@ -177,7 +214,7 @@ def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=N
             state["updated_utc"] = now_utc.isoformat()
             state["last_refresh_utc"] = now_utc.isoformat()
             state["next_refresh_utc"] = (
-                now_utc + timedelta(seconds=cp.DATA_REFRESH_INTERVAL_SECONDS)
+                now_utc + timedelta(seconds=data_refresh.interval_seconds)
             ).replace(microsecond=0).isoformat()
             state["errors"] = errors[-50:]
             _write_data_refresh_state(state)
@@ -185,8 +222,10 @@ def _refresh_data_cache_now(force=False, reason="auto", refresh_ohlcv_cache_fn=N
 
 
 def _data_refresh_loop():
-    cp = _cp()
-    while not cp.DATA_REFRESH_STOP.wait(5):
+    data_refresh = _data_refresh_runtime()
+    if data_refresh is None:
+        return
+    while not data_refresh.stop_event.wait(5):
         try:
             _refresh_data_cache_now(force=False, reason="auto")
         except Exception:
@@ -195,17 +234,20 @@ def _data_refresh_loop():
 
 
 def _ensure_data_refresh_thread():
-    cp = _cp()
-    with cp.DATA_REFRESH_THREAD_LOCK:
-        if cp.DATA_REFRESH_THREAD is not None and cp.DATA_REFRESH_THREAD.is_alive():
+    data_refresh = _data_refresh_runtime()
+    if data_refresh is None:
+        return
+    with data_refresh.thread_lock:
+        if data_refresh.thread is not None and data_refresh.thread.is_alive():
             return
-        cp.DATA_REFRESH_STOP.clear()
-        cp.DATA_REFRESH_THREAD = threading.Thread(
+        data_refresh.stop_event.clear()
+        data_refresh.thread = threading.Thread(
             target=_data_refresh_loop,
             name="autowfo-data-refresh",
             daemon=True,
         )
-        cp.DATA_REFRESH_THREAD.start()
+        data_refresh.thread.start()
+        _sync_runtime_aliases()
 
 
 def _overlay_data_end_from_refresh(rows, refresh_state):

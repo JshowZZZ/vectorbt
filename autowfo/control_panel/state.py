@@ -25,6 +25,28 @@ def _cp():
     return _sys.modules.get("autowfo.control_panel.server")
 
 
+def _runtime():
+    cp = _cp()
+    return getattr(cp, "RUNTIME", None) if cp is not None else None
+
+
+def _paths():
+    runtime = _runtime()
+    return runtime.paths if runtime is not None else None
+
+
+def _processes():
+    runtime = _runtime()
+    return runtime.processes if runtime is not None else None
+
+
+def _sync_runtime_aliases() -> None:
+    cp = _cp()
+    sync = getattr(cp, "_sync_runtime_aliases", None) if cp is not None else None
+    if callable(sync):
+        sync()
+
+
 @dataclass
 class ProcessManager:
     process_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -56,6 +78,9 @@ class ProcessManager:
         cp.PROCESS = self.process
         cp.TEST_PROCESS = self.test_process
         cp.BATCH_PROCESS = self.batch_process
+        sync = getattr(cp, "_sync_runtime_from_aliases", None)
+        if callable(sync):
+            sync("PROCESS", "TEST_PROCESS", "BATCH_PROCESS")
 
     def sync_from_module(self) -> None:
         cp = _cp()
@@ -73,14 +98,14 @@ DEFAULT_PROCESS_MANAGER = ProcessManager()
 
 
 def _resolve_static_path(path):
-    cp = _cp()
-    if cp is None or not path.startswith("/static/"):
+    paths = _paths()
+    if paths is None or not path.startswith("/static/"):
         return None
     rel_path = path[len("/static/") :].strip("/")
     if not rel_path:
         return None
-    candidate = (cp.STATIC_DIR / rel_path).resolve()
-    static_root = cp.STATIC_DIR.resolve()
+    candidate = (paths.static_dir / rel_path).resolve()
+    static_root = paths.static_dir.resolve()
     try:
         candidate.relative_to(static_root)
     except ValueError:
@@ -91,10 +116,10 @@ def _resolve_static_path(path):
 
 
 def _read_static_text(rel_path, fallback=""):
-    cp = _cp()
-    if cp is None:
+    paths = _paths()
+    if paths is None:
         return fallback
-    file_path = cp.STATIC_DIR / rel_path
+    file_path = paths.static_dir / rel_path
     if file_path.exists():
         return file_path.read_text(encoding="utf-8")
     return fallback
@@ -113,18 +138,18 @@ def _normalize_top_n(value, default=DASHBOARD_TOP_N_DEFAULT):
 
 
 def _is_running():
-    cp = _cp()
-    return bool(cp is not None and cp.PROCESS is not None and cp.PROCESS.poll() is None)
+    processes = _processes()
+    return bool(processes is not None and processes.is_running())
 
 
 def _is_test_running():
-    cp = _cp()
-    return bool(cp is not None and cp.TEST_PROCESS is not None and cp.TEST_PROCESS.poll() is None)
+    processes = _processes()
+    return bool(processes is not None and processes.is_test_running())
 
 
 def _is_batch_running():
-    cp = _cp()
-    return bool(cp is not None and cp.BATCH_PROCESS is not None and cp.BATCH_PROCESS.poll() is None)
+    processes = _processes()
+    return bool(processes is not None and processes.is_batch_running())
 
 
 def _now_iso():
@@ -132,11 +157,11 @@ def _now_iso():
 
 
 def _python_path():
-    cp = _cp()
-    if cp is None:
+    paths = _paths()
+    if paths is None:
         return str(Path(os.sys.executable))
     is_windows = os.name == "nt"
-    venv_python = cp.ROOT / ".venv" / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")
+    venv_python = paths.root / ".venv" / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")
     return str(venv_python if venv_python.exists() else Path(os.sys.executable))
 
 
@@ -171,9 +196,9 @@ def _parse_utc(value):
 
 
 def _relative_path_or_str(path):
-    cp = _cp()
+    paths = _paths()
     try:
-        return path.relative_to(cp.ROOT).as_posix() if cp is not None else Path(path).as_posix()
+        return path.relative_to(paths.root).as_posix() if paths is not None else Path(path).as_posix()
     except Exception:
         try:
             return Path(path).as_posix()
@@ -183,25 +208,28 @@ def _relative_path_or_str(path):
 
 def _start_run():
     cp = _cp()
-    if cp is None:
+    paths = _paths()
+    processes = _processes()
+    if cp is None or paths is None or processes is None:
         return False, "control panel not initialized"
-    with cp.PROCESS_LOCK:
+    with processes.process_lock:
         if _is_running():
             return False, "run already in progress"
         if _is_batch_running():
             return False, "batch is running; stop batch first"
         python_path = _python_path()
-        cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
-        log_f = cp.RUN_LOG.open("a", encoding="utf-8")
+        paths.artifacts.mkdir(parents=True, exist_ok=True)
+        log_f = paths.run_log.open("a", encoding="utf-8")
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(cp.ROOT)
-        cp.PROCESS = subprocess.Popen(
-            [python_path, "-m", "autowfo", "run", "--config", str(cp.CONFIG_JSON), "--cwd", str(cp.ROOT)],
-            cwd=str(cp.ROOT),
+        env["PYTHONPATH"] = str(paths.root)
+        processes.process = subprocess.Popen(
+            [python_path, "-m", "autowfo", "run", "--config", str(paths.config_json), "--cwd", str(paths.root)],
+            cwd=str(paths.root),
             env=env,
             stdout=log_f,
             stderr=subprocess.STDOUT,
         )
+        _sync_runtime_aliases()
         cp._write_status(
             {
                 "run_id": "",
@@ -220,20 +248,23 @@ def _start_run():
 
 def _start_tests():
     cp = _cp()
-    if cp is None:
+    paths = _paths()
+    processes = _processes()
+    if cp is None or paths is None or processes is None:
         return False, "control panel not initialized"
-    with cp.TEST_PROCESS_LOCK:
+    with processes.test_process_lock:
         if _is_test_running():
             return False, "tests already running"
         python_path = _python_path()
-        cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
-        log_f = cp.TEST_LOG.open("a", encoding="utf-8")
-        cp.TEST_PROCESS = subprocess.Popen(
+        paths.artifacts.mkdir(parents=True, exist_ok=True)
+        log_f = paths.test_log.open("a", encoding="utf-8")
+        processes.test_process = subprocess.Popen(
             [python_path, "-m", "pytest", "tests", "-q"],
-            cwd=str(cp.ROOT),
+            cwd=str(paths.root),
             stdout=log_f,
             stderr=subprocess.STDOUT,
         )
+        _sync_runtime_aliases()
         cp._write_test_status(
             {
                 "stage": "running",
@@ -248,21 +279,24 @@ def _start_tests():
 
 def _stop_tests():
     cp = _cp()
-    if cp is None:
+    processes = _processes()
+    if cp is None or processes is None:
         return False, "control panel not initialized"
-    with cp.TEST_PROCESS_LOCK:
-        if cp.TEST_PROCESS is None or cp.TEST_PROCESS.poll() is not None:
+    with processes.test_process_lock:
+        proc = processes.test_process
+        if proc is None or proc.poll() is not None:
             return False, "tests are not running"
         try:
-            cp.TEST_PROCESS.terminate()
+            proc.terminate()
             try:
-                cp.TEST_PROCESS.wait(timeout=5)
+                proc.wait(timeout=5)
             except Exception:
-                cp.TEST_PROCESS.kill()
+                proc.kill()
         except Exception as exc:
             return False, f"stop failed: {exc}"
         finally:
-            cp.TEST_PROCESS = None
+            processes.test_process = None
+            _sync_runtime_aliases()
         cp._write_test_status(
             {
                 "stage": "stopped",
@@ -277,18 +311,20 @@ def _stop_tests():
 
 def _read_status():
     cp = _cp()
-    if cp is None:
+    paths = _paths()
+    processes = _processes()
+    if cp is None or paths is None or processes is None:
         return {}
     status = cp._read_json_file(
-        cp.STATUS_JSON,
+        paths.status_json,
         {"run_id": "", "stage": "idle", "started": "", "elapsed": "", "eta": "", "processed": 0, "total": 0, "skipped": 0, "updated": ""},
     )
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    with cp.PROCESS_LOCK:
+    with processes.process_lock:
         if _is_running():
             status["stage"] = "running"
-        elif cp.PROCESS is not None:
-            rc = cp.PROCESS.poll()
+        elif processes.process is not None:
+            rc = processes.process.poll()
             if rc is not None and status.get("stage") == "running":
                 status["stage"] = "finished" if rc == 0 else "failed"
     started_dt = cp._parse_iso(status.get("started"))
@@ -301,7 +337,9 @@ def _read_status():
 
 def _read_test_status():
     cp = _cp()
-    if cp is None:
+    paths = _paths()
+    processes = _processes()
+    if cp is None or paths is None or processes is None:
         return {}
     status = {
         "stage": "idle",
@@ -310,17 +348,17 @@ def _read_test_status():
         "return_code": "",
         "updated": "",
     }
-    if cp.TEST_STATUS_JSON.exists():
+    if paths.test_status_json.exists():
         try:
-            status.update(json.loads(cp.TEST_STATUS_JSON.read_text(encoding="utf-8")))
+            status.update(json.loads(paths.test_status_json.read_text(encoding="utf-8")))
         except Exception:
             pass
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    with cp.TEST_PROCESS_LOCK:
+    with processes.test_process_lock:
         if _is_test_running():
             status["stage"] = "running"
-        elif cp.TEST_PROCESS is not None:
-            rc = cp.TEST_PROCESS.poll()
+        elif processes.test_process is not None:
+            rc = processes.test_process.poll()
             if rc is not None and status.get("return_code", "") == "":
                 status["return_code"] = str(rc)
                 status["stage"] = "finished" if rc == 0 else "failed"
@@ -333,33 +371,33 @@ def _read_test_status():
 
 
 def _read_log_tail(max_lines=LOG_MAX_LINES):
-    cp = _cp()
-    if cp is None or not cp.RUN_LOG.exists():
+    paths = _paths()
+    if paths is None or not paths.run_log.exists():
         return ""
     lines = deque(maxlen=max_lines)
-    with cp.RUN_LOG.open("r", encoding="utf-8", errors="replace") as f:
+    with paths.run_log.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
             lines.append(line.rstrip("\n"))
     return "\n".join(lines)
 
 
 def _read_test_log_tail(max_lines=LOG_MAX_LINES):
-    cp = _cp()
-    if cp is None or not cp.TEST_LOG.exists():
+    paths = _paths()
+    if paths is None or not paths.test_log.exists():
         return ""
     lines = deque(maxlen=max_lines)
-    with cp.TEST_LOG.open("r", encoding="utf-8", errors="replace") as f:
+    with paths.test_log.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
             lines.append(line.rstrip("\n"))
     return "\n".join(lines)
 
 
 def _clear_test_log():
-    cp = _cp()
-    if cp is None:
+    paths = _paths()
+    if paths is None:
         return
-    cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    cp.TEST_LOG.write_text("", encoding="utf-8")
+    paths.artifacts.mkdir(parents=True, exist_ok=True)
+    paths.test_log.write_text("", encoding="utf-8")
 
 
 def _log_html():

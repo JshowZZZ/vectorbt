@@ -43,21 +43,28 @@ PAPER_OPEN_PATH_RE = re.compile(r"^/paper/open$")
 PAPER_CLOSE_PATH_RE = re.compile(r"^/paper/close$")
 
 
-_SCHEDULER_LOCK = threading.Lock()
-_SCHEDULER_THREAD_LOCK = threading.Lock()
-_SCHEDULER_THREAD: threading.Thread | None = None
-_SCHEDULER_STOP_EVENT = threading.Event()
-_SCHEDULER_RUNNING = False
-_SCHEDULER_LAST_ERROR = ""
-_SCHEDULER_LAST_RUN_UTC = ""
-
-
 def _cp():
     return _sys.modules.get("autowfo.control_panel.server")
 
 
+def _runtime():
+    cp = _cp()
+    return getattr(cp, "RUNTIME", None) if cp is not None else None
+
+
+def _paths():
+    runtime = _runtime()
+    return runtime.paths if runtime is not None else None
+
+
+def _scheduler_runtime():
+    runtime = _runtime()
+    return runtime.scheduler if runtime is not None else None
+
+
 def _experiments_root() -> Path:
-    return _cp().ARTIFACTS / "experiments"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "experiments"
 
 
 def _experiment_dir(experiment_id: str) -> Path:
@@ -69,31 +76,38 @@ def _experiment_config_path(experiment_id: str) -> Path:
 
 
 def _artifact_store(experiment_id: str) -> ArtifactStore:
-    return ArtifactStore(experiment_id, base_dir=_cp().ARTIFACTS)
+    paths = _paths()
+    return ArtifactStore(experiment_id, base_dir=paths.artifacts if paths is not None else Path("artifacts"))
 
 
 def _analytics_store() -> AnalyticsStore:
-    return AnalyticsStore(_cp().ARTIFACTS / "analytics.duckdb")
+    paths = _paths()
+    return AnalyticsStore((paths.artifacts if paths is not None else Path("artifacts")) / "analytics.duckdb")
 
 
 def _scheduler_config_path() -> Path:
-    return _cp().ARTIFACTS / "scheduler.json"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "scheduler.json"
 
 
 def _scheduler_queue_path() -> Path:
-    return _cp().ARTIFACTS / "scheduler_queue.json"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "scheduler_queue.json"
 
 
 def _paper_positions_path() -> Path:
-    return _cp().ARTIFACTS / "paper_positions.json"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "paper_positions.json"
 
 
 def _paper_latest_prices_path() -> Path:
-    return _cp().ARTIFACTS / "paper_latest_prices.json"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "paper_latest_prices.json"
 
 
 def _notifier_config_path() -> Path:
-    return _cp().ARTIFACTS / "notifier_config.json"
+    paths = _paths()
+    return (paths.artifacts if paths is not None else Path("artifacts")) / "notifier_config.json"
 
 
 def _scheduler_queue() -> ExperimentQueue:
@@ -106,8 +120,10 @@ def _paper_position_store() -> PaperPositionStore:
 
 
 def _scheduler_is_running() -> bool:
-    with _SCHEDULER_LOCK:
-        return bool(_SCHEDULER_RUNNING)
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return False
+    return bool(scheduler.snapshot().get("is_running"))
 
 
 def _scheduler_priority(priority: Any, queue: ExperimentQueue) -> str:
@@ -140,12 +156,14 @@ def _default_start_date() -> str:
 
 
 def _scheduler_set_state(*, running: bool, last_error: str | None = None) -> None:
-    global _SCHEDULER_RUNNING, _SCHEDULER_LAST_ERROR, _SCHEDULER_LAST_RUN_UTC
-    with _SCHEDULER_LOCK:
-        _SCHEDULER_RUNNING = bool(running)
-        _SCHEDULER_LAST_RUN_UTC = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-        if last_error is not None:
-            _SCHEDULER_LAST_ERROR = str(last_error or "")
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return
+    scheduler.mark(
+        running=running,
+        last_run_utc=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        last_error=last_error,
+    )
 
 
 def _execute_scheduled_experiment(item: dict) -> dict:
@@ -166,7 +184,7 @@ def _execute_scheduled_experiment(item: dict) -> dict:
         experiment=experiment,
         start_date=start_date,
         end_date=end_date,
-        cache_dir=_cp().ARTIFACTS / "ohlcv",
+        cache_dir=_scheduler_queue_path().parent / "ohlcv",
     )
 
     runner = ExperimentRunner(
@@ -208,8 +226,11 @@ def _scheduler_run_once() -> dict:
 
 
 def _scheduler_worker_loop() -> None:
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return
     while True:
-        if _SCHEDULER_STOP_EVENT.is_set():
+        if scheduler.stop_event.is_set():
             break
         outcome = _scheduler_run_once()
         if not outcome.get("processed"):
@@ -217,33 +238,37 @@ def _scheduler_worker_loop() -> None:
 
 
 def _scheduler_start_worker() -> bool:
-    global _SCHEDULER_THREAD
-    with _SCHEDULER_THREAD_LOCK:
-        if _SCHEDULER_THREAD is not None and _SCHEDULER_THREAD.is_alive():
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return False
+    with scheduler.thread_lock:
+        if scheduler.thread is not None and scheduler.thread.is_alive():
             return False
-        _SCHEDULER_STOP_EVENT.clear()
-        _SCHEDULER_THREAD = threading.Thread(
+        scheduler.stop_event.clear()
+        scheduler.thread = threading.Thread(
             target=_scheduler_worker_loop,
             name="autowfo-scheduler-worker",
             daemon=True,
         )
-        _SCHEDULER_THREAD.start()
+        scheduler.thread.start()
         return True
 
 
 def _scheduler_stop_worker(timeout_seconds: float = 5.0) -> dict:
-    global _SCHEDULER_THREAD
-    _SCHEDULER_STOP_EVENT.set()
-    with _SCHEDULER_THREAD_LOCK:
-        thread = _SCHEDULER_THREAD
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return {"ok": True, "thread_alive": False, "joined": False}
+    scheduler.stop_event.set()
+    with scheduler.thread_lock:
+        thread = scheduler.thread
     joined = False
     if thread is not None and thread.is_alive():
         thread.join(timeout=max(0.0, float(timeout_seconds)))
         joined = True
     thread_alive = bool(thread is not None and thread.is_alive())
     if not thread_alive:
-        with _SCHEDULER_THREAD_LOCK:
-            _SCHEDULER_THREAD = None
+        with scheduler.thread_lock:
+            scheduler.thread = None
     _scheduler_set_state(running=False)
     return {
         "ok": not thread_alive,
@@ -255,14 +280,14 @@ def _scheduler_stop_worker(timeout_seconds: float = 5.0) -> dict:
 def _scheduler_runtime_status() -> dict:
     queue = _scheduler_queue()
     head = queue.peek() or {}
-    with _SCHEDULER_LOCK:
-        return {
-            "queue_depth": queue.size(),
-            "next_experiment_id": str(head.get("experiment_id") or "") or None,
-            "is_running": bool(_SCHEDULER_RUNNING),
-            "last_run_utc": str(_SCHEDULER_LAST_RUN_UTC or ""),
-            "last_error": str(_SCHEDULER_LAST_ERROR or ""),
-        }
+    runtime_status = _scheduler_runtime().snapshot() if _scheduler_runtime() is not None else {}
+    return {
+        "queue_depth": queue.size(),
+        "next_experiment_id": str(head.get("experiment_id") or "") or None,
+        "is_running": bool(runtime_status.get("is_running")),
+        "last_run_utc": str(runtime_status.get("last_run_utc") or ""),
+        "last_error": str(runtime_status.get("last_error") or ""),
+    }
 
 
 def _resolve_pool_config(payload: dict) -> dict:
@@ -273,12 +298,14 @@ def _resolve_pool_config(payload: dict) -> dict:
         return dict(inline)
 
     raw_path = str(payload.get("pool_path") or payload.get("pool") or "").strip()
+    paths = _paths()
     if raw_path:
         pool_path = Path(raw_path)
         if not pool_path.is_absolute():
-            pool_path = (_cp().ROOT / pool_path).resolve()
+            base_root = paths.root if paths is not None else Path.cwd().resolve()
+            pool_path = (base_root / pool_path).resolve()
     else:
-        pool_path = _cp().ARTIFACTS / "discovery_pool.json"
+        pool_path = (paths.artifacts if paths is not None else Path("artifacts")) / "discovery_pool.json"
 
     if not pool_path.exists():
         raise FileNotFoundError(pool_path)
@@ -289,20 +316,10 @@ def _resolve_pool_config(payload: dict) -> dict:
 
 
 def _scheduler_reset_runtime_state() -> None:
-    global _SCHEDULER_THREAD, _SCHEDULER_RUNNING, _SCHEDULER_LAST_ERROR, _SCHEDULER_LAST_RUN_UTC
-    _SCHEDULER_STOP_EVENT.set()
-    with _SCHEDULER_THREAD_LOCK:
-        thread = _SCHEDULER_THREAD
-        _SCHEDULER_THREAD = None
-    if thread is not None and thread.is_alive():
-        thread.join(timeout=1.0)
-    _SCHEDULER_STOP_EVENT.clear()
-    with _SCHEDULER_THREAD_LOCK:
-        _SCHEDULER_THREAD = None
-    with _SCHEDULER_LOCK:
-        _SCHEDULER_RUNNING = False
-        _SCHEDULER_LAST_ERROR = ""
-        _SCHEDULER_LAST_RUN_UTC = ""
+    scheduler = _scheduler_runtime()
+    if scheduler is None:
+        return
+    scheduler.reset(join_timeout=1.0)
 
 
 def _safe_json_read(path: Path, default):
@@ -926,7 +943,7 @@ def _handle_analytics_growth(handler):
 
 
 def _handle_analytics_report_html(handler):
-    out_path = _cp().ARTIFACTS / "research_report.html"
+    out_path = _scheduler_queue_path().parent / "research_report.html"
     try:
         export_html_report(_analytics_store(), out_path)
         html = out_path.read_text(encoding="utf-8")

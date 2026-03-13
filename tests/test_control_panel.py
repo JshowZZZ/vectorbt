@@ -46,14 +46,80 @@ def test_process_manager_supports_standalone_instantiation():
     assert mgr.is_batch_running()
 
 
+def test_configure_runtime_updates_derived_paths(tmp_path):
+    artifacts = tmp_path / "ops_artifacts"
+    db_path = artifacts / "custom_results.db"
+    static_dir = tmp_path / "static_override"
+
+    runtime = cp.configure_runtime(
+        root=tmp_path,
+        artifacts_dir=artifacts,
+        db_path=db_path,
+        static_dir=static_dir,
+        data_refresh_interval_seconds=45,
+        reset_state=True,
+    )
+
+    assert runtime.paths.root == tmp_path.resolve()
+    assert runtime.paths.artifacts == artifacts.resolve()
+    assert runtime.paths.db_path == db_path.resolve()
+    assert runtime.paths.static_dir == static_dir.resolve()
+    assert cp.ROOT == tmp_path.resolve()
+    assert cp.ARTIFACTS == artifacts.resolve()
+    assert cp.DB_PATH == db_path.resolve()
+    assert cp.STATIC_DIR == static_dir.resolve()
+    assert cp.DATA_REFRESH_INTERVAL_SECONDS == 45
+
+
+def test_main_applies_runtime_cli_overrides(tmp_path, monkeypatch):
+    captured = {}
+
+    class DummyServer:
+        def __init__(self, addr, handler):
+            captured["addr"] = addr
+            captured["handler"] = handler
+
+        def serve_forever(self):
+            raise KeyboardInterrupt
+
+        def server_close(self):
+            captured["closed"] = True
+
+    refresh_started = []
+    monkeypatch.setattr(cp, "ThreadingHTTPServer", DummyServer)
+    monkeypatch.setattr(cp, "_ensure_data_refresh_thread", lambda: refresh_started.append(True))
+
+    ret = cp.main(
+        [
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9999",
+            "--root",
+            str(tmp_path),
+            "--artifacts-dir",
+            "ops_artifacts",
+            "--data-refresh-interval-seconds",
+            "60",
+            "--no-data-refresh-thread",
+        ]
+    )
+
+    assert ret == 0
+    assert captured["addr"] == ("0.0.0.0", 9999)
+    assert captured["handler"] is cp.Handler
+    assert captured["closed"] is True
+    assert refresh_started == []
+    assert cp.ROOT == tmp_path.resolve()
+    assert cp.ARTIFACTS == (tmp_path / "ops_artifacts").resolve()
+    assert cp.DATA_REFRESH_INTERVAL_SECONDS == 60
+
+
 def test_get_results_payload_timeframe_filter(tmp_path, monkeypatch):
     db_path = tmp_path / "results.db"
     _setup_db(db_path)
 
-    monkeypatch.setattr(cp, "ROOT", tmp_path)
-    monkeypatch.setattr(cp, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(cp, "DB_PATH", db_path)
-    cp.TIMEFRAME_CACHE = {"ts": 0, "mtime": 0, "values": []}
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
 
     payload = cp._get_results_payload(timeframe="15m")
     combo = payload["combo"]
@@ -81,10 +147,7 @@ def test_get_results_payload_applies_refresh_state_data_end(tmp_path, monkeypatc
             ("15m", "ETH/BTC", "2024-01-01 00:00:00", "1.23"),
         )
 
-    monkeypatch.setattr(cp, "ROOT", tmp_path)
-    monkeypatch.setattr(cp, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(cp, "DB_PATH", db_path)
-    cp.TIMEFRAME_CACHE = {"ts": 0, "mtime": 0, "values": []}
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
     (tmp_path / "data_refresh_state.json").write_text(
         json.dumps(
             {
@@ -127,10 +190,7 @@ def test_get_results_payload_top10_dual_path(tmp_path, monkeypatch):
     latest_csv = tmp_path / "param_sweep_top10_r999.csv"
     latest_csv.write_text("timeframe,oos_avg_total_return_pct\n15m,2.2\n", encoding="utf-8")
 
-    monkeypatch.setattr(cp, "ROOT", tmp_path)
-    monkeypatch.setattr(cp, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(cp, "DB_PATH", db_path)
-    cp.TIMEFRAME_CACHE = {"ts": 0, "mtime": 0, "values": []}
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
 
     payload = cp._get_results_payload()
 
@@ -217,7 +277,7 @@ def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
     app_js = js_dir / "app.js"
     app_js.write_text("console.log('ok');", encoding="utf-8")
 
-    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+    cp.configure_runtime(static_dir=static_dir, reset_state=True)
 
     assert cp._resolve_static_path("/static/js/app.js") == app_js.resolve()
     assert cp._resolve_static_path("/static/../control_panel.py") is None
@@ -227,7 +287,7 @@ def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
 def test_read_static_text_fallback(tmp_path, monkeypatch):
     static_dir = tmp_path / "scripts" / "control_panel" / "static"
     static_dir.mkdir(parents=True)
-    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+    cp.configure_runtime(static_dir=static_dir, reset_state=True)
 
     assert cp._read_static_text("index.html", fallback="fallback") == "fallback"
     (static_dir / "index.html").write_text("hello", encoding="utf-8")
@@ -239,7 +299,7 @@ def test_favicon_endpoint_serves_static_svg(tmp_path, monkeypatch):
     static_dir.mkdir(parents=True)
     favicon = static_dir / "favicon.svg"
     favicon.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
-    monkeypatch.setattr(cp, "STATIC_DIR", static_dir)
+    cp.configure_runtime(static_dir=static_dir, reset_state=True)
 
     with _serve_handler_connection() as conn:
         conn.request("GET", "/favicon.ico")
@@ -262,11 +322,12 @@ def test_normalize_top_n_bounds_and_defaults():
 def _setup_batch_env(tmp_path, monkeypatch):
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(cp, "ROOT", tmp_path)
-    monkeypatch.setattr(cp, "ARTIFACTS", artifacts)
-    monkeypatch.setattr(cp, "CONFIG_JSON", artifacts / "sweep_config.json")
-    cp.BATCH_PROCESS = None
-    cp.PROCESS = None
+    cp.configure_runtime(
+        root=tmp_path,
+        artifacts_dir=artifacts,
+        config_json=artifacts / "sweep_config.json",
+        reset_state=True,
+    )
     return artifacts
 
 

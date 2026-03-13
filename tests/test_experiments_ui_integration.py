@@ -55,14 +55,14 @@ def _valid_experiment_config(experiment_id="exp_demo"):
 def _setup_env(tmp_path, monkeypatch):
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(cp, "ROOT", tmp_path)
-    monkeypatch.setattr(cp, "ARTIFACTS", artifacts)
-    monkeypatch.setattr(cp, "CONFIG_JSON", artifacts / "sweep_config.json")
-    monkeypatch.setattr(cp, "CONTROL_JSON", artifacts / "run_control.json")
-    monkeypatch.setattr(cp, "RUN_LOG", artifacts / "run_console.log")
-    cp.PROCESS = None
-    cp.BATCH_PROCESS = None
-    cp_experiments._scheduler_reset_runtime_state()
+    cp.configure_runtime(
+        root=tmp_path,
+        artifacts_dir=artifacts,
+        config_json=artifacts / "sweep_config.json",
+        control_json=artifacts / "run_control.json",
+        run_log=artifacts / "run_console.log",
+        reset_state=True,
+    )
     return artifacts
 
 
