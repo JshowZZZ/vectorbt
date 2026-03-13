@@ -1,5 +1,7 @@
 # AUTOWFO TODO Archive
 
+> Phase 40 completion items (`AWF-193`~`AWF-198`) are archived at the end of this file.
+
 > Completed items from Phase 1–15 (AWF-000~AWF-063). Archived from `AUTOWFO_TODO.md` on 2026-02-26.
 > Active backlog starts at AWF-064 in `AUTOWFO_TODO.md`.
 
@@ -162,3 +164,9 @@
 | AWF-190 | UI-1 | done | Sidebar navigation + responsive layout rebuild (horizontal tabs → collapsible icon sidebar, mobile breakpoints) | `app.js`, `app.css` |
 | AWF-191 | UI-1 | done | Shared component library + i18n completion (ActionButton 107處, KpiCard, DataTable empty state; i18n syntax fix) | `components.js`, `i18n.js`, all tab files |
 | AWF-192 | UI-1 | done | Page-level visual polish (skeleton loading, Chart.js MutationObserver theme adaptation, toast feedback, CSS cleanup) | all tab files, `results.js`, `app.css` |
+| AWF-193 | 40 | done | Phase 40 documentation freeze + namespace contract | `plans/reports/AWF-193-report.md` |
+| AWF-194 | 40 | done | `scripts.autowfo.*` -> `autowfo.*` runtime migration | `plans/reports/AWF-194-report.md` |
+| AWF-195 | 40 | done | control panel package migration + new module entrypoint | `plans/reports/AWF-195-report.md` |
+| AWF-196 | 40 | done | Packaging metadata + static asset distribution | `plans/reports/AWF-196-report.md` |
+| AWF-197 | 40 | done | Import-surface cleanup + regression validation | `plans/reports/AWF-197-report.md` |
+| AWF-198 | 40 | done | README / plan closure + steady-state update | `plans/reports/AWF-198-report.md` |

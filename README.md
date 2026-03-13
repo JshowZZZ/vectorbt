@@ -81,6 +81,18 @@ Current baseline (2026-03-02):
 * `pytest tests -q --tb=short` -> `1442 passed, 30 warnings`
 * `pytest tests -q --tb=short -W error::DeprecationWarning` -> `1442 passed, 26 warnings`, `0` deprecation failures
 
+### AUTOWFO Entrypoints
+
+This repository also ships the AUTOWFO experiment platform on top of `vectorbt`.
+
+```sh
+python -m autowfo --help
+python -m autowfo.control_panel
+```
+
+- `python -m autowfo` is the CLI entrypoint for experiment workflows, analytics, patrol, and report export.
+- `python -m autowfo.control_panel` starts the packaged control panel and serves static assets from the installed `autowfo` package.
+
 ## :sparkles: Usage
 
 VectorBT lets you backtest strategies in just a few lines of Python.

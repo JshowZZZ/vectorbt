@@ -27,10 +27,10 @@ indicators, symbols, and time windows to discover robust combinations.
 - Keep vectorbt core simulation and indicator engines as compute primitives.
 - Add orchestration layer on top (AUTOWFO) rather than forcing major core refactors.
 - Treat each run as an experiment with fixed seed, dataset snapshot, config, and metrics.
-- ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Modules live in `scripts/autowfo/`.
+- ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-02-10. Modules extracted into `scripts/autowfo/`, protocols frozen, Gates A+D passed.
+> Updated 2026-03-12. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; Gates A+D remain passed.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -52,7 +52,7 @@ indicators, symbols, and time windows to discover robust combinations.
 ## Milestones
 
 ### Phase 1: Decompose (AWF-000) [Done]
-- Extracted 10 modules from 3000-line monolith into `scripts/autowfo/`.
+- Extracted 10 modules from 3000-line monolith into the AUTOWFO runtime package (now `autowfo/`).
 - Bit-identical artifact output verified.
 - Linked TODO: `AWF-000`.
 
@@ -159,7 +159,7 @@ indicators, symbols, and time windows to discover robust combinations.
 - Tech stack: Vue 3 (ESM CDN, no build step) + Tailwind CSS (Play CDN) + Chart.js.
 - 6 tabs: Overview, Config, Results, Batch, Coverage, Analytics.
 - Zero backend changes: all 35 API endpoints unchanged; pure static file replacement.
-- Old UI preserved in `scripts/control_panel/static_legacy/` for fallback.
+- Old UI preserved in `autowfo/control_panel/static_legacy/` for fallback.
 - Prerequisite: Phase 14 complete (all gates passed, 347 tests green).
 - **Progress (2026-02-19):**
   - AWF-033 Vue 3 + Tailwind CDN + dark theme + CSS variables + i18n + store + api + components complete
@@ -356,8 +356,16 @@ indicators, symbols, and time windows to discover robust combinations.
 - Exit criteria: All 10 tabs render correctly with sidebar; shared components used consistently; i18n coverage ≥95%; loading/empty/error states present on all data-fetching views; all existing tests green.
 - Linked TODO: `AWF-190`, `AWF-191`, `AWF-192`.
 
+### Phase 40: Namespace and Packaging Convergence (AWF-193~AWF-198) [Done]
+- Goal: converge AUTOWFO runtime and control panel into a single installable `autowfo.*` package surface.
+- Runtime namespace: product imports now use `autowfo.*`; `scripts.autowfo.*` is no longer a supported package path.
+- Control panel packaging: HTTP server and static assets now live under `autowfo/control_panel/` and start via `python -m autowfo.control_panel`.
+- Packaging contract: distribution package discovery now includes only `vectorbt*` and `autowfo*`; control panel static assets ship as package data.
+- Validation: import-surface cleanup, CLI/control-panel smoke checks, editable install, build smoke, and targeted regression suites completed before closure.
+- Linked TODO: `AWF-193`, `AWF-194`, `AWF-195`, `AWF-196`, `AWF-197`, `AWF-198`.
+
 ## Steady State
-- Status: Entered (Phase 39 complete). UI-1 phase completed and closed.
+- Status: Re-entered after Phase 40 closure. UI-1 and namespace/package convergence completed and closed.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
 - Runtime posture: unattended operation supported with anomaly notifications and bounded schedulers.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
@@ -572,3 +580,4 @@ Each experiment should record:
 - 2026-03-01: Phase 36 完成交付（AWF-177~179）：paper feedback 新增 `(experiment_id, close_ts)` 去重 idempotency、paper position 狀態機加入重複開倉與無倉平倉防呆（API 回傳 400）；完成 vectorbt core 與新 pandas/NumPy 環境兼容修補（`ParamLoc` object-key normalization、`is_deep_equal` callable 比較、`dir` 穩定化），並通過完整回歸 `pytest tests -q --tb=short`（1426 passed, 0 failed）。
 - 2026-03-01: Phase 37 完成交付（AWF-180~182）：依賴版本鎖定為 `pandas>=2,<3`、`numpy<2.4`、`numba<0.64`；新增 `autowfo schedule-signals` daemon（strategy 變更時自動 close/open + export）；`autowfo cron --scheduler-mode` 新增 `enable_signal_scheduling` opt-in tick，並完成文件凍結與回歸驗證。
 - 2026-03-01: Phase 38 完成交付（AWF-183~185）：新增通知派發層 `notifier.py`（webhook + Telegram optional）與事件型別（STRATEGY_CHANGED/POSITION_OPENED/POSITION_CLOSED/PATROL_ANOMALY/PNL_THRESHOLD_HIT）；paper trading 升級為多策略並行（SignalScheduler top-N 預設 3，新增 `/paper/portfolio.json` unrealized PnL 視圖）；signal scheduler 加入重試與指數退避（上限 30s）並在重試耗盡時派發 PATROL_ANOMALY，完成回歸 `pytest tests -q --tb=short`（1439 passed, 0 failed）。
+- 2026-03-12: Phase 40 完成交付（AWF-193~198）：AUTOWFO runtime 與 control panel namespace 收斂到 `autowfo.*`；`scripts.autowfo.*` 與 `scripts.control_panel*` 退出產品級 import surface；control panel 正式以 `python -m autowfo.control_panel` 啟動；`pyproject.toml` 僅打包 `vectorbt*` + `autowfo*` 並分發 packaged static assets；README、MASTER_PLAN、TODO 與 AWF 報告同步完成收尾。
