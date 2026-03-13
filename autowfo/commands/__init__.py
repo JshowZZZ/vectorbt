@@ -5,6 +5,7 @@ from .cron import add_cron_parser
 from .gate import add_gate_parser
 from .plan import add_plan_parsers
 from .run import add_run_parsers
+from .storage import add_storage_parsers
 
 __all__ = [
     "add_batch_parser",
@@ -12,5 +13,6 @@ __all__ = [
     "add_gate_parser",
     "add_plan_parsers",
     "add_run_parsers",
+    "add_storage_parsers",
 ]
 

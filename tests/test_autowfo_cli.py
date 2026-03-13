@@ -2105,3 +2105,95 @@ def test_cmd_cron_notifications_and_state_update(tmp_path, monkeypatch):
     notify_state = json.loads(notify_state_path.read_text(encoding="utf-8"))
     assert notify_state["last_top"][0]["key"] == "combo-B"
 
+
+def test_cli_doctor_returns_nonzero_on_storage_error(tmp_path, capsys):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "scheduler_queue.json").write_text("{invalid json", encoding="utf-8")
+
+    code = cli.main(["doctor", "--artifacts-dir", str(artifacts), "--cwd", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "[doctor]" in captured.out
+    assert "scheduler_queue" in captured.out
+
+
+def test_cli_storage_migrate_dry_run_preserves_legacy_payload(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    legacy_path = artifacts / "paper_positions.json"
+    legacy_path.write_text(
+        json.dumps(
+            [
+                {
+                    "signal_id": "signal::exp_cli",
+                    "experiment_id": "exp_cli",
+                    "open_ts": "2026-03-13T00:00:00Z",
+                    "open_price": 1.0,
+                    "close_ts": None,
+                    "close_price": None,
+                    "pnl_pct": None,
+                    "status": "open",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    code = cli.main(["storage", "migrate", "--dry-run", "--artifacts-dir", str(artifacts), "--cwd", str(tmp_path)])
+
+    payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+    assert code == 0
+    assert isinstance(payload, list)
+
+
+def test_cli_storage_rebuild_analytics_builds_duckdb(tmp_path):
+    pytest.importorskip("duckdb")
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+
+    artifact_store = cli.importlib.import_module("autowfo.artifact_store").ArtifactStore(
+        "exp_cli_rebuild",
+        base_dir=artifacts,
+    )
+    run_id = "20260313_040000"
+    conn = artifact_store.init_results_db(run_id)
+    try:
+        conn.execute(
+            """
+            INSERT INTO combo_results (
+                combo_id, experiment_id, run_id, direction,
+                trigger_asset, action_asset,
+                indicator_params, condition_params, risk_params,
+                oos_sharpe, oos_win_rate, oos_n_trades, oos_total_return,
+                wf_score, created_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "combo_cli",
+                "exp_cli_rebuild",
+                run_id,
+                "long",
+                "BTC/USDT",
+                "ETH/USDT",
+                "{\"trigger_indicators\": [\"RSI\"], \"action_indicators\": [\"BB\"]}",
+                "{}",
+                "{}",
+                1.1,
+                0.5,
+                12,
+                0.2,
+                0.8,
+                "2026-03-13T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    code = cli.main(["storage", "rebuild-analytics", "--artifacts-dir", str(artifacts), "--cwd", str(tmp_path)])
+
+    assert code == 0
+    assert (artifacts / "analytics.duckdb").exists()
+

@@ -174,3 +174,9 @@ class ExperimentQueue:
             if str(item.get("experiment_id", "")).strip()
         }
 
+    def snapshot(self) -> dict:
+        return dict(self._state)
+
+    def rewrite_state(self) -> None:
+        self._persist()
+

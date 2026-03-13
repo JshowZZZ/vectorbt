@@ -77,6 +77,15 @@ class PaperPositionStore:
             },
         )
 
+    def normalized_payload(self) -> dict:
+        return {
+            "schema_version": PAPER_POSITIONS_SCHEMA_VERSION,
+            "positions": [dict(row) for row in self._load_positions()],
+        }
+
+    def rewrite_positions(self) -> None:
+        self._save_positions(self._load_positions())
+
     def list_positions(self) -> list[dict]:
         return self._load_positions()
 

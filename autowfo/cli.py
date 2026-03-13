@@ -19,6 +19,7 @@ from autowfo.commands import cron as cmd_cron
 from autowfo.commands import gate as cmd_gate
 from autowfo.commands import plan as cmd_plan
 from autowfo.commands import run as cmd_run
+from autowfo.commands import storage as cmd_storage
 
 _ORIG_CORE_RUN_BATCH_JOB_SINGLE = _core._run_batch_job_single
 _ORIG_CORE_RUN_BATCH_JOBS_PARALLEL = _core._run_batch_jobs_parallel
@@ -242,6 +243,22 @@ def _cmd_cron(args: argparse.Namespace) -> int:
     return cmd_cron.cmd_cron(args, _self())
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_doctor(args, _self())
+
+
+def _cmd_storage_validate(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_validate(args, _self())
+
+
+def _cmd_storage_migrate(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_migrate(args, _self())
+
+
+def _cmd_storage_rebuild_analytics(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_rebuild_analytics(args, _self())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     parser.add_argument("--version", action="version", version=f"autowfo {AUTOWFO_VERSION}")
@@ -253,6 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     cmd_plan.add_plan_parsers(subparsers, cli_impl)
     cmd_gate.add_gate_parser(subparsers, cli_impl)
     cmd_cron.add_cron_parser(subparsers, cli_impl)
+    cmd_storage.add_storage_parsers(subparsers, cli_impl)
     return parser
 
 

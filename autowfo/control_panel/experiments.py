@@ -20,6 +20,7 @@ from autowfo.notifier import NotificationEvent, notify, should_trigger_pnl_thres
 from autowfo.paper_position import PaperPositionStore
 from autowfo.report_export import export_html_report
 from autowfo.scheduler import ExperimentQueue, SchedulerConfig
+from autowfo.storage_ops import validate_storage
 
 EXPERIMENT_CONFIG_PATH_RE = re.compile(r"^/experiments/(?P<experiment_id>[^/]+)/config\.json$")
 EXPERIMENT_RUN_PATH_RE = re.compile(r"^/experiments/(?P<experiment_id>[^/]+)/run$")
@@ -41,6 +42,7 @@ PAPER_POSITIONS_PATH_RE = re.compile(r"^/paper/positions\.json$")
 PAPER_PORTFOLIO_PATH_RE = re.compile(r"^/paper/portfolio\.json$")
 PAPER_OPEN_PATH_RE = re.compile(r"^/paper/open$")
 PAPER_CLOSE_PATH_RE = re.compile(r"^/paper/close$")
+OPS_STORAGE_HEALTH_PATH_RE = re.compile(r"^/ops/storage-health\.json$")
 
 
 def _cp():
@@ -740,6 +742,11 @@ def _handle_experiment_run_results(handler, experiment_id: str, run_id: str):
 
 def _handle_scheduler_status(handler):
     payload = _scheduler_runtime_status()
+    return handler._send(json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8")
+
+
+def _handle_storage_health(handler):
+    payload = validate_storage(_scheduler_queue_path().parent)
     return handler._send(json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8")
 
 

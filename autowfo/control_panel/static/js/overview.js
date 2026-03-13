@@ -288,6 +288,60 @@ export const OverviewTab = {
         </section>
 
         <section class="cp-panel rounded-3xl p-5 md:p-6">
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Storage Health</div>
+              <h3 class="mt-2 text-lg font-semibold text-slate-950 dark:text-white">資料儲存健康狀態</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+                    :class="storageSummary.ok
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'">
+                {{ storageSummary.ok ? 'Healthy' : 'Needs Attention' }}
+              </span>
+              <a href="/ops/storage-health.json"
+                 target="_blank"
+                 class="rounded-full border border-slate-200/80 px-3 py-1.5 text-xs text-slate-600 hover:text-slate-950 hover:bg-slate-50 dark:border-slate-700/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-900/80">
+                JSON
+              </a>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Warnings</div>
+              <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ storageSummary.warnings }}</div>
+            </div>
+            <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Errors</div>
+              <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ storageSummary.errors }}</div>
+            </div>
+            <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Legacy Run Meta</div>
+              <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ storageSummary.runMetaLegacy }}</div>
+            </div>
+            <div class="rounded-2xl border border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Analytics Schema</div>
+              <div class="mt-1 text-sm font-semibold font-mono text-slate-950 dark:text-white">{{ storageSummary.analyticsSchema }}</div>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-2xl border px-4 py-3 text-xs leading-5"
+               :class="storageSummary.needsMigration
+                 ? 'border-amber-200/80 bg-amber-50/70 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100'
+                 : 'border-slate-200/80 bg-slate-50/80 text-slate-600 dark:border-slate-800/80 dark:bg-slate-900/50 dark:text-slate-300'">
+            <span class="font-semibold">Ops 提示：</span>
+            <span v-if="storageSummary.needsMigration">
+              發現可正規化的 legacy payload。建議先跑 `python -m autowfo storage migrate --dry-run --cwd .`，確認後再正式 migrate。
+            </span>
+            <span v-else>
+              目前 schema version 狀態一致。若 analytics 需要重建，可執行 `python -m autowfo storage rebuild-analytics --cwd .`。
+            </span>
+          </div>
+        </section>
+
+        <section class="cp-panel rounded-3xl p-5 md:p-6">
           <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Patrol History</div>
@@ -335,6 +389,7 @@ export const OverviewTab = {
     const status = ref({})
     const experimentNext = ref({})
     const patrolHistory = ref([])
+    const storageHealth = ref({})
     const actionLoading = ref(false)
     const runMode = ref('combo')
     let statusTimer = null
@@ -455,6 +510,20 @@ export const OverviewTab = {
       return 'runs trend: ' + recent.join(' -> ')
     })
 
+    const storageSummary = computed(() => {
+      const payload = storageHealth.value && typeof storageHealth.value === 'object' ? storageHealth.value : {}
+      const summary = payload.summary && typeof payload.summary === 'object' ? payload.summary : {}
+      const components = payload.components && typeof payload.components === 'object' ? payload.components : {}
+      return {
+        ok: Boolean(payload.ok),
+        needsMigration: Boolean(payload.needs_migration),
+        warnings: Number(summary.warnings || 0),
+        errors: Number(summary.errors || 0),
+        runMetaLegacy: Number(summary.run_meta_legacy_files || 0),
+        analyticsSchema: (components.analytics && components.analytics.schema_version) || '--',
+      }
+    })
+
     const runChecklist = computed(() => {
       const stage = String(status.value.stage || '').toLowerCase()
       return [
@@ -551,6 +620,14 @@ export const OverviewTab = {
       }
     }
 
+    async function refreshStorageHealth() {
+      try {
+        storageHealth.value = await fetchJson('/ops/storage-health.json')
+      } catch (_) {
+        storageHealth.value = {}
+      }
+    }
+
     async function doAction(url, toastKey, toastFallback, confirmOpts = null) {
       if (confirmOpts) {
         const confirmed = await confirmAction(confirmOpts)
@@ -600,13 +677,14 @@ export const OverviewTab = {
       })
 
     onMounted(() => {
-      Promise.all([refreshStatus(), refreshExperimentNext(), refreshPatrolHistory()]).finally(() => {
+      Promise.all([refreshStatus(), refreshExperimentNext(), refreshPatrolHistory(), refreshStorageHealth()]).finally(() => {
         loading.value = false
       })
       statusTimer = setInterval(() => {
         refreshStatus()
         refreshExperimentNext()
         refreshPatrolHistory()
+        refreshStorageHealth()
       }, 3000)
     })
 
@@ -634,6 +712,7 @@ export const OverviewTab = {
       runChecklist,
       runMode,
       selectRunMode,
+      storageSummary,
       stageClass,
       stageDotClass,
       stageLabel,

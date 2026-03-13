@@ -395,6 +395,8 @@ class Handler(BaseHTTPRequestHandler):
             return cp_experiments._handle_paper_positions(self)
         if cp_experiments.PAPER_PORTFOLIO_PATH_RE.fullmatch(path):
             return cp_experiments._handle_paper_portfolio(self)
+        if cp_experiments.OPS_STORAGE_HEALTH_PATH_RE.fullmatch(path):
+            return cp_experiments._handle_storage_health(self)
 
         for mod in _route_modules_get():
             try_handler = getattr(mod, "try_handle_get", None)
