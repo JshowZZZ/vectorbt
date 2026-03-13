@@ -21,6 +21,8 @@
    - `python -m autowfo baseline --help`
    - `python -m autowfo batch --help`
    - `python -m autowfo plan --help`
+   - `python -m autowfo doctor --help`
+   - `python -m autowfo storage validate --help`
    - `python -m autowfo gate-c --help`
 4. Check disk headroom before long sweeps:
    - Windows: `Get-PSDrive -Name E | Select-Object Name,Free,Used`
@@ -46,6 +48,14 @@
 8. Start the packaged control panel against an explicit working root/artifacts root:
    - `python -m autowfo.control_panel --host 127.0.0.1 --port 8787 --root . --artifacts-dir artifacts`
    - Environment fallback: `AUTOWFO_CONTROL_PANEL_HOST`, `AUTOWFO_CONTROL_PANEL_PORT`, `AUTOWFO_ROOT`, `AUTOWFO_ARTIFACTS_DIR`, `AUTOWFO_DATA_REFRESH_INTERVAL_SECONDS`
+9. Validate storage health without mutating files:
+   - `python -m autowfo doctor --cwd .`
+   - `python -m autowfo storage validate --cwd . --json`
+10. Preview or apply storage normalization:
+   - `python -m autowfo storage migrate --dry-run --cwd .`
+   - `python -m autowfo storage migrate --cwd .`
+11. Rebuild analytics from experiment artifacts:
+   - `python -m autowfo storage rebuild-analytics --cwd .`
 
 ## Output Locations
 - Latest sweep artifacts:
@@ -101,6 +111,12 @@
    - Completed jobs are skipped using `seen_keys`; unfinished jobs continue.
 7. Batch should continue despite a failed job:
    - Add `--continue-on-error` and inspect failed entries in `artifacts/batch_state.json`.
+8. Storage doctor reports warnings / needs migration:
+   - Start with `python -m autowfo storage migrate --dry-run --cwd .`.
+   - If the planned rewrites look correct, rerun without `--dry-run`.
+9. Analytics store looks stale or metadata is missing:
+   - Run `python -m autowfo storage rebuild-analytics --cwd .`.
+   - Recheck with `python -m autowfo doctor --cwd .`.
 
 ## Post-Run Checklist
 1. Confirm pass completion in `manifest.json` (`run_done == run_total`).

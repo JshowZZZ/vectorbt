@@ -182,3 +182,9 @@
 | AWF-208 | 42 | done | Analytics metadata contract | `plans/reports/AWF-208-report.md` |
 | AWF-209 | 42 | done | Regression + legacy-migration validation | `plans/reports/AWF-209-report.md` |
 | AWF-210 | 42 | done | Plan closure + steady-state update | `plans/reports/AWF-210-report.md` |
+| AWF-211 | 43 | done | Phase 43 documentation freeze + operations contract | `plans/reports/AWF-211-report.md` |
+| AWF-212 | 43 | done | Storage validation and inspection core | `plans/reports/AWF-212-report.md` |
+| AWF-213 | 43 | done | Storage migration / normalization tooling | `plans/reports/AWF-213-report.md` |
+| AWF-214 | 43 | done | Analytics rebuild tooling | `plans/reports/AWF-214-report.md` |
+| AWF-215 | 43 | done | Control-panel storage health endpoint and surfacing | `plans/reports/AWF-215-report.md` |
+| AWF-216 | 43 | done | Regression validation + plan closure | `plans/reports/AWF-216-report.md` |

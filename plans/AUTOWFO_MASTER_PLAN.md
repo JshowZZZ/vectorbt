@@ -30,7 +30,7 @@ indicators, symbols, and time windows to discover robust combinations.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-03-13. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores now carry explicit schema-version contracts; Gates A+D remain passed.
+> Updated 2026-03-13. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores carry explicit schema-version contracts plus operator-facing validation/migration/rebuild tooling; Gates A+D remain passed.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -380,10 +380,19 @@ indicators, symbols, and time windows to discover robust combinations.
 - Validation: focused storage suites, experiment/control-panel consumer suites, and full repository regression completed before closure.
 - Linked TODO: `AWF-205`, `AWF-206`, `AWF-207`, `AWF-208`, `AWF-209`, `AWF-210`.
 
+### Phase 43: Storage Operations and Migration Tooling (AWF-211~AWF-216) [Done]
+- Goal: turn Phase 42 storage contracts into operator-usable tooling for validation, normalization, analytics rebuild, and lightweight UI observability.
+- Validation tooling: `python -m autowfo doctor` and `python -m autowfo storage validate` now inspect run metadata, scheduler queue, paper positions, signal-scheduler state, and analytics metadata without mutating files.
+- Migration tooling: `python -m autowfo storage migrate [--dry-run]` now rewrites legacy-readable payloads through canonical readers/writers into the current versioned shapes.
+- Rebuild tooling: `python -m autowfo storage rebuild-analytics` now recreates `analytics.duckdb` from experiment run stores and reports imported runs/combos plus schema version.
+- Control-panel observability: packaged overview now surfaces storage-health summary and exposes `/ops/storage-health.json` for machine-readable inspection.
+- Validation: focused storage/CLI/control-panel suites, consumer suites, JS syntax smoke, CLI doctor smoke, and full repository regression completed before closure.
+- Linked TODO: `AWF-211`, `AWF-212`, `AWF-213`, `AWF-214`, `AWF-215`, `AWF-216`.
+
 ## Steady State
-- Status: Re-entered after Phase 42 closure. UI-1, namespace/package convergence, control-panel runtime hardening, and storage-contract hardening completed and closed.
+- Status: Re-entered after Phase 43 closure. UI-1, namespace/package convergence, control-panel runtime hardening, storage-contract hardening, and storage-ops tooling completed and closed.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
-- Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, explicit control-panel root/artifacts startup contract, and versioned mutable-state/artifact payloads.
+- Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, explicit control-panel root/artifacts startup contract, versioned mutable-state/artifact payloads, and first-class storage validation/migration/rebuild commands.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
 - Maintenance mode: prioritize dependency drift management and warning cleanup.
 
@@ -599,3 +608,4 @@ Each experiment should record:
 - 2026-03-12: Phase 40 完成交付（AWF-193~198）：AUTOWFO runtime 與 control panel namespace 收斂到 `autowfo.*`；`scripts.autowfo.*` 與 `scripts.control_panel*` 退出產品級 import surface；control panel 正式以 `python -m autowfo.control_panel` 啟動；`pyproject.toml` 僅打包 `vectorbt*` + `autowfo*` 並分發 packaged static assets；README、MASTER_PLAN、TODO 與 AWF 報告同步完成收尾。
 - 2026-03-13: Phase 41 完成交付（AWF-199~204）：新增 `autowfo.control_panel.runtime` 統一路徑、process、data-refresh、scheduler 狀態；control panel 啟動入口支援 `--host/--port/--root/--artifacts-dir` 與環境變數覆寫；既有路由模組透過 alias/runtime 同步維持相容；README、RUNBOOK、MASTER_PLAN、TODO、AWF 報告與完整回歸同步完成收尾。
 - 2026-03-13: Phase 42 完成交付（AWF-205~210）：新增 `autowfo.storage_contract` 統一 storage schema-version 常數；`run_meta.json`、scheduler queue、paper position、signal scheduler state 與 analytics DuckDB metadata 全部帶入顯式版本標記；legacy payload 透過 reader normalization 保持可讀；MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
+- 2026-03-13: Phase 43 完成交付（AWF-211~216）：新增 `autowfo.storage_ops` 作為 storage validation / migration / analytics rebuild 核心；CLI 新增 `doctor` 與 `storage validate|migrate|rebuild-analytics`；control panel Overview 新增 storage health 摘要並暴露 `/ops/storage-health.json`；README、RUNBOOK、MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。

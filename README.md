@@ -78,8 +78,8 @@ pytest tests -q --tb=short -W error::DeprecationWarning
 
 Current baseline (2026-03-13):
 
-* `pytest tests -q --tb=short` -> `1445 passed, 26 warnings`
-* `pytest tests/test_control_panel.py tests/test_control_panel_experiments.py tests/test_experiments_ui_integration.py tests/test_e2e_experiment_lifecycle.py -q` -> `95 passed`
+* `pytest tests -q --tb=short` -> `1456 passed, 26 warnings`
+* `pytest tests/test_control_panel.py tests/test_control_panel_experiments.py tests/test_experiments_ui_integration.py tests/test_e2e_experiment_lifecycle.py -q` -> `96 passed`
 
 ### AUTOWFO Entrypoints
 
@@ -94,6 +94,11 @@ python -m autowfo.control_panel --root . --artifacts-dir artifacts
 - `python -m autowfo.control_panel` starts the packaged control panel and serves static assets from the installed `autowfo` package.
 - Control-panel startup now supports `--host`, `--port`, `--root`, `--artifacts-dir`, and `--data-refresh-interval-seconds`.
 - Environment-variable fallbacks are available for unattended runs: `AUTOWFO_CONTROL_PANEL_HOST`, `AUTOWFO_CONTROL_PANEL_PORT`, `AUTOWFO_ROOT`, `AUTOWFO_ARTIFACTS_DIR`, and `AUTOWFO_DATA_REFRESH_INTERVAL_SECONDS`.
+- Storage operations are now first-class CLI commands:
+  - `python -m autowfo doctor --cwd .`
+  - `python -m autowfo storage validate --cwd .`
+  - `python -m autowfo storage migrate --dry-run --cwd .`
+  - `python -m autowfo storage rebuild-analytics --cwd .`
 
 ## :sparkles: Usage
 
