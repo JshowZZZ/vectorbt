@@ -76,10 +76,10 @@ pytest tests -q --tb=short
 pytest tests -q --tb=short -W error::DeprecationWarning
 ```
 
-Current baseline (2026-03-02):
+Current baseline (2026-03-13):
 
-* `pytest tests -q --tb=short` -> `1442 passed, 30 warnings`
-* `pytest tests -q --tb=short -W error::DeprecationWarning` -> `1442 passed, 26 warnings`, `0` deprecation failures
+* `pytest tests -q --tb=short` -> `1445 passed, 26 warnings`
+* `pytest tests/test_control_panel.py tests/test_control_panel_experiments.py tests/test_experiments_ui_integration.py tests/test_e2e_experiment_lifecycle.py -q` -> `95 passed`
 
 ### AUTOWFO Entrypoints
 
@@ -87,11 +87,13 @@ This repository also ships the AUTOWFO experiment platform on top of `vectorbt`.
 
 ```sh
 python -m autowfo --help
-python -m autowfo.control_panel
+python -m autowfo.control_panel --root . --artifacts-dir artifacts
 ```
 
 - `python -m autowfo` is the CLI entrypoint for experiment workflows, analytics, patrol, and report export.
 - `python -m autowfo.control_panel` starts the packaged control panel and serves static assets from the installed `autowfo` package.
+- Control-panel startup now supports `--host`, `--port`, `--root`, `--artifacts-dir`, and `--data-refresh-interval-seconds`.
+- Environment-variable fallbacks are available for unattended runs: `AUTOWFO_CONTROL_PANEL_HOST`, `AUTOWFO_CONTROL_PANEL_PORT`, `AUTOWFO_ROOT`, `AUTOWFO_ARTIFACTS_DIR`, and `AUTOWFO_DATA_REFRESH_INTERVAL_SECONDS`.
 
 ## :sparkles: Usage
 

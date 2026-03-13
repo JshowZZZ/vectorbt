@@ -170,3 +170,9 @@
 | AWF-196 | 40 | done | Packaging metadata + static asset distribution | `plans/reports/AWF-196-report.md` |
 | AWF-197 | 40 | done | Import-surface cleanup + regression validation | `plans/reports/AWF-197-report.md` |
 | AWF-198 | 40 | done | README / plan closure + steady-state update | `plans/reports/AWF-198-report.md` |
+| AWF-199 | 41 | done | Phase 41 documentation freeze + runtime contract | `plans/reports/AWF-199-report.md` |
+| AWF-200 | 41 | done | Configurable root/artifacts contract + startup options | `plans/reports/AWF-200-report.md` |
+| AWF-201 | 41 | done | Process + data-refresh runtime convergence | `plans/reports/AWF-201-report.md` |
+| AWF-202 | 41 | done | Scheduler runtime convergence + mutable-state sync | `plans/reports/AWF-202-report.md` |
+| AWF-203 | 41 | done | Regression validation for runtime contract | `plans/reports/AWF-203-report.md` |
+| AWF-204 | 41 | done | Runbook / README / plan closure + steady-state update | `plans/reports/AWF-204-report.md` |

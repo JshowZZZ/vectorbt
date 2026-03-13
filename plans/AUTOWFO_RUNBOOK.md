@@ -15,6 +15,7 @@
    - `git status --short`
 2. Confirm CLI entrypoint is available:
    - `python -m autowfo --help`
+   - `python -m autowfo.control_panel --help`
 3. Check the target config parses:
    - `python -m autowfo run --help`
    - `python -m autowfo baseline --help`
@@ -42,6 +43,9 @@
    - `python -m autowfo plan --registry artifacts/run_registry.json --template-config artifacts/sweep_config.json --out-plan artifacts/batch_plan.auto.json --out-config-dir artifacts/planned_configs --max-jobs 20 --cwd .`
 7. Run Gate C reproducibility check (dual-run + schema validation + top-N comparison):
    - `python -m autowfo gate-c --config artifacts/sweep_config_window11_quick.json --workflow run --mode combo --target-mode combo --out-json artifacts/reproducibility/gate_c_window11_quick.json --cwd .`
+8. Start the packaged control panel against an explicit working root/artifacts root:
+   - `python -m autowfo.control_panel --host 127.0.0.1 --port 8787 --root . --artifacts-dir artifacts`
+   - Environment fallback: `AUTOWFO_CONTROL_PANEL_HOST`, `AUTOWFO_CONTROL_PANEL_PORT`, `AUTOWFO_ROOT`, `AUTOWFO_ARTIFACTS_DIR`, `AUTOWFO_DATA_REFRESH_INTERVAL_SECONDS`
 
 ## Output Locations
 - Latest sweep artifacts:
