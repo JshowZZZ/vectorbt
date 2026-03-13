@@ -12,6 +12,7 @@ from typing import Any, Callable
 from autowfo.notifier import NotificationEvent, notify, should_trigger_pnl_threshold
 from autowfo.paper_position import PaperPositionStore
 from autowfo.signal_exporter import build_live_signal_config_from_combo
+from autowfo.storage_contract import SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION
 
 
 def _atomic_write_json(path: Path, payload: Any) -> None:
@@ -52,6 +53,7 @@ class SignalScheduler:
 
     def _default_state(self) -> dict:
         return {
+            "schema_version": SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION,
             "tracked_experiment_ids": [],
             "last_experiment_id": None,
             "last_export_ts": "",
@@ -69,6 +71,9 @@ class SignalScheduler:
         if not isinstance(payload, dict):
             payload = {}
         state = self._default_state()
+        state["schema_version"] = (
+            str(payload.get("schema_version") or "").strip() or SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION
+        )
         tracked = payload.get("tracked_experiment_ids")
         if isinstance(tracked, list):
             state["tracked_experiment_ids"] = [str(v).strip() for v in tracked if str(v).strip()]
@@ -96,6 +101,7 @@ class SignalScheduler:
         tracked = [str(v).strip() for v in tracked if str(v).strip()]
         last_experiment_id = tracked[0] if tracked else None
         payload = {
+            "schema_version": SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION,
             "tracked_experiment_ids": tracked,
             "last_experiment_id": state.get("last_experiment_id") or last_experiment_id,
             "last_export_ts": str(state.get("last_export_ts") or ""),

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from autowfo.storage_contract import SCHEDULER_QUEUE_SCHEMA_VERSION
+
 
 @dataclass
 class SchedulerConfig:
@@ -58,6 +60,7 @@ class ExperimentQueue:
 
     def _default_state(self) -> dict:
         return {
+            "schema_version": SCHEDULER_QUEUE_SCHEMA_VERSION,
             "version": 1,
             "next_seq": 1,
             "items": [],
@@ -79,6 +82,7 @@ class ExperimentQueue:
             payload["next_seq"] = max(1, int(payload.get("next_seq", 1)))
         except Exception:
             payload["next_seq"] = 1
+        payload.setdefault("schema_version", SCHEDULER_QUEUE_SCHEMA_VERSION)
         payload.setdefault("version", 1)
         return payload
 

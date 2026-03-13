@@ -1,6 +1,7 @@
 import json
 
 from autowfo.scheduler import ExperimentQueue, SchedulerConfig
+from autowfo.storage_contract import SCHEDULER_QUEUE_SCHEMA_VERSION
 
 
 def _exp_cfg(exp_id):
@@ -31,8 +32,24 @@ def test_persist_and_reload_state_consistent(tmp_path):
     assert queue_b.size() == 2
     assert queue_b.peek()["experiment_id"] == "exp_a"
     raw = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert raw["schema_version"] == SCHEDULER_QUEUE_SCHEMA_VERSION
     assert raw["next_seq"] == 3
     assert len(raw["items"]) == 2
+
+
+def test_reload_legacy_queue_injects_schema_version(tmp_path):
+    queue_path = tmp_path / "scheduler_queue.json"
+    queue_path.write_text(
+        json.dumps({"version": 1, "next_seq": 2, "items": [{"experiment_id": "exp_a", "priority": "discovery", "seq": 1, "experiment_config": _exp_cfg("exp_a")}]}),
+        encoding="utf-8",
+    )
+
+    queue = ExperimentQueue(queue_path=queue_path)
+
+    assert queue.size() == 1
+    raw = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert "schema_version" not in raw
+    assert queue._state["schema_version"] == SCHEDULER_QUEUE_SCHEMA_VERSION
 
 
 def test_empty_pop_returns_none(tmp_path):

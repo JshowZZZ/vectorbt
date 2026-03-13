@@ -6,6 +6,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from autowfo.storage_contract import RUN_META_SCHEMA_VERSION
+
 
 _ORDERABLE_COLUMNS = {
     "combo_id",
@@ -63,13 +65,20 @@ class ArtifactStore:
     def write_run_meta(self, run_id: str, meta: dict) -> None:
         run_dir = self.init_run(run_id)
         path = run_dir / "run_meta.json"
-        path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = dict(meta) if isinstance(meta, dict) else {}
+        payload.setdefault("schema_version", RUN_META_SCHEMA_VERSION)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def read_run_meta(self, run_id: str) -> dict:
         path = self.get_run_meta_path(run_id)
         if not path.exists():
             raise FileNotFoundError(path)
-        return json.loads(path.read_text(encoding="utf-8-sig"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"run_meta.json must decode to object: {path}")
+        normalized = dict(payload)
+        normalized.setdefault("schema_version", RUN_META_SCHEMA_VERSION)
+        return normalized
 
     def list_runs(self) -> list[str]:
         runs_dir = self.experiment_dir / "runs"

@@ -6,6 +6,7 @@ duckdb = pytest.importorskip("duckdb")
 
 from autowfo.analytics import AnalyticsStore
 from autowfo.artifact_store import ArtifactStore
+from autowfo.storage_contract import ANALYTICS_STORE_SCHEMA_VERSION
 
 
 def _insert_combo_row(
@@ -160,6 +161,7 @@ def test_views_and_queries_return_expected_shape(tmp_path):
     }
     assert isinstance(best, list)
     assert best[0]["combo_id"] == "combo_high"
+    assert analytics.get_metadata()["schema_version"] == ANALYTICS_STORE_SCHEMA_VERSION
 
 
 def test_query_experiment_comparison(tmp_path):

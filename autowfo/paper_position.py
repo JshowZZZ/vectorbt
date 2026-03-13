@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from autowfo.storage_contract import PAPER_POSITIONS_SCHEMA_VERSION
+
 
 POSITION_KEYS = {
     "signal_id",
@@ -38,6 +40,25 @@ class PaperPositionStore:
     def __init__(self, positions_path: str | Path = "artifacts/paper_positions.json"):
         self.positions_path = Path(positions_path)
 
+    @staticmethod
+    def _normalize_payload(payload: Any) -> dict:
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            rows = payload.get("positions", [])
+        else:
+            rows = []
+        out = []
+        for row in rows:
+            if isinstance(row, dict):
+                out.append(dict(row))
+        schema_version = (
+            str(payload.get("schema_version") or "").strip()
+            if isinstance(payload, dict)
+            else ""
+        ) or PAPER_POSITIONS_SCHEMA_VERSION
+        return {"schema_version": schema_version, "positions": out}
+
     def _load_positions(self) -> list[dict]:
         if not self.positions_path.exists():
             return []
@@ -45,16 +66,16 @@ class PaperPositionStore:
             payload = json.loads(self.positions_path.read_text(encoding="utf-8-sig"))
         except Exception:
             return []
-        if not isinstance(payload, list):
-            return []
-        out = []
-        for row in payload:
-            if isinstance(row, dict):
-                out.append(dict(row))
-        return out
+        return self._normalize_payload(payload)["positions"]
 
     def _save_positions(self, positions: list[dict]) -> None:
-        _atomic_write_json(self.positions_path, positions)
+        _atomic_write_json(
+            self.positions_path,
+            {
+                "schema_version": PAPER_POSITIONS_SCHEMA_VERSION,
+                "positions": [dict(row) for row in positions if isinstance(row, dict)],
+            },
+        )
 
     def list_positions(self) -> list[dict]:
         return self._load_positions()

@@ -1,6 +1,7 @@
 import sqlite3
 
 from autowfo.artifact_store import ArtifactStore
+from autowfo.storage_contract import RUN_META_SCHEMA_VERSION
 
 
 def _insert_combo_row(conn, *, combo_id, experiment_id, run_id, wf_score, oos_sharpe):
@@ -107,7 +108,22 @@ def test_run_meta_roundtrip(tmp_path):
     payload = {"run_id": run_id, "n_combos": 42}
     store.write_run_meta(run_id, payload)
     loaded = store.read_run_meta(run_id)
-    assert loaded == payload
+    assert loaded["run_id"] == run_id
+    assert loaded["n_combos"] == 42
+    assert loaded["schema_version"] == RUN_META_SCHEMA_VERSION
+
+
+def test_read_run_meta_legacy_payload_injects_schema_version(tmp_path):
+    store = ArtifactStore("exp_demo", base_dir=tmp_path / "artifacts")
+    run_id = "20260301_020000"
+    meta_path = store.init_run(run_id) / "run_meta.json"
+    meta_path.write_text('{"run_id":"20260301_020000","n_combos":7}', encoding="utf-8")
+
+    loaded = store.read_run_meta(run_id)
+
+    assert loaded["run_id"] == run_id
+    assert loaded["n_combos"] == 7
+    assert loaded["schema_version"] == RUN_META_SCHEMA_VERSION
 
 
 def test_read_run_meta_missing_raises(tmp_path):

@@ -1,6 +1,7 @@
 import json
 
 from autowfo.paper_position import PaperPositionStore
+from autowfo.storage_contract import PAPER_POSITIONS_SCHEMA_VERSION
 
 
 def test_open_close_roundtrip_pnl(tmp_path):
@@ -51,9 +52,38 @@ def test_positions_json_schema_and_persistence(tmp_path):
     }
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert isinstance(payload, list)
-    assert payload[0]["signal_id"] == "sig_002"
+    assert payload["schema_version"] == PAPER_POSITIONS_SCHEMA_VERSION
+    assert isinstance(payload["positions"], list)
+    assert payload["positions"][0]["signal_id"] == "sig_002"
     assert not (path.parent / "paper_positions.json.tmp").exists()
+
+
+def test_legacy_positions_list_remains_readable(tmp_path):
+    path = tmp_path / "artifacts" / "paper_positions.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "signal_id": "sig_legacy",
+                    "experiment_id": "exp_legacy",
+                    "open_ts": "2026-03-01T00:00:00Z",
+                    "open_price": 100.0,
+                    "close_ts": None,
+                    "close_price": None,
+                    "pnl_pct": None,
+                    "status": "open",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    store = PaperPositionStore(path)
+    rows = store.list_positions()
+
+    assert len(rows) == 1
+    assert rows[0]["signal_id"] == "sig_legacy"
 
 
 def test_open_position_rejects_duplicate_open_signal(tmp_path):

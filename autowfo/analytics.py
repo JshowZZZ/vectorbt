@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from autowfo.storage_contract import ANALYTICS_STORE_SCHEMA_VERSION
+
 try:
     import duckdb  # type: ignore
 except Exception:  # pragma: no cover
@@ -43,6 +45,13 @@ CREATE TABLE IF NOT EXISTS paper_feedback (
 );
 """
 
+_ANALYTICS_METADATA_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS analytics_metadata (
+    meta_key TEXT PRIMARY KEY,
+    meta_value TEXT NOT NULL
+);
+"""
+
 
 class AnalyticsStore:
     def __init__(self, db_path: str | Path = "artifacts/analytics.duckdb"):
@@ -64,6 +73,68 @@ class AnalyticsStore:
     def _ensure_schema(conn) -> None:
         conn.execute(_COMBO_RESULTS_SCHEMA_SQL)
         conn.execute(_PAPER_FEEDBACK_SCHEMA_SQL)
+        conn.execute(_ANALYTICS_METADATA_SCHEMA_SQL)
+        conn.execute("DELETE FROM analytics_metadata WHERE meta_key = 'schema_version'")
+        conn.execute(
+            "INSERT INTO analytics_metadata (meta_key, meta_value) VALUES ('schema_version', ?)",
+            [ANALYTICS_STORE_SCHEMA_VERSION],
+        )
+
+    @staticmethod
+    def _create_views(conn) -> None:
+        conn.execute(
+            """
+CREATE OR REPLACE VIEW indicator_effectiveness AS
+SELECT
+  c.trigger_indicators,
+  c.action_indicators,
+  COUNT(*) AS n_combos,
+  AVG(c.oos_win_rate) AS avg_win_rate,
+  AVG(c.oos_sharpe) AS avg_sharpe,
+  COUNT(DISTINCT c.experiment_id) AS n_experiments,
+  AVG(f.paper_avg_pnl) AS paper_avg_pnl
+FROM (
+  SELECT
+    json_extract(indicator_params, '$.trigger_indicators') AS trigger_indicators,
+    json_extract(indicator_params, '$.action_indicators') AS action_indicators,
+    experiment_id,
+    oos_win_rate,
+    oos_sharpe
+  FROM combo_results
+  WHERE oos_n_trades >= 10
+) AS c
+LEFT JOIN (
+  SELECT
+    experiment_id,
+    AVG(pnl_pct) AS paper_avg_pnl
+  FROM paper_feedback
+  GROUP BY experiment_id
+) AS f
+ON c.experiment_id = f.experiment_id
+GROUP BY 1, 2
+ORDER BY avg_sharpe DESC
+"""
+        )
+        conn.execute(
+            """
+CREATE OR REPLACE VIEW all_time_best AS
+SELECT * FROM combo_results
+WHERE oos_n_trades >= 10
+ORDER BY wf_score DESC
+LIMIT 100
+"""
+        )
+
+    def get_metadata(self) -> dict:
+        if duckdb is None or not self._db_exists():
+            return {"schema_version": ANALYTICS_STORE_SCHEMA_VERSION}
+        conn = self._connect()
+        try:
+            self._ensure_schema(conn)
+            rows = conn.execute("SELECT meta_key, meta_value FROM analytics_metadata").fetchall()
+            return {str(key): value for key, value in rows}
+        finally:
+            conn.close()
 
     def update_from_run(self, experiment_id: str, run_id: str, artifact_store) -> int:
         db_path = artifact_store.get_run_db_path(run_id)
@@ -125,48 +196,7 @@ WHERE combo_results.combo_id = incoming_df.combo_id
         conn = self._connect()
         try:
             self._ensure_schema(conn)
-            conn.execute(
-                """
-CREATE OR REPLACE VIEW indicator_effectiveness AS
-SELECT
-  c.trigger_indicators,
-  c.action_indicators,
-  COUNT(*) AS n_combos,
-  AVG(c.oos_win_rate) AS avg_win_rate,
-  AVG(c.oos_sharpe) AS avg_sharpe,
-  COUNT(DISTINCT c.experiment_id) AS n_experiments,
-  AVG(f.paper_avg_pnl) AS paper_avg_pnl
-FROM (
-  SELECT
-    json_extract(indicator_params, '$.trigger_indicators') AS trigger_indicators,
-    json_extract(indicator_params, '$.action_indicators') AS action_indicators,
-    experiment_id,
-    oos_win_rate,
-    oos_sharpe
-  FROM combo_results
-  WHERE oos_n_trades >= 10
-) AS c
-LEFT JOIN (
-  SELECT
-    experiment_id,
-    AVG(pnl_pct) AS paper_avg_pnl
-  FROM paper_feedback
-  GROUP BY experiment_id
-) AS f
-ON c.experiment_id = f.experiment_id
-GROUP BY 1, 2
-ORDER BY avg_sharpe DESC
-"""
-            )
-            conn.execute(
-                """
-CREATE OR REPLACE VIEW all_time_best AS
-SELECT * FROM combo_results
-WHERE oos_n_trades >= 10
-ORDER BY wf_score DESC
-LIMIT 100
-"""
-            )
+            self._create_views(conn)
         finally:
             conn.close()
 
@@ -395,7 +425,7 @@ FROM combo_results
 """
             ).fetchone()
             try:
-                self.create_views()
+                self._create_views(conn)
                 leaderboard_size = conn.execute("SELECT COUNT(*) FROM indicator_effectiveness").fetchone()[0]
             except Exception:
                 leaderboard_size = 0

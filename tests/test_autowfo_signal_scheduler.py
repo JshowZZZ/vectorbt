@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from autowfo.signal_scheduler import SignalScheduler
+from autowfo.storage_contract import PAPER_POSITIONS_SCHEMA_VERSION, SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION
 
 
 class _FakeAnalyticsStore:
@@ -75,7 +76,9 @@ def test_signal_scheduler_switches_strategy_close_then_open(tmp_path):
     assert second["close_result"]["error"] == ""
 
     positions_path = artifacts / "paper_positions.json"
-    positions = json.loads(positions_path.read_text(encoding="utf-8"))
+    positions_payload = json.loads(positions_path.read_text(encoding="utf-8"))
+    assert positions_payload["schema_version"] == PAPER_POSITIONS_SCHEMA_VERSION
+    positions = positions_payload["positions"]
     assert len(positions) == 2
     assert positions[0]["signal_id"] == "signal::exp_a"
     assert positions[0]["status"] == "closed"
@@ -85,12 +88,14 @@ def test_signal_scheduler_switches_strategy_close_then_open(tmp_path):
     state_path = artifacts / "signal_schedule_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert set(state.keys()) >= {
+        "schema_version",
         "tracked_experiment_ids",
         "last_experiment_id",
         "last_export_ts",
         "schedule_interval_seconds",
         "top_n",
     }
+    assert state["schema_version"] == SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION
     assert state["last_experiment_id"] == "exp_b"
     assert state["schedule_interval_seconds"] == 120
     assert state["tracked_experiment_ids"] == ["exp_b"]
@@ -125,7 +130,7 @@ def test_signal_scheduler_skips_when_top_strategy_unchanged(tmp_path):
     assert second["changed"] is False
     assert second["experiment_id"] == "exp_same"
 
-    positions = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))
+    positions = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))["positions"]
     assert len(positions) == 1
     assert positions[0]["status"] == "open"
     assert positions[0]["signal_id"] == "signal::exp_same"
@@ -156,7 +161,7 @@ def test_signal_scheduler_top3_opens_and_closes_dropped_strategy(tmp_path):
     assert first["ok"] is True
     assert first["changed"] is True
     assert first["tracked_experiment_ids"] == ["exp_a", "exp_b", "exp_c"]
-    positions_after_first = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))
+    positions_after_first = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))["positions"]
     open_first = [row for row in positions_after_first if row["status"] == "open"]
     assert len(open_first) == 3
 
@@ -169,10 +174,40 @@ def test_signal_scheduler_top3_opens_and_closes_dropped_strategy(tmp_path):
     assert second["ok"] is True
     assert second["changed"] is True
     assert second["tracked_experiment_ids"] == ["exp_b", "exp_c", "exp_d"]
-    positions_after_second = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))
+    positions_after_second = json.loads((artifacts / "paper_positions.json").read_text(encoding="utf-8"))["positions"]
     rows_by_signal = {row["signal_id"]: row for row in positions_after_second}
     assert rows_by_signal["signal::exp_a"]["status"] == "closed"
     assert rows_by_signal["signal::exp_d"]["status"] == "open"
+
+
+def test_signal_scheduler_reads_legacy_state_payload(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    state_path = artifacts / "signal_schedule_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "tracked_experiment_ids": ["exp_legacy"],
+                "last_experiment_id": "exp_legacy",
+                "last_export_ts": "2026-03-01T00:00:00+00:00",
+                "schedule_interval_seconds": 120,
+                "top_n": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    scheduler = SignalScheduler(
+        analytics_store=_FakeAnalyticsStore([]),
+        state_path=state_path,
+        export_path=artifacts / "live_signal_config.json",
+        positions_path=artifacts / "paper_positions.json",
+    )
+
+    state = scheduler.read_state()
+
+    assert state["schema_version"] == SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION
+    assert state["tracked_experiment_ids"] == ["exp_legacy"]
 
 
 def test_signal_scheduler_retry_and_patrol_anomaly_notify(tmp_path, monkeypatch):
