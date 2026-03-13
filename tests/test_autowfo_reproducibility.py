@@ -2,8 +2,8 @@ import json
 
 import pandas as pd
 
-from scripts.autowfo import artifact_contract as ac
-from scripts.autowfo import reproducibility as rep
+from autowfo import artifact_contract as ac
+from autowfo import reproducibility as rep
 
 
 def test_compare_top_n_stability_identical_rows_are_stable():
@@ -152,3 +152,4 @@ def test_validate_run_artifact_schema_detects_missing_metadata_fields(tmp_path):
     assert got["valid"] is False
     assert got["run_metadata_missing_fields"] == ["combo_seed"]
     assert "param_sweep_combo_summary.csv" in got["row_metadata_missing_by_file"]
+

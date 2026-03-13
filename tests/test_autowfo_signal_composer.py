@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import signal_composer
+from autowfo import signal_composer
 
 
 def _make_ohlcv(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -217,3 +217,4 @@ def test_nan_values_produce_false_not_nan(monkeypatch):
     out = signal_composer.compose(trigger_ohlcv, action_ohlcv, experiment, combo_params)
     assert out.entry_long.tolist() == [False, True, False]
     assert bool(out.entry_long.isna().any()) is False
+

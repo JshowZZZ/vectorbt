@@ -431,7 +431,7 @@ def _run_patrol_cycle(
     target_symbols: Optional[List[str]] = None,
     timeframe_days_map: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
-    """Execute one plan → batch → report cycle.
+    """Execute one plan ??batch ??report cycle.
 
     Returns a summary dict with ``plan_jobs``, ``batch_ok``, ``report_ok``,
     ``error`` (None on success).
@@ -511,7 +511,7 @@ def _run_patrol_cycle(
         plan_out.parent.mkdir(parents=True, exist_ok=True)
         plan_out.write_text(json.dumps(plan_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         result["plan_jobs"] = len(jobs)
-        print(f"[cron:plan] generated {len(jobs)} jobs → {plan_out}")
+        print(f"[cron:plan] generated {len(jobs)} jobs ??{plan_out}")
     except Exception as exc:
         result["error"] = f"plan failed: {exc}"
         print(f"[cron:plan] ERROR: {exc}")
@@ -519,7 +519,7 @@ def _run_patrol_cycle(
 
     # If no jobs, skip batch and go straight to report
     if not jobs:
-        print("[cron:plan] no untested pairs — skipping batch")
+        print("[cron:plan] no untested pairs ??skipping batch")
         result["batch_ok"] = True
     else:
         # --- 2. Batch ----------------------------------------------------------
@@ -564,7 +564,7 @@ def _run_patrol_cycle(
 
     # --- 3. Report ---------------------------------------------------------
     try:
-        from scripts.autowfo import cross_run
+        from autowfo import cross_run
 
         artifacts_dir = cwd / "artifacts"
         if not artifacts_dir.exists():
@@ -579,11 +579,12 @@ def _run_patrol_cycle(
         )
         result["top_entities"] = _extract_top_entities(report_payload, limit=max(1, int(top_n)))
         result["report_ok"] = True
-        print(f"[cron:report] → {report_html_path}")
+        print(f"[cron:report] ??{report_html_path}")
     except Exception as exc:
         result["error"] = f"report failed: {exc}"
         print(f"[cron:report] ERROR: {exc}")
 
     result["cycle_end_utc"] = _utc_now_iso()
     return result
+
 

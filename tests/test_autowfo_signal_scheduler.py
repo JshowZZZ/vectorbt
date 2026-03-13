@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from scripts.autowfo.signal_scheduler import SignalScheduler
+from autowfo.signal_scheduler import SignalScheduler
 
 
 class _FakeAnalyticsStore:
@@ -209,7 +209,7 @@ def test_signal_scheduler_retry_and_patrol_anomaly_notify(tmp_path, monkeypatch)
         return {"ok": True, "sent": [], "skipped": ["config_missing"], "errors": []}
 
     monkeypatch.setattr(scheduler, "tick", _always_fail_tick)
-    import scripts.autowfo.signal_scheduler as signal_scheduler_mod
+    import autowfo.signal_scheduler as signal_scheduler_mod
     monkeypatch.setattr(signal_scheduler_mod, "notify", _fake_notify)
 
     ticks = scheduler.run_forever(max_ticks=1, sleep_func=_fake_sleep)
@@ -217,3 +217,4 @@ def test_signal_scheduler_retry_and_patrol_anomaly_notify(tmp_path, monkeypatch)
     assert tick_calls["n"] == 4
     assert sleep_calls == [1.0, 2.0, 4.0]
     assert any(row["event_type"] == "PATROL_ANOMALY" for row in notify_calls)
+

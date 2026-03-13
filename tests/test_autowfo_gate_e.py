@@ -9,17 +9,17 @@ import pytest
 
 
 SUB_MODULES = [
-    "scripts.autowfo.engine_helpers",
-    "scripts.autowfo.engine_runtime",
-    "scripts.autowfo.engine_report",
-    "scripts.autowfo.engine_search",
-    "scripts.autowfo.engine_finalize",
+    "autowfo.engine_helpers",
+    "autowfo.engine_runtime",
+    "autowfo.engine_report",
+    "autowfo.engine_search",
+    "autowfo.engine_finalize",
 ]
 
 
 def test_engine_facade_exports_only_default_config():
-    engine = importlib.import_module("scripts.autowfo.engine")
-    helpers = importlib.import_module("scripts.autowfo.engine_helpers")
+    engine = importlib.import_module("autowfo.engine")
+    helpers = importlib.import_module("autowfo.engine_helpers")
 
     assert hasattr(engine, "DEFAULT_CONFIG")
     assert engine.DEFAULT_CONFIG is helpers.DEFAULT_CONFIG
@@ -33,8 +33,8 @@ def test_engine_facade_exports_only_default_config():
 
 
 def test_private_helpers_available_from_source_modules():
-    search_mod = importlib.import_module("scripts.autowfo.engine_search")
-    runtime_mod = importlib.import_module("scripts.autowfo.engine_runtime")
+    search_mod = importlib.import_module("autowfo.engine_search")
+    runtime_mod = importlib.import_module("autowfo.engine_runtime")
     assert callable(getattr(search_mod, "_run_search_for_timeframe"))
     assert callable(getattr(runtime_mod, "_resolve_regime_signals"))
 
@@ -58,7 +58,7 @@ class TestSubModuleLineCount:
 
 
 def test_run_finalize_pipeline_is_keyword_only():
-    from scripts.autowfo.engine_finalize import _run_finalize_pipeline
+    from autowfo.engine_finalize import _run_finalize_pipeline
 
     sig = inspect.signature(_run_finalize_pipeline)
     for name, param in sig.parameters.items():
@@ -68,7 +68,7 @@ def test_run_finalize_pipeline_is_keyword_only():
 
 
 def test_build_completion_output_map_returns_dict():
-    from scripts.autowfo.engine_finalize import _build_completion_output_map
+    from autowfo.engine_finalize import _build_completion_output_map
 
     result = _build_completion_output_map(
         combo_path="a",
@@ -83,3 +83,4 @@ def test_build_completion_output_map_returns_dict():
     )
     assert isinstance(result, dict)
     assert "combo_summary" in result
+

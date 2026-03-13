@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from scripts.autowfo import data_multi
+from autowfo import data_multi
 
 
 def _make_ohlcv(start: str, periods: int, freq: str = "1h") -> pd.DataFrame:
@@ -235,3 +235,4 @@ def test_load_ohlcv_concurrent_calls_are_safe(tmp_path, monkeypatch):
     pd.testing.assert_frame_equal(results[0], results[1])
     assert fetch_count["value"] == 1
     assert (tmp_path / "binance_btc-usdt_1h.parquet").exists()
+

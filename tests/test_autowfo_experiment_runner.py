@@ -5,14 +5,14 @@ import sqlite3
 
 import pandas as pd
 
-from scripts.autowfo.artifact_store import ArtifactStore
-from scripts.autowfo.experiment import Experiment
-from scripts.autowfo.experiment_runner import (
+from autowfo.artifact_store import ArtifactStore
+from autowfo.experiment import Experiment
+from autowfo.experiment_runner import (
     ExperimentRunner,
     RunResult,
     _compute_wf_score,
 )
-from scripts.autowfo.signal_composer import SignalResult
+from autowfo.signal_composer import SignalResult
 
 
 def _make_ohlcv(n_bars: int = 24 * 25, freq: str = "1h") -> pd.DataFrame:
@@ -135,7 +135,7 @@ def _make_runner(
 
 def test_run_returns_runresult_and_inserts_rows(tmp_path, monkeypatch):
     experiment, store, runner = _make_runner(tmp_path, direction="both")
-    monkeypatch.setattr("scripts.autowfo.experiment_runner.compose", _fake_compose)
+    monkeypatch.setattr("autowfo.experiment_runner.compose", _fake_compose)
     monkeypatch.setattr(ExperimentRunner, "_run_window_backtest", _fake_window_metrics)
 
     result = runner.run()
@@ -169,7 +169,7 @@ def test_wf_score_formula_matches_spec():
 
 def test_progress_callback_called(tmp_path, monkeypatch):
     experiment, _store, runner = _make_runner(tmp_path, direction="both")
-    monkeypatch.setattr("scripts.autowfo.experiment_runner.compose", _fake_compose)
+    monkeypatch.setattr("autowfo.experiment_runner.compose", _fake_compose)
     monkeypatch.setattr(ExperimentRunner, "_run_window_backtest", _fake_window_metrics)
 
     progress_calls = []
@@ -223,7 +223,7 @@ def test_combo_error_isolation(tmp_path, monkeypatch):
 
 def test_run_writes_run_meta(tmp_path, monkeypatch):
     _experiment, store, runner = _make_runner(tmp_path, direction="long", run_id="20260227_020202")
-    monkeypatch.setattr("scripts.autowfo.experiment_runner.compose", _fake_compose)
+    monkeypatch.setattr("autowfo.experiment_runner.compose", _fake_compose)
     monkeypatch.setattr(ExperimentRunner, "_run_window_backtest", _fake_window_metrics)
 
     result = runner.run()
@@ -250,7 +250,7 @@ def test_run_calls_analytics_hook_when_provided(tmp_path, monkeypatch):
         run_id="20260227_040404",
         analytics_store=analytics,
     )
-    monkeypatch.setattr("scripts.autowfo.experiment_runner.compose", _fake_compose)
+    monkeypatch.setattr("autowfo.experiment_runner.compose", _fake_compose)
     monkeypatch.setattr(ExperimentRunner, "_run_window_backtest", _fake_window_metrics)
 
     result = runner.run()
@@ -275,9 +275,10 @@ def test_analytics_hook_failure_does_not_break_run(tmp_path, monkeypatch):
         run_id="20260227_050505",
         analytics_store=FailingAnalyticsStore(),
     )
-    monkeypatch.setattr("scripts.autowfo.experiment_runner.compose", _fake_compose)
+    monkeypatch.setattr("autowfo.experiment_runner.compose", _fake_compose)
     monkeypatch.setattr(ExperimentRunner, "_run_window_backtest", _fake_window_metrics)
 
     result = runner.run()
     assert isinstance(result, RunResult)
     assert result.n_errors == 0
+

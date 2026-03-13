@@ -411,3 +411,4 @@ class TestGenerators:
                 ], names=['bolb_window', 'bolb_pos_th', 'bolb_neg_th', None])
             )
         )
+

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from scripts.autowfo import split as s
+from autowfo import split as s
 
 
 def test_build_walk_forward_slices_empty_index():
@@ -111,7 +111,7 @@ def test_build_walk_forward_windows_rolling_moves_train_start():
     assert second_train_end - second_train_start == pd.Timedelta(days=5)
 
 
-# ── 3-way split (validation segment) tests ─────────────────────────
+# ?? 3-way split (validation segment) tests ?????????????????????????
 
 def test_windows_valid_days_zero_degenerates_to_2way():
     """valid_days=0 should produce 6-tuples where valid_start == valid_end == train_end."""
@@ -259,3 +259,4 @@ def test_windows_returns_6_tuples():
     assert len(got) > 0
     for w in got:
         assert len(w) == 6
+

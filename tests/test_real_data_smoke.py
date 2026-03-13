@@ -12,11 +12,11 @@ def test_real_data_smoke_runner_to_analytics(tmp_path, monkeypatch):
     pytest.importorskip("duckdb")
     vbt = pytest.importorskip("vectorbt")
 
-    from scripts.autowfo import data_multi
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.artifact_store import ArtifactStore
-    from scripts.autowfo.experiment import Experiment
-    from scripts.autowfo.experiment_runner import ExperimentRunner
+    from autowfo import data_multi
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.artifact_store import ArtifactStore
+    from autowfo.experiment import Experiment
+    from autowfo.experiment_runner import ExperimentRunner
 
     start = pd.Timestamp("2026-01-01 00:00:00", tz="UTC")
     end = start + pd.Timedelta(hours=499)
@@ -142,3 +142,4 @@ def test_real_data_smoke_runner_to_analytics(tmp_path, monkeypatch):
     assert updated_rows >= 1
     leaderboard = analytics_store.query_indicator_leaderboard(limit=20)
     assert len(leaderboard) >= 1
+

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.autowfo import artifact_contract as ac
+from autowfo import artifact_contract as ac
 
 
 def test_default_artifact_contract_contains_expected_sections():
@@ -39,8 +39,8 @@ def test_artifacts_module_fail_fast_when_contract_invalid(monkeypatch, tmp_path)
     bad_path = tmp_path / "invalid_artifact_contract.yaml"
     bad_path.write_text(json.dumps(contract), encoding="utf-8")
 
-    import scripts.autowfo.artifacts as artifacts_module
-    import scripts.run_btc_regime_sweep as sweep_module
+    import autowfo.artifacts as artifacts_module
+    import autowfo.run_btc_regime_sweep as sweep_module
 
     monkeypatch.setenv(ac.ARTIFACT_CONTRACT_PATH_ENV, str(bad_path))
     try:
@@ -50,3 +50,4 @@ def test_artifacts_module_fail_fast_when_contract_invalid(monkeypatch, tmp_path)
         monkeypatch.delenv(ac.ARTIFACT_CONTRACT_PATH_ENV, raising=False)
         importlib.reload(artifacts_module)
         importlib.reload(sweep_module)
+

@@ -4,8 +4,8 @@ import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
-from scripts.autowfo.analytics import AnalyticsStore
-from scripts.autowfo.artifact_store import ArtifactStore
+from autowfo.analytics import AnalyticsStore
+from autowfo.artifact_store import ArtifactStore
 
 
 def _insert_combo_row(
@@ -377,3 +377,4 @@ def test_add_paper_feedback_updates_leaderboard_paper_avg_pnl(tmp_path):
     assert "paper_avg_pnl" in row
     assert row["paper_avg_pnl"] is not None
     assert round(float(row["paper_avg_pnl"]), 8) == 2.0
+

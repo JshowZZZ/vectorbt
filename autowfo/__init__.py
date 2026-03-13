@@ -1,5 +1,3 @@
-"""AUTOWFO one-command entrypoints."""
+"""AUTOWFO implementation modules used by script entrypoints."""
 
-from autowfo.cli import main
 
-__all__ = ["main"]

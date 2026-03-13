@@ -3,8 +3,8 @@ import copy
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import evaluator as ev
-from scripts.autowfo import parallel as pr
+from autowfo import evaluator as ev
+from autowfo import parallel as pr
 
 
 def _normalize_for_compare(value):
@@ -89,3 +89,4 @@ def test_parallel_combo_results_match_sequential_bit_identical():
     got = list(pr._run_combo_tasks(tasks, runtime, max_workers=3))
     assert _normalize_for_compare(got) == _normalize_for_compare(expected)
     assert len(got) == len(tasks)
+

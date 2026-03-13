@@ -63,7 +63,7 @@ def add_gate_parser(subparsers: argparse._SubParsersAction[Any], cli_impl: Any) 
 def cmd_gate_c(args: argparse.Namespace, cli_impl: Any) -> int:
     import pandas as pd
 
-    from scripts.autowfo import reproducibility
+    from autowfo import reproducibility
 
     cwd = Path(args.cwd).resolve()
     config_path = cli_impl._resolve_path(cwd, args.config)
@@ -200,3 +200,4 @@ def cmd_gate_c(args: argparse.Namespace, cli_impl: Any) -> int:
         )
     )
     return 0
+

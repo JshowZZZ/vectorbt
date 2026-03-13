@@ -16,3 +16,4 @@ class TestSettings:
         new_settings = vbt.settings.load(tmp_path / "settings")
         assert vbt.settings == new_settings
         assert vbt.settings.__dict__ == new_settings.__dict__
+

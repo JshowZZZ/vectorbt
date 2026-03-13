@@ -7559,3 +7559,4 @@ class TestPortfolio:
             _ = pf.plot(subplots='all')
         with pytest.raises(Exception):
             _ = pf_grouped.plot(subplots='all')
+

@@ -5,9 +5,9 @@ import pytest
 
 pytest.importorskip("duckdb")
 
-from scripts.autowfo.analytics import AnalyticsStore
-from scripts.autowfo.artifact_store import ArtifactStore
-from scripts.autowfo.signal_exporter import export_top_signal_config
+from autowfo.analytics import AnalyticsStore
+from autowfo.artifact_store import ArtifactStore
+from autowfo.signal_exporter import export_top_signal_config
 
 
 def _insert_combo_row(
@@ -108,4 +108,5 @@ def test_export_top_signal_config_raises_when_analytics_empty(tmp_path):
     analytics = AnalyticsStore(tmp_path / "analytics.duckdb")
     with pytest.raises(ValueError, match="no analytics strategies"):
         export_top_signal_config(analytics_store=analytics, top_n=1, out_path=tmp_path / "live_signal_config.json")
+
 

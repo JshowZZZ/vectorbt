@@ -14,9 +14,9 @@ import pandas as pd
 
 from autowfo.commands.core_patrol import _append_patrol_log
 from autowfo.commands.cron import _run_scheduler_patrol_cycle
-from scripts.autowfo import data_multi
-from scripts.autowfo.analytics import AnalyticsStore
-from scripts.autowfo import experiment_runner as experiment_runner_mod
+from autowfo import data_multi
+from autowfo.analytics import AnalyticsStore
+from autowfo import experiment_runner as experiment_runner_mod
 
 
 def _utc_now_iso() -> str:
@@ -247,3 +247,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

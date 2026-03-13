@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from autowfo import cli
-from scripts.autowfo import artifact_contract as ac
+from autowfo import artifact_contract as ac
 
 
 def test_cli_run_writes_runtime_config_and_invokes_sweep(tmp_path, monkeypatch):
@@ -45,7 +45,7 @@ def test_cli_run_writes_runtime_config_and_invokes_sweep(tmp_path, monkeypatch):
     payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
     assert payload["search_mode"] == "refine"
     assert payload["max_workers"] == 3
-    assert calls[0]["cmd"] == [cli.sys.executable, "-m", "scripts.run_btc_regime_sweep"]
+    assert calls[0]["cmd"] == [cli.sys.executable, "-m", "autowfo.run_btc_regime_sweep"]
     assert calls[0]["env"]["VBT_SWEEP_MODE"] == "refine"
 
 
@@ -77,7 +77,7 @@ def test_cli_baseline_writes_runtime_config_and_invokes_baseline(tmp_path, monke
     runtime_cfg = tmp_path / "artifacts" / "sweep_config.json"
     payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
     assert payload["max_workers"] == 2
-    assert calls[0]["cmd"] == [cli.sys.executable, "-m", "scripts.run_autowfo_baseline"]
+    assert calls[0]["cmd"] == [cli.sys.executable, "-m", "autowfo.run_autowfo_baseline"]
 
 
 def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
@@ -394,7 +394,7 @@ def test_cli_plan_target_timeframes_surfaces_unseen_gaps(tmp_path):
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    # Registry has only 2h×ETH and 4h×ETH as tested.  1h never appeared.
+    # Registry has only 2h?ETH and 4h?ETH as tested.  1h never appeared.
     registry_path = artifacts_dir / "run_registry.json"
     registry_path.write_text(
         json.dumps({
@@ -883,7 +883,7 @@ def test_cli_batch_parallel_skips_seen_keys(tmp_path, monkeypatch):
     assert cli.main(base_argv) == 0
     assert len(calls) == 1
 
-    # Second run — job already seen
+    # Second run ??job already seen
     assert cli.main(base_argv) == 0
     assert len(calls) == 1  # no new calls
 
@@ -1273,8 +1273,8 @@ def test_cli_help_lists_all_subcommands():
 
 def test_cli_export_signal_writes_live_signal_config(tmp_path):
     pytest.importorskip("duckdb")
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.artifact_store import ArtifactStore
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.artifact_store import ArtifactStore
 
     experiment_id = "exp_cli_signal"
     run_id = "20260301_010000"
@@ -1337,7 +1337,7 @@ def test_cli_export_signal_writes_live_signal_config(tmp_path):
 
 
 def test_cli_export_report_writes_html_file(tmp_path, monkeypatch):
-    from scripts.autowfo import report_export as report_export_mod
+    from autowfo import report_export as report_export_mod
 
     captured = {}
 
@@ -1368,7 +1368,7 @@ def test_cli_export_report_writes_html_file(tmp_path, monkeypatch):
 
 
 def test_cli_schedule_signals_runs_daemon_with_interval_and_max_ticks(tmp_path, monkeypatch):
-    from scripts.autowfo import signal_scheduler as signal_scheduler_mod
+    from autowfo import signal_scheduler as signal_scheduler_mod
 
     calls = {}
 
@@ -1504,7 +1504,7 @@ def test_cmd_cron_scheduler_mode_runs_discovery_then_run_once(tmp_path, monkeypa
     )
 
     from autowfo.commands import cron as cron_cmd
-    from scripts.autowfo import discovery_loop as discovery_loop_mod
+    from autowfo import discovery_loop as discovery_loop_mod
 
     tick_calls = []
     run_once_calls = []
@@ -1633,7 +1633,7 @@ def test_cmd_cron_scheduler_mode_opt_in_signal_scheduling_tick(tmp_path, monkeyp
     )
 
     from autowfo.commands import cron as cron_cmd
-    from scripts.autowfo import signal_scheduler as signal_scheduler_mod
+    from autowfo import signal_scheduler as signal_scheduler_mod
 
     run_once_calls = []
     signal_tick_calls = []
@@ -1761,7 +1761,7 @@ def test_run_patrol_cycle_plan_error_returns_early(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-#  AWF-032: Cron patrol validation — deeper cycle state tracking tests
+#  AWF-032: Cron patrol validation ??deeper cycle state tracking tests
 # ---------------------------------------------------------------------------
 
 
@@ -2104,3 +2104,4 @@ def test_cmd_cron_notifications_and_state_update(tmp_path, monkeypatch):
     assert notify_state_path.exists()
     notify_state = json.loads(notify_state_path.read_text(encoding="utf-8"))
     assert notify_state["last_top"][0]["key"] == "combo-B"
+

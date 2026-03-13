@@ -4,13 +4,13 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from scripts.autowfo import engine_finalize as _engine_finalize_mod
-from scripts.autowfo import engine_helpers as _engine_helpers_mod
-from scripts.autowfo import engine_report as _engine_report_mod
-from scripts.autowfo import engine_runtime as _engine_runtime_mod
-from scripts.autowfo import engine_search as _engine_search_mod
-from scripts.autowfo import engine_search as _e_search
-from scripts.autowfo import engine_finalize as _e_finalize
+from autowfo import engine_finalize as _engine_finalize_mod
+from autowfo import engine_helpers as _engine_helpers_mod
+from autowfo import engine_report as _engine_report_mod
+from autowfo import engine_runtime as _engine_runtime_mod
+from autowfo import engine_search as _engine_search_mod
+from autowfo import engine_search as _e_search
+from autowfo import engine_finalize as _e_finalize
 
 
 def _collect_private_callables(module):
@@ -635,10 +635,10 @@ def test_build_seen_keys_fills_null_fields_with_defaults():
     """AWF-106b: rows with None/NaN strict fields get DEFAULT_CONFIG fills so
     they pass has_all_config_fields and produce matchable seen keys.
     Regression: old CSV rows written before capital_mode/wf_valid_days/wf_mode
-    were added caused ALL rows to fail has_all_config_fields → seen_keys always
-    empty → 0 cross-run skips → same speed on every re-run."""
+    were added caused ALL rows to fail has_all_config_fields ??seen_keys always
+    empty ??0 cross-run skips ??same speed on every re-run."""
     import numpy as np
-    from scripts.autowfo.engine_helpers import _SEEN_KEY_NULL_FIELD_DEFAULTS
+    from autowfo.engine_helpers import _SEEN_KEY_NULL_FIELD_DEFAULTS
 
     # Simulate an old CSV row: has combo fields but capital_mode/wf_mode are NaN
     old_row = {
@@ -652,7 +652,7 @@ def test_build_seen_keys_fills_null_fields_with_defaults():
     df = pd.DataFrame([old_row])
 
     # With the old behavior (no fill), has_all_config_fields would fail for
-    # capital_mode=NaN → seen_keys is empty.
+    # capital_mode=NaN ??seen_keys is empty.
     strict_fields = ["capital_mode", "wf_mode", "indicator_list"]
 
     def has_all_config_fields(row):
@@ -693,7 +693,7 @@ def test_normalize_key_value_int_float_consistency():
     After AWF-106c, integer-valued floats are converted to int for consistent
     key representation regardless of how the value was sourced."""
     import numpy as np
-    from scripts.autowfo.search import _normalize_key_value, _combo_key_from_dict
+    from autowfo.search import _normalize_key_value, _combo_key_from_dict
 
     # Core correctness: integer-valued floats -> int
     assert _normalize_key_value(0.0) == 0
@@ -738,7 +738,7 @@ def test_build_seen_keys_int_float_csv_roundtrip():
 
     def key_fn(row):
         # wf_valid_days must come out as "0" not "0.0"
-        from scripts.autowfo.search import _combo_key_from_dict
+        from autowfo.search import _combo_key_from_dict
         return _combo_key_from_dict(row, ["wf_valid_days", "indicator_list"])
 
     seen = e._build_seen_keys(df, has_all_config_fields_fn=has_all, combo_key_from_dict_fn=key_fn)
@@ -757,7 +757,7 @@ def test_build_seen_keys_null_fill_overrides_capital_mode():
     DEFAULT_CONFIG['capital_mode']='shared' regardless of the actual runtime
     value.  When the user's config used capital_mode='per_symbol', the
     runtime-generated key (capital_mode=per_symbol) never matched the seen key
-    (capital_mode=shared) → zero cross-run skips.
+    (capital_mode=shared) ??zero cross-run skips.
 
     After AWF-106d:
     - _build_combo_row writes capital_mode to CSV (prevents future NaN).
@@ -781,7 +781,7 @@ def test_build_seen_keys_null_fill_overrides_capital_mode():
         return True
 
     def key_fn(row):
-        from scripts.autowfo.search import _combo_key_from_dict
+        from autowfo.search import _combo_key_from_dict
         return _combo_key_from_dict(row, ["capital_mode", "indicator_list"])
 
     # Without override: NaN is filled with DEFAULT_CONFIG's 'shared'
@@ -1444,7 +1444,7 @@ def test_run_parallel_combo_search_for_timeframe_counts_done_and_skipped():
     assert result == {"done": 2, "skipped": 1}
     assert counter == {"done": 2, "skipped": 1}
     assert seen_keys == {"k1", "k2"}
-    # AWF-108(a): skip emit is throttled every 200 consecutive skips; only 1 skip here → no skip emit
+    # AWF-108(a): skip emit is throttled every 200 consecutive skips; only 1 skip here ??no skip emit
     assert progress_calls == ["1h combo"]
     assert len(append_calls) == 1
     assert append_calls[0][1]["combo_key"] == "k2"
@@ -4132,3 +4132,4 @@ def test_append_leaderboard_row_and_build_views(tmp_path):
     assert "href=" in lb_view.iloc[0]["report"]
     assert lb_recent.iloc[0]["run_id"] == "r2"
     assert lb_best.iloc[0]["run_id"] == "r2"
+

@@ -3,8 +3,8 @@ import sqlite3
 
 import pytest
 
-from scripts.autowfo import artifacts as a
-from scripts.autowfo.constants import LABELS
+from autowfo import artifacts as a
+from autowfo.constants import LABELS
 
 
 def test_artifacts_db_schema_and_append_module(tmp_path):
@@ -71,3 +71,4 @@ def test_write_run_metadata_requires_contract_fields(tmp_path):
     bad_payload_seed.pop("combo_seed")
     with pytest.raises(ValueError, match="missing required fields"):
         a._write_run_metadata(str(path), bad_payload_seed)
+

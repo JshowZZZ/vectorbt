@@ -6,10 +6,10 @@ from contextlib import contextmanager
 import pandas as pd
 import pytest
 
-from scripts import control_panel as cp
-from scripts import control_panel_experiments as cp_experiments
-from scripts.autowfo.analytics import AnalyticsStore
-from scripts.autowfo.artifact_store import ArtifactStore
+from autowfo.control_panel import server as cp
+from autowfo.control_panel import experiments as cp_experiments
+from autowfo.analytics import AnalyticsStore
+from autowfo.artifact_store import ArtifactStore
 
 
 def _valid_experiment_config(experiment_id: str = "exp_e2e") -> dict:
@@ -121,7 +121,7 @@ def test_e2e_experiment_lifecycle_smoke(tmp_path, monkeypatch):
         _ = args, kwargs
         return trigger_ohlcv, action_ohlcv
 
-    monkeypatch.setattr("scripts.autowfo.data_multi.load_experiment_data", _fake_load_experiment_data)
+    monkeypatch.setattr("autowfo.data_multi.load_experiment_data", _fake_load_experiment_data)
 
     class _FakeTrades:
         def count(self):
@@ -141,7 +141,7 @@ def test_e2e_experiment_lifecycle_smoke(tmp_path, monkeypatch):
             return 0.15
 
     monkeypatch.setattr(
-        "scripts.autowfo.experiment_runner.vbt.Portfolio.from_signals",
+        "autowfo.experiment_runner.vbt.Portfolio.from_signals",
         lambda *args, **kwargs: _FakePortfolio(),
     )
 
@@ -224,3 +224,4 @@ def test_e2e_experiment_lifecycle_smoke(tmp_path, monkeypatch):
         pytest.importorskip("duckdb", reason="duckdb not installed; skip leaderboard assertion")
         assert payload_lb["total"] >= 1
         assert len(payload_lb["indicators"]) >= 1
+

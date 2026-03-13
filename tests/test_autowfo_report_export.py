@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.autowfo.report_export import export_html_report
+from autowfo.report_export import export_html_report
 
 
 class _DummyAnalyticsStore:
@@ -57,3 +57,4 @@ def test_export_html_report_contains_required_sections(tmp_path):
     assert "trigger_indicators" in html
     assert "avg_oos_sharpe" in html
     assert "Generated UTC:" in html
+

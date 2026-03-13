@@ -1,9 +1,9 @@
 import pandas as pd
 
-from scripts import run_btc_regime_sweep as sweep
-from scripts.autowfo import engine_helpers as e
-from scripts.autowfo import report as r
-from scripts.autowfo import search as s
+from autowfo import run_btc_regime_sweep as sweep
+from autowfo import engine_helpers as e
+from autowfo import report as r
+from autowfo import search as s
 
 
 def _build_sweep_adapters():
@@ -86,3 +86,4 @@ def test_combo_key_and_config_field_adapters_match_module_behavior():
     assert actual_key == expected_key
     assert adapters["has_all_config_fields_fn"](payload)
     assert not adapters["has_all_config_fields_fn"]({**payload, "wf_mode": ""})
+

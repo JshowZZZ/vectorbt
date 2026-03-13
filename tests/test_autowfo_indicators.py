@@ -8,18 +8,18 @@ import pandas as pd
 import pytest
 
 PLUGIN_MODULES = [
-    "scripts.autowfo.indicators.rsi",
-    "scripts.autowfo.indicators.macd",
-    "scripts.autowfo.indicators.bb",
-    "scripts.autowfo.indicators.ema",
-    "scripts.autowfo.indicators.volume",
+    "autowfo.indicators.rsi",
+    "autowfo.indicators.macd",
+    "autowfo.indicators.bb",
+    "autowfo.indicators.ema",
+    "autowfo.indicators.volume",
 ]
 
 EXPECTED_INDICATORS = {"RSI", "MACD", "BB", "EMA", "Volume"}
 
 
 def _reload_indicators_package():
-    import scripts.autowfo.indicators as indicators
+    import autowfo.indicators as indicators
 
     importlib.invalidate_caches()
     return importlib.reload(indicators)
@@ -122,4 +122,5 @@ def test_registry_skips_syntax_error_plugin_with_warning(caplog):
             plugin_path.unlink()
         sys.modules.pop(module_name, None)
         _reload_indicators_package()
+
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 import os
@@ -13,12 +13,12 @@ def test_cross_asset_integration_end_to_end(tmp_path, monkeypatch):
     pytest.importorskip("duckdb")
     vbt = pytest.importorskip("vectorbt")
 
-    from scripts.autowfo import data_multi
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.artifact_store import ArtifactStore
-    from scripts.autowfo.experiment import Experiment
-    from scripts.autowfo.experiment_runner import ExperimentRunner
-    from scripts.autowfo.signal_composer import compose
+    from autowfo import data_multi
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.artifact_store import ArtifactStore
+    from autowfo.experiment import Experiment
+    from autowfo.experiment_runner import ExperimentRunner
+    from autowfo.signal_composer import compose
 
     def _build_ohlcv(symbol: str, freq: str, bars: int, seed: int) -> pd.DataFrame:
         start = pd.Timestamp("2026-01-01 00:00:00", tz="UTC")
@@ -238,3 +238,4 @@ def test_cross_asset_integration_end_to_end(tmp_path, monkeypatch):
         "exp_cross_asset_macd_ema",
     }
     assert comparison[0]["avg_oos_sharpe"] >= comparison[1]["avg_oos_sharpe"]
+

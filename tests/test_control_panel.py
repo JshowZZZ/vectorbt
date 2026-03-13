@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts import control_panel as cp
-from scripts import control_panel_state as cp_state
+from autowfo.control_panel import server as cp
+from autowfo.control_panel import state as cp_state
 
 
 def _setup_db(path):
@@ -138,7 +138,7 @@ def test_get_results_payload_top10_dual_path(tmp_path, monkeypatch):
     assert "top10" in payload, "AWF-107: top10 key missing from payload"
     assert "top10_latest_run" in payload, "AWF-107: top10_latest_run key missing from payload"
 
-    # Primary top10 is derived from full combo history (3 rows → top10 picks ≤3 rows)
+    # Primary top10 is derived from full combo history (3 rows ??top10 picks ?? rows)
     top10_rows = payload["top10"]["rows"]
     assert len(top10_rows) >= 1, "top10 should have rows from combo history"
     # Best row is the highest oos_avg_total_return_pct; should be "9.9"
@@ -304,7 +304,7 @@ def test_overview_next_action_includes_scheduler_queue_depth(tmp_path, monkeypat
         encoding="utf-8",
     )
 
-    from scripts import control_panel_experiments as cp_experiments
+    from autowfo.control_panel import experiments as cp_experiments
 
     monkeypatch.setattr(
         cp_experiments,
@@ -2912,3 +2912,4 @@ def test_build_advanced_results_analysis_empty_rows():
     assert payload["drawdown_distribution"]["count"] == 0
     assert payload["monte_carlo"] is None
     assert payload["errors"] == []
+

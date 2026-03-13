@@ -2602,3 +2602,4 @@ class TestTemplate:
         Tup = namedtuple('Tup', ['a'])
         tup = Tup(template.Rep('hello'))
         assert template.deep_substitute(tup, {'hello': 100}) == Tup(100)
+

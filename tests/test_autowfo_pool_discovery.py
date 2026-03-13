@@ -1,5 +1,5 @@
-from scripts.autowfo.experiment import Experiment
-from scripts.autowfo.pool_discovery import generate_combinations, generate_experiment_configs
+from autowfo.experiment import Experiment
+from autowfo.pool_discovery import generate_combinations, generate_experiment_configs
 
 
 def test_generate_combinations_pool5_size2_returns_10_configs():
@@ -71,3 +71,4 @@ def test_generate_combinations_returns_valid_experiment_configs():
     for cfg in configs:
         exp = Experiment.from_dict(cfg)
         assert exp.experiment_id.startswith("discovery_")
+

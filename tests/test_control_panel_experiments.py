@@ -4,9 +4,9 @@ import threading
 import time
 from contextlib import contextmanager
 
-from scripts import control_panel as cp
-from scripts import control_panel_experiments as cp_experiments
-from scripts.autowfo.artifact_store import ArtifactStore
+from autowfo.control_panel import server as cp
+from autowfo.control_panel import experiments as cp_experiments
+from autowfo.artifact_store import ArtifactStore
 
 
 def _valid_experiment_config(experiment_id="exp_demo"):
@@ -968,3 +968,4 @@ def test_paper_open_duplicate_and_close_without_open_return_400(tmp_path, monkey
         assert response_close.status == 400
         assert payload_close["ok"] is False
         assert payload_close["error"] == "no open position"
+

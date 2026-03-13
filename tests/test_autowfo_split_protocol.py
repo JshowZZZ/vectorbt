@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.autowfo import split_protocol as sp
+from autowfo import split_protocol as sp
 
 
 def test_default_split_protocol_contains_expected_fields():
@@ -43,8 +43,8 @@ def test_split_module_fail_fast_when_protocol_invalid(monkeypatch, tmp_path):
     bad_path = tmp_path / "invalid_split_protocol.yaml"
     bad_path.write_text(json.dumps(protocol), encoding="utf-8")
 
-    import scripts.autowfo.split as split_module
-    import scripts.run_btc_regime_sweep as sweep_module
+    import autowfo.split as split_module
+    import autowfo.run_btc_regime_sweep as sweep_module
 
     monkeypatch.setenv(sp.SPLIT_PROTOCOL_PATH_ENV, str(bad_path))
     try:
@@ -54,3 +54,4 @@ def test_split_module_fail_fast_when_protocol_invalid(monkeypatch, tmp_path):
         monkeypatch.delenv(sp.SPLIT_PROTOCOL_PATH_ENV, raising=False)
         importlib.reload(split_module)
         importlib.reload(sweep_module)
+

@@ -814,3 +814,4 @@ class TestAccessors:
                 qs.stats.sharpe(rets.dropna())
             )
             assert rets['a'].vbt.returns(benchmark_rets=benchmark_rets['a']).qs.r_squared() == 0.6321016849785153
+

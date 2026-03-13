@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scripts import run_btc_regime_sweep as sweep
-from scripts.autowfo import data as autowfo_data
-from scripts.autowfo import metrics as autowfo_metrics
-from scripts.autowfo import portfolio as autowfo_portfolio
-from scripts.autowfo import split as autowfo_split
-from scripts.autowfo import strategy as autowfo_strategy
+from autowfo import run_btc_regime_sweep as sweep
+from autowfo import data as autowfo_data
+from autowfo import metrics as autowfo_metrics
+from autowfo import portfolio as autowfo_portfolio
+from autowfo import split as autowfo_split
+from autowfo import strategy as autowfo_strategy
 
 
 def _make_ohlcv(index, base=100.0):
@@ -509,3 +509,4 @@ def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
         assert path_a.exists()
         assert path_b.exists()
         assert path_a.read_bytes() == path_b.read_bytes()
+

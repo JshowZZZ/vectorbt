@@ -31,3 +31,4 @@ def test_validate_patrol_dryrun_script_runs_and_writes_patrol_log(tmp_path):
     for raw in lines:
         row = json.loads(raw)
         assert set(row.keys()) >= {"utc", "tick_generated", "tick_enqueued", "runs_executed", "runs_errors", "queue_remaining"}
+

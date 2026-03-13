@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scripts.autowfo.conditions import OPERATOR_REGISTRY, apply
+from autowfo.conditions import OPERATOR_REGISTRY, apply
 
 
 def _series(values):
@@ -87,3 +87,4 @@ def test_unknown_operator_raises_value_error():
     values = _series([1.0, 2.0, 3.0])
     with pytest.raises(ValueError, match="Unknown operator"):
         apply(values, "not_an_operator", {})
+

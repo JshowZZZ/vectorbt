@@ -1,15 +1,15 @@
-"""AWF-031 — End-to-end smoke test for the AUTOWFO pipeline.
+"""AWF-031 ??End-to-end smoke test for the AUTOWFO pipeline.
 
 Exercises the critical integration seams with synthetic tiny data and no
 network access.  The goal is to catch pipeline-breaking regressions
 automatically rather than relying on manual real-data runs.
 
 Integration seams tested:
-  1. Data → Context: synthetic OHLCV → ``_prepare_timeframe_context`` → real
+  1. Data ??Context: synthetic OHLCV ??``_prepare_timeframe_context`` ??real
      VBT indicator precomputation
-  2. Context → Walk-Forward: ``_build_walk_forward_windows`` → 6-tuple windows
-  3. Evaluation: ``evaluate_combo_task`` → result dict with metrics
-  4. Finalize artifacts: result DataFrames → ``_run_finalize_pipeline`` →
+  2. Context ??Walk-Forward: ``_build_walk_forward_windows`` ??6-tuple windows
+  3. Evaluation: ``evaluate_combo_task`` ??result dict with metrics
+  4. Finalize artifacts: result DataFrames ??``_run_finalize_pipeline`` ??
      CSV/HTML/JSON output files
 """
 
@@ -104,7 +104,7 @@ def synthetic_loader(synthetic_index):
 @pytest.fixture()
 def ctx(synthetic_loader, tmp_path):
     """Build a real timeframe context from synthetic data."""
-    from scripts.autowfo.data import _prepare_timeframe_context
+    from autowfo.data import _prepare_timeframe_context
 
     return _prepare_timeframe_context(
         timeframe="1h",
@@ -122,7 +122,7 @@ def ctx(synthetic_loader, tmp_path):
 
 
 # ===================================================================
-# Seam 1: Data → Context (real VBT indicator computation)
+# Seam 1: Data ??Context (real VBT indicator computation)
 # ===================================================================
 
 class TestDataToContext:
@@ -175,7 +175,7 @@ class TestDataToContext:
 
 
 # ===================================================================
-# Seam 2: Context → Walk-Forward Windows
+# Seam 2: Context ??Walk-Forward Windows
 # ===================================================================
 
 class TestWalkForwardWindows:
@@ -183,7 +183,7 @@ class TestWalkForwardWindows:
     from the context."""
 
     def test_windows_from_context(self, ctx):
-        from scripts.autowfo.split import _build_walk_forward_windows
+        from autowfo.split import _build_walk_forward_windows
 
         windows = _build_walk_forward_windows(
             index=ctx["trade_close"].index,
@@ -203,7 +203,7 @@ class TestWalkForwardWindows:
             assert train_end <= test_start
 
     def test_windows_with_validation(self, ctx):
-        from scripts.autowfo.split import _build_walk_forward_windows
+        from autowfo.split import _build_walk_forward_windows
 
         windows = _build_walk_forward_windows(
             index=ctx["trade_close"].index,
@@ -230,8 +230,8 @@ class TestEvaluationSmoke:
     metrics when given a valid context and task."""
 
     def test_evaluate_produces_result(self, ctx, monkeypatch):
-        from scripts.autowfo import evaluator as ev
-        from scripts.autowfo.split import _build_walk_forward_slices
+        from autowfo import evaluator as ev
+        from autowfo.split import _build_walk_forward_slices
 
         # Build minimal slices from context
         slices = _build_walk_forward_slices(
@@ -364,7 +364,7 @@ class TestEvaluationSmoke:
 
 
 # ===================================================================
-# Seam 4: Results → Finalize → Artifacts
+# Seam 4: Results ??Finalize ??Artifacts
 # ===================================================================
 
 class TestFinalizeArtifacts:
@@ -546,12 +546,12 @@ class TestFinalizeArtifacts:
         """
         from unittest.mock import patch, MagicMock
 
-        from scripts.autowfo.engine_finalize import _run_finalize_pipeline
-        from scripts.autowfo.artifacts import (
+        from autowfo.engine_finalize import _run_finalize_pipeline
+        from autowfo.artifacts import (
             _combine_data_fingerprints, _write_run_metadata,
         )
-        from scripts.autowfo.registry import _update_run_registry
-        from scripts.autowfo import constants
+        from autowfo.registry import _update_run_registry
+        from autowfo import constants
 
         out_dir = str(tmp_path / "artifacts")
         os.makedirs(out_dir, exist_ok=True)
@@ -580,31 +580,31 @@ class TestFinalizeArtifacts:
         timeframe_days_map = {"1h": 10}
 
         # --- Mock heavy internal functions in engine_finalize namespace ---
-        _mod = "scripts.autowfo.engine_finalize"
+        _mod = "autowfo.engine_finalize"
 
-        # _fallback_activity_filter → pass through
+        # _fallback_activity_filter ??pass through
         mock_fallback = MagicMock(
             side_effect=lambda combo_df_current, **kw: (combo_df_current, 0.0),
         )
 
-        # _prepare_best_timeframe_context → fake ctx with trade_close
+        # _prepare_best_timeframe_context ??fake ctx with trade_close
         _fake_idx = pd.date_range("2024-01-01", periods=50, freq="h")
         _fake_trade_close = pd.DataFrame(
             {"ETH/USDT": np.linspace(3000, 3100, 50)}, index=_fake_idx,
         )
         mock_prepare_ctx = MagicMock(
-            return_value={"ctx": {"trade_close": _fake_trade_close, "trade_symbols": ["ETH/USDT"], "data_range": "2024-01-01 → 2024-01-09"}, "error": None},
+            return_value={"ctx": {"trade_close": _fake_trade_close, "trade_symbols": ["ETH/USDT"], "data_range": "2024-01-01 ??2024-01-09"}, "error": None},
         )
 
         # compute_bh_return_pct / compute_random_entry_return_pct
         mock_bh = MagicMock(return_value=1.5)
         mock_rand = MagicMock(return_value=0.5)
 
-        # _prepare_best_replay_payload → fake replay dict
+        # _prepare_best_replay_payload ??fake replay dict
         mock_replay = MagicMock(return_value={
             "trade_symbols": ["ETH/USDT"],
             "plot_symbol": "ETH/USDT",
-            "data_range": "2024-01-01 → 2024-01-09",
+            "data_range": "2024-01-01 ??2024-01-09",
             "scan_timeframes": "1h",
             "wf_slices": [(0, 1, 1, 1, 1, 2)],
             "best_regime": {"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high"},
@@ -787,7 +787,7 @@ class TestFinalizeArtifacts:
 
     def test_finalize_empty_combo_returns_warning(self, tmp_path):
         """Finalize with empty combo CSV should return a warning result."""
-        from scripts.autowfo.engine_finalize import _run_finalize_pipeline
+        from autowfo.engine_finalize import _run_finalize_pipeline
 
         out_dir = str(tmp_path / "empty_artifacts")
         os.makedirs(out_dir, exist_ok=True)
@@ -798,7 +798,7 @@ class TestFinalizeArtifacts:
         pd.DataFrame(columns=["timeframe"]).to_csv(combo_path, index=False)
         pd.DataFrame(columns=["timeframe"]).to_csv(symbol_path, index=False)
 
-        # Minimal kwargs — most won't be reached because combo_df is empty
+        # Minimal kwargs ??most won't be reached because combo_df is empty
         result = _run_finalize_pipeline(
             combo_path=combo_path,
             per_symbol_path=symbol_path,
@@ -878,3 +878,4 @@ class TestFinalizeArtifacts:
         assert result is not None
         assert result.get("ok") is False
         assert "warning" in result
+

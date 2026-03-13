@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.autowfo import strategy_schema as ss
+from autowfo import strategy_schema as ss
 
 
 def test_default_strategy_schema_contains_expected_inventory():
@@ -44,8 +44,8 @@ def test_constants_fail_fast_when_schema_invalid(monkeypatch, tmp_path):
     bad_path = tmp_path / "invalid_strategy_schema.json"
     bad_path.write_text(json.dumps(schema), encoding="utf-8")
 
-    import scripts.autowfo.constants as constants_module
-    import scripts.run_btc_regime_sweep as sweep_module
+    import autowfo.constants as constants_module
+    import autowfo.run_btc_regime_sweep as sweep_module
 
     monkeypatch.setenv(ss.STRATEGY_SCHEMA_PATH_ENV, str(bad_path))
     try:
@@ -55,3 +55,4 @@ def test_constants_fail_fast_when_schema_invalid(monkeypatch, tmp_path):
         monkeypatch.delenv(ss.STRATEGY_SCHEMA_PATH_ENV, raising=False)
         importlib.reload(constants_module)
         importlib.reload(sweep_module)
+

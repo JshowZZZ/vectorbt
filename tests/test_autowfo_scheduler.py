@@ -1,6 +1,6 @@
 import json
 
-from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
 
 def _exp_cfg(exp_id):
@@ -40,3 +40,4 @@ def test_empty_pop_returns_none(tmp_path):
     assert queue.pop() is None
     assert queue.peek() is None
     assert queue.size() == 0
+

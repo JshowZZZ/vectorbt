@@ -3161,3 +3161,4 @@ class TestGenerators:
             ], names=['ohlcstcx_sl_stop', 'ohlcstcx_sl_trail', 'ohlcstcx_tp_stop', None])
             )
         )
+

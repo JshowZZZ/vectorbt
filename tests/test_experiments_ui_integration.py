@@ -3,8 +3,8 @@ import json
 import threading
 from contextlib import contextmanager
 
-from scripts import control_panel as cp
-from scripts import control_panel_experiments as cp_experiments
+from autowfo.control_panel import server as cp
+from autowfo.control_panel import experiments as cp_experiments
 
 
 def _valid_experiment_config(experiment_id="exp_demo"):
@@ -216,3 +216,4 @@ def test_discovery_tick_enqueues_new_items(tmp_path, monkeypatch):
         payload_status = json.loads(response_status.read().decode("utf-8"))
         assert response_status.status == 200
         assert payload_status["queue_depth"] == 3
+

@@ -1069,3 +1069,4 @@ class TestDataUpdater:
             data = data.update()
         assert updater.data == data
         assert updater.config['data'] == data
+

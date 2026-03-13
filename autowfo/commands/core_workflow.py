@@ -60,12 +60,12 @@ def _run_workflow(
             env["VBT_SWEEP_MODE"] = mode
         print(f"[autowfo] runtime_config={runtime_config_path}")
         print(f"[autowfo] mode={mode or 'config_default'} workers={workers or 'config_default'}")
-        _run_module("scripts.run_btc_regime_sweep", cwd=cwd, env=env)
+        _run_module("autowfo.run_btc_regime_sweep", cwd=cwd, env=env)
         return
 
     print(f"[autowfo] runtime_config={runtime_config_path}")
     print(f"[autowfo] baseline workers={workers or 'config_default'}")
-    _run_module("scripts.run_autowfo_baseline", cwd=cwd, env=env)
+    _run_module("autowfo.run_autowfo_baseline", cwd=cwd, env=env)
 
 def _latest_run_label(cwd: Path) -> Optional[str]:
     runs_dir = cwd / "artifacts" / "runs"
@@ -125,4 +125,5 @@ def _resolve_top10_csv_path(run_dir: Path, run_id: str) -> Path:
     if plain.exists():
         return plain
     raise FileNotFoundError(f"top-N csv not found under {run_dir}")
+
 

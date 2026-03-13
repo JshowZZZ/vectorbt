@@ -1,7 +1,7 @@
 import pandas as pd
 
-from scripts.autowfo import evaluator as autowfo_evaluator
-from scripts.autowfo import strategy as autowfo_strategy
+from autowfo import evaluator as autowfo_evaluator
+from autowfo import strategy as autowfo_strategy
 
 
 def test_evaluator_coerces_missing_indicator_lookback(monkeypatch):
@@ -386,3 +386,4 @@ def test_apply_indicator_combo_fills_missing_ppo_threshold():
     assert params_out["ppo_threshold"] == 0.0
     assert long_out.tolist() == [True, False]
     assert short_out.tolist() == [False, True]
+

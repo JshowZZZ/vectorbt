@@ -1841,3 +1841,4 @@ class TestAccessors:
         assert stats_df.shape == (3, 8)
         pd.testing.assert_index_equal(stats_df.index, df.vbt.wrapper.columns)
         pd.testing.assert_index_equal(stats_df.columns, stats_index)
+

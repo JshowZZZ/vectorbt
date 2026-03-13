@@ -98,3 +98,4 @@ def cmd_batch(args: argparse.Namespace, cli_impl: Any) -> int:
 
     print(f"[batch] finished jobs={total} seen_keys={len(state['seen_keys'])} state={state_path}")
     return 0
+

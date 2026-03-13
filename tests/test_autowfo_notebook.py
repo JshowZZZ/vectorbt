@@ -1,11 +1,11 @@
-"""AWF-028 tests — experiment notebook export."""
+"""AWF-028 tests ??experiment notebook export."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from scripts.autowfo.notebook import (
+from autowfo.notebook import (
     _code_basic_analysis,
     _code_combo_summary_analysis,
     _code_imports,
@@ -270,7 +270,7 @@ class TestBuildExperimentNotebook:
 class TestFinalizeNotebookWiring:
     def test_completion_outputs_has_notebook_key(self):
         """_build_completion_output_map output should accept notebook injection."""
-        from scripts.autowfo.engine_finalize import _build_completion_output_map
+        from autowfo.engine_finalize import _build_completion_output_map
 
         outputs = _build_completion_output_map(
             combo_path="a",
@@ -286,3 +286,4 @@ class TestFinalizeNotebookWiring:
         # Notebook key is injected externally, not by _build_completion_output_map
         outputs["experiment_notebook"] = "/some/path.ipynb"
         assert "experiment_notebook" in outputs
+

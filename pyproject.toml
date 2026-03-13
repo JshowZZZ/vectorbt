@@ -90,10 +90,19 @@ Homepage = "https://github.com/polakowo/vectorbt"
 version = {attr = "vectorbt._version.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["vectorbt*", "autowfo*", "scripts*"]
+include = ["vectorbt*", "autowfo*"]
 
 [tool.setuptools.package-data]
 vectorbt = ["templates/*.json"]
+autowfo = [
+    "control_panel/static/*.html",
+    "control_panel/static/favicon.svg",
+    "control_panel/static/css/*.css",
+    "control_panel/static/js/*.js",
+    "control_panel/static_legacy/*.html",
+    "control_panel/static_legacy/css/*.css",
+    "control_panel/static_legacy/js/*.js",
+]
 
 [tool.pytest.ini_options]
 markers = [

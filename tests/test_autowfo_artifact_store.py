@@ -1,6 +1,6 @@
 import sqlite3
 
-from scripts.autowfo.artifact_store import ArtifactStore
+from autowfo.artifact_store import ArtifactStore
 
 
 def _insert_combo_row(conn, *, combo_id, experiment_id, run_id, wf_score, oos_sharpe):
@@ -267,3 +267,4 @@ def test_query_all_results_returns_cross_run_top_rows(tmp_path):
     assert len(rows) == 2
     assert rows[0]["combo_id"] == "combo_a_high"
     assert rows[1]["combo_id"] == "combo_b_mid"
+

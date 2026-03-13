@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import ranking as r
+from autowfo import ranking as r
 
 
 def test_sort_by_score_tie_break_behavior_in_legacy_mode():
@@ -119,7 +119,7 @@ def test_default_ranking_config_has_regime_weights():
 
 
 def test_apply_regime_weight_no_weights():
-    """Empty regime_weights → no change to composite_score."""
+    """Empty regime_weights ??no change to composite_score."""
     df = _make_regime_df()
     original_scores = df["composite_score"].tolist()
     result = r._apply_regime_weight(df, ranking_config=None)
@@ -143,13 +143,13 @@ def test_apply_regime_weight_with_weights():
 def test_apply_regime_weight_default_for_unknown():
     """Unknown regime_name defaults to weight 1.0."""
     df = _make_regime_df()
-    cfg = {"regime_weights": {"trend_high": 1.5}}  # rsi_revert_low not listed → 1.0
+    cfg = {"regime_weights": {"trend_high": 1.5}}  # rsi_revert_low not listed ??1.0
     result = r._apply_regime_weight(df, ranking_config=cfg)
     assert result.iloc[2]["composite_score"] == 1.2  # unchanged
 
 
 def test_apply_regime_weight_no_regime_column():
-    """DataFrame without regime_name → no change."""
+    """DataFrame without regime_name ??no change."""
     df = pd.DataFrame({"composite_score": [1.0, 2.0]})
     cfg = {"regime_weights": {"trend_high": 2.0}}
     result = r._apply_regime_weight(df, ranking_config=cfg)
@@ -162,19 +162,19 @@ def test_top_by_score_per_regime_grouping():
     result = r._top_by_score_per_regime(df, top_n=2, ranking_config={"mode": "legacy"})
     assert "trend_high" in result
     assert "rsi_revert_low" in result
-    # trend_high: top 2 by oos_avg_total_return_pct → e(12), a(10)
+    # trend_high: top 2 by oos_avg_total_return_pct ??e(12), a(10)
     th_df, _ = result["trend_high"]
     assert len(th_df) == 2
     assert th_df.iloc[0]["name"] == "e"
     assert th_df.iloc[1]["name"] == "a"
-    # rsi_revert_low: top 2 → c(8), d(3)
+    # rsi_revert_low: top 2 ??c(8), d(3)
     rr_df, _ = result["rsi_revert_low"]
     assert len(rr_df) == 2
     assert rr_df.iloc[0]["name"] == "c"
 
 
 def test_top_by_score_per_regime_empty_when_no_column():
-    """No regime_name column → empty dict."""
+    """No regime_name column ??empty dict."""
     df = pd.DataFrame({"oos_avg_total_return_pct": [1.0]})
     assert r._top_by_score_per_regime(df, top_n=5) == {}
 
@@ -188,7 +188,7 @@ def test_regime_summary_basic():
     by_name = {row["regime_name"]: row for row in summary}
     assert by_name["trend_high"]["combo_count"] == 3
     assert by_name["rsi_revert_low"]["combo_count"] == 2
-    # avg return for trend_high: (10+6+12)/3 ≈ 9.3333
+    # avg return for trend_high: (10+6+12)/3 ??9.3333
     assert abs(by_name["trend_high"]["avg_return_pct"] - 9.3333) < 0.01
     # avg composite for rsi_revert_low: (1.2+0.3)/2 = 0.75
     assert abs(by_name["rsi_revert_low"]["avg_composite_score"] - 0.75) < 0.01
@@ -197,3 +197,4 @@ def test_regime_summary_basic():
 def test_regime_summary_empty_without_regime_column():
     df = pd.DataFrame({"oos_avg_total_return_pct": [1.0]})
     assert r._regime_summary(df) == []
+

@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from scripts.autowfo import registry as r
+from autowfo import registry as r
 
 
 def test_update_run_registry_creates_file_and_coverage(tmp_path):
@@ -95,7 +95,7 @@ def test_build_coverage_map_without_targets_ignores_unseen_timeframes():
     ]
     cov = r._build_coverage_map(per_symbol_df, run_entries)
     assert "1h" not in cov["timeframes"]
-    # 2h×BNB and 4h×BNB should be untested
+    # 2h?BNB and 4h?BNB should be untested
     untested_keys = {(p["timeframe"], p["symbol"]) for p in cov["untested_pairs"]}
     assert ("2h", "BNB/USDT") in untested_keys
     assert ("4h", "BNB/USDT") in untested_keys
@@ -165,7 +165,7 @@ def test_build_run_entry_includes_benchmark_fields():
 
 
 def test_build_run_entry_benchmark_fields_missing():
-    """Old best_row without benchmark fields → None."""
+    """Old best_row without benchmark fields ??None."""
     meta = {
         "run_id": "old1",
         "timestamp_utc": "2026-01-01T00:00:00Z",
@@ -183,3 +183,4 @@ def test_build_run_entry_benchmark_fields_missing():
     entry = r._build_run_entry(meta, best)
     assert entry["bh_return_pct"] is None
     assert entry["random_entry_return_pct"] is None
+

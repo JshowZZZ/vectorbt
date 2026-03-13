@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.autowfo import metric_contract as mc
+from autowfo import metric_contract as mc
 
 
 def test_default_metric_contract_contains_expected_sections_and_counts():
@@ -42,8 +42,8 @@ def test_metrics_module_fail_fast_when_contract_invalid(monkeypatch, tmp_path):
     bad_path = tmp_path / "invalid_metric_contract.yaml"
     bad_path.write_text(json.dumps(contract), encoding="utf-8")
 
-    import scripts.autowfo.metrics as metrics_module
-    import scripts.run_btc_regime_sweep as sweep_module
+    import autowfo.metrics as metrics_module
+    import autowfo.run_btc_regime_sweep as sweep_module
 
     monkeypatch.setenv(mc.METRIC_CONTRACT_PATH_ENV, str(bad_path))
     try:
@@ -53,3 +53,4 @@ def test_metrics_module_fail_fast_when_contract_invalid(monkeypatch, tmp_path):
         monkeypatch.delenv(mc.METRIC_CONTRACT_PATH_ENV, raising=False)
         importlib.reload(metrics_module)
         importlib.reload(sweep_module)
+

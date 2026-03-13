@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import http.client
 import json
@@ -7,8 +7,8 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from scripts import control_panel as cp
-from scripts import control_panel_experiments as cp_experiments
+from autowfo.control_panel import server as cp
+from autowfo.control_panel import experiments as cp_experiments
 
 
 def _experiment_config(experiment_id: str) -> dict:
@@ -192,3 +192,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

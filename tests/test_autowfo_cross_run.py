@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.autowfo import cross_run
+from autowfo import cross_run
 
 
 def _write_csv(path: Path, header, rows):
@@ -110,7 +110,7 @@ def test_build_cross_run_payload_with_combo_stability(tmp_path):
 
 
 def test_benchmark_fields_propagated_to_leaderboard(tmp_path):
-    """Runs with bh_return_pct / random_entry_return_pct → leaderboard + summary."""
+    """Runs with bh_return_pct / random_entry_return_pct ??leaderboard + summary."""
     artifacts = tmp_path / "artifacts"
     registry_path = artifacts / "run_registry.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,7 +165,7 @@ def test_benchmark_fields_propagated_to_leaderboard(tmp_path):
 
 
 def test_benchmark_fields_none_when_absent(tmp_path):
-    """Old registry entries without benchmark fields → graceful None."""
+    """Old registry entries without benchmark fields ??graceful None."""
     artifacts = tmp_path / "artifacts"
     registry_path = artifacts / "run_registry.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,11 +343,11 @@ def test_validate_cross_run_payload_raises_on_missing_summary_keys():
 def test_linear_slope_basic():
     assert cross_run._linear_slope([]) == 0.0
     assert cross_run._linear_slope([5.0]) == 0.0
-    # Perfectly increasing: 1, 2, 3 → slope = 1.0
+    # Perfectly increasing: 1, 2, 3 ??slope = 1.0
     assert abs(cross_run._linear_slope([1.0, 2.0, 3.0]) - 1.0) < 1e-9
-    # Perfectly decreasing: 3, 2, 1 → slope = -1.0
+    # Perfectly decreasing: 3, 2, 1 ??slope = -1.0
     assert abs(cross_run._linear_slope([3.0, 2.0, 1.0]) - (-1.0)) < 1e-9
-    # Flat: 5, 5, 5 → slope = 0.0
+    # Flat: 5, 5, 5 ??slope = 0.0
     assert cross_run._linear_slope([5.0, 5.0, 5.0]) == 0.0
 
 
@@ -414,7 +414,7 @@ def test_compute_trend_metrics_declining():
 
 
 def test_compute_trend_metrics_consistency():
-    # 3 positive, 1 negative → 75%
+    # 3 positive, 1 negative ??75%
     m = cross_run._compute_trend_metrics([1.0, -1.0, 2.0, 3.0])
     assert m["consistency_pct"] == 75.0
 
@@ -676,3 +676,4 @@ def test_cross_run_html_contains_regime_sections(tmp_path):
     assert "Per-Regime Leaderboard" in html
     assert "trend_high" in html
     assert "bb_revert_low" in html
+

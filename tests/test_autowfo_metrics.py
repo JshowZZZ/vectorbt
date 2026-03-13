@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import metrics as m
-from scripts.autowfo import portfolio as p
+from autowfo import metrics as m
+from autowfo import portfolio as p
 
 
 def test_timeframe_to_hours_characterization():
@@ -126,3 +126,4 @@ def test_metric_field_constants_loaded_from_contract():
         "oos_low_trade_penalty",
         "oos_segments",
     )
+

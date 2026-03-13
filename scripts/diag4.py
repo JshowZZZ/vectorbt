@@ -1,8 +1,8 @@
 """Deep diagnostic: compare seen_key from CSV vs runtime-generated key."""
 import sys; sys.path.insert(0, ".")
 import pandas as pd, numpy as np, json
-from scripts.autowfo import engine_helpers as E, search as S, artifacts as A
-from scripts.autowfo.engine_helpers import _strip_data_range_from_combo_key
+from autowfo import engine_helpers as E, search as S, artifacts as A
+from autowfo.engine_helpers import _strip_data_range_from_combo_key
 
 ROW_META = list(A.ROW_METADATA_FIELDS)
 SCHEMA = E._build_sweep_schema_fields(artifact_row_metadata_fields=ROW_META)
@@ -94,3 +94,4 @@ if matching_dd:
     print(f"\n--- Sample matching key ---")
     for part in matching_dd[0].split("|"):
         print(f"    {part}")
+

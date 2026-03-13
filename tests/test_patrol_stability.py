@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from autowfo.commands import cron as cron_cmd
-from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -128,3 +128,4 @@ def test_scheduler_patrol_stability_for_ten_cycles(tmp_path, monkeypatch):
     assert empty_cycle["scheduler_runs_processed"] == 0
     assert empty_cycle["scheduler_run_once"]["processed"] is False
     assert queue.size() == 0
+

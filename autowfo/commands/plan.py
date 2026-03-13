@@ -272,9 +272,9 @@ def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_discover(args: argparse.Namespace, cli_impl: Any) -> int:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.discovery_loop import DiscoveryLoop
-    from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.discovery_loop import DiscoveryLoop
+    from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
     cwd = Path(args.cwd).resolve()
     pool_path = cli_impl._resolve_path(cwd, args.pool)
@@ -303,8 +303,8 @@ def cmd_discover(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_export_signal(args: argparse.Namespace, cli_impl: Any) -> int:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.signal_exporter import export_top_signal_config
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.signal_exporter import export_top_signal_config
 
     cwd = Path(args.cwd).resolve()
     out_path = cli_impl._resolve_path(cwd, args.out)
@@ -319,8 +319,8 @@ def cmd_export_signal(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_schedule_signals(args: argparse.Namespace, cli_impl: Any) -> int:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.signal_scheduler import SignalScheduler
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.signal_scheduler import SignalScheduler
 
     cwd = Path(args.cwd).resolve()
     artifacts_dir = cwd / "artifacts"
@@ -350,7 +350,7 @@ def cmd_schedule_signals(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_report(args: argparse.Namespace, cli_impl: Any) -> int:
-    from scripts.autowfo import cross_run
+    from autowfo import cross_run
 
     cwd = Path(args.cwd).resolve()
     artifacts_dir = cli_impl._resolve_path(cwd, args.artifacts_dir)
@@ -388,8 +388,8 @@ def cmd_report(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_export_report(args: argparse.Namespace, cli_impl: Any) -> int:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.report_export import export_html_report
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.report_export import export_html_report
 
     cwd = Path(args.cwd).resolve()
     out_path = cli_impl._resolve_path(cwd, args.out)
@@ -402,7 +402,7 @@ def cmd_export_report(args: argparse.Namespace, cli_impl: Any) -> int:
 def cmd_repro(args: argparse.Namespace, cli_impl: Any) -> int:
     import pandas as pd
 
-    from scripts.autowfo import reproducibility
+    from autowfo import reproducibility
 
     cwd = Path(args.cwd).resolve()
     reference_top = cli_impl._resolve_path(cwd, args.reference_top)
@@ -444,3 +444,4 @@ def cmd_repro(args: argparse.Namespace, cli_impl: Any) -> int:
         )
     )
     return 0
+

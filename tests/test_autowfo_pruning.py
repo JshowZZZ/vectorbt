@@ -1,11 +1,11 @@
-"""Tests for AWF-022 — combo intelligent pruning."""
+"""Tests for AWF-022 ??combo intelligent pruning."""
 
 import math
 
 import pandas as pd
 import pytest
 
-from scripts.autowfo.pruning import PruningTracker, _default_pruning_config, _split_into_batches
+from autowfo.pruning import PruningTracker, _default_pruning_config, _split_into_batches
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ def test_split_into_batches_large_batch():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — construction
+# PruningTracker ??construction
 # ---------------------------------------------------------------------------
 
 def test_tracker_default_construction():
@@ -93,12 +93,12 @@ def test_tracker_disabled_never_prunes():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — should_prune logic
+# PruningTracker ??should_prune logic
 # ---------------------------------------------------------------------------
 
 def test_tracker_no_prune_before_warmup():
     tracker = PruningTracker({"warmup_count": 10, "indicator_min_samples": 1, "prune_ratio": 0.5})
-    # Record 5 results — below warmup_count=10
+    # Record 5 results ??below warmup_count=10
     for i in range(5):
         tracker.record_result(("rsi",), 10.0)
     tracker.update_threshold()
@@ -137,7 +137,7 @@ def test_tracker_no_prune_insufficient_indicator_samples():
     for i in range(10):
         tracker.record_result(("rsi",), 100.0)
     tracker.update_threshold()
-    # "rsi" has only 10 samples but min_samples=20 — can't prune
+    # "rsi" has only 10 samples but min_samples=20 ??can't prune
     assert tracker.should_prune(("rsi",)) is False
 
 
@@ -175,12 +175,12 @@ def test_tracker_multi_indicator_combo_prediction():
     # Predicted for ("rsi", "bb") = (50 + 10) / 2 = 30
     # Since all scores are 50 or 10, top-N median is 50
     # threshold = 50 * 0.3 = 15
-    # 30 >= 15 → should NOT be pruned
+    # 30 >= 15 ??should NOT be pruned
     assert tracker.should_prune(("rsi", "bb")) is False
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — budget_exhausted
+# PruningTracker ??budget_exhausted
 # ---------------------------------------------------------------------------
 
 def test_tracker_budget_unlimited():
@@ -205,7 +205,7 @@ def test_tracker_budget_not_yet_exhausted():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — record_result / increment_pruned
+# PruningTracker ??record_result / increment_pruned
 # ---------------------------------------------------------------------------
 
 def test_tracker_record_nan_score():
@@ -231,7 +231,7 @@ def test_tracker_increment_pruned():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — warm_start
+# PruningTracker ??warm_start
 # ---------------------------------------------------------------------------
 
 def test_warm_start_from_dataframe():
@@ -278,7 +278,7 @@ def test_warm_start_with_nan_scores():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — summary
+# PruningTracker ??summary
 # ---------------------------------------------------------------------------
 
 def test_tracker_summary():
@@ -295,7 +295,7 @@ def test_tracker_summary():
 
 
 # ---------------------------------------------------------------------------
-# PruningTracker — top-N and threshold
+# PruningTracker ??top-N and threshold
 # ---------------------------------------------------------------------------
 
 def test_top_n_cap():
@@ -322,7 +322,7 @@ def test_threshold_computation():
 # ---------------------------------------------------------------------------
 
 def test_run_combo_eval_step_prunes_low_scoring_combo():
-    from scripts.autowfo.engine_search import _run_combo_eval_step
+    from autowfo.engine_search import _run_combo_eval_step
 
     tracker = PruningTracker({
         "warmup_count": 3,
@@ -374,7 +374,7 @@ def test_run_combo_eval_step_prunes_low_scoring_combo():
 
 
 def test_run_combo_eval_step_no_prune_good_combo():
-    from scripts.autowfo.engine_search import _run_combo_eval_step
+    from autowfo.engine_search import _run_combo_eval_step
 
     tracker = PruningTracker({
         "warmup_count": 3,
@@ -428,7 +428,7 @@ def test_run_combo_eval_step_no_prune_good_combo():
 
 
 def test_run_combo_eval_step_budget_exhausted():
-    from scripts.autowfo.engine_search import _run_combo_eval_step
+    from autowfo.engine_search import _run_combo_eval_step
 
     tracker = PruningTracker({"max_combos_evaluated": 5})
     for _ in range(5):
@@ -467,9 +467,9 @@ def test_run_combo_eval_step_budget_exhausted():
 # ---------------------------------------------------------------------------
 
 def test_resolve_runtime_settings_includes_pruning_config():
-    from scripts.autowfo.engine_helpers import _resolve_runtime_settings
-    from scripts.autowfo.split import _normalize_split_mode
-    from scripts.autowfo.ranking import _resolve_ranking_config
+    from autowfo.engine_helpers import _resolve_runtime_settings
+    from autowfo.split import _normalize_split_mode
+    from autowfo.ranking import _resolve_ranking_config
 
     default_config = {
         "search_mode": "combo",
@@ -495,9 +495,9 @@ def test_resolve_runtime_settings_includes_pruning_config():
 
 
 def test_resolve_runtime_settings_no_pruning_config():
-    from scripts.autowfo.engine_helpers import _resolve_runtime_settings
-    from scripts.autowfo.split import _normalize_split_mode
-    from scripts.autowfo.ranking import _resolve_ranking_config
+    from autowfo.engine_helpers import _resolve_runtime_settings
+    from autowfo.split import _normalize_split_mode
+    from autowfo.ranking import _resolve_ranking_config
 
     default_config = {
         "search_mode": "combo",
@@ -519,10 +519,10 @@ def test_resolve_runtime_settings_no_pruning_config():
 # ---------------------------------------------------------------------------
 
 def test_build_timeframe_ready_search_context_includes_pruning_config():
-    from scripts.autowfo.engine_search import _build_timeframe_ready_search_context
+    from autowfo.engine_search import _build_timeframe_ready_search_context
 
     pruning_cfg = {"enabled": True, "warmup_count": 200}
-    # Build a minimal context — we only verify pruning_config is forwarded
+    # Build a minimal context ??we only verify pruning_config is forwarded
     ctx = _build_timeframe_ready_search_context(
         search_mode="combo",
         max_workers=1,
@@ -582,3 +582,4 @@ def test_build_timeframe_ready_search_context_includes_pruning_config():
     )
 
     assert ctx["pruning_config"] == pruning_cfg
+

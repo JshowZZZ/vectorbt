@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from scripts.autowfo.experiment import Experiment
+from autowfo.experiment import Experiment
 
 
 def _valid_config():
@@ -161,4 +161,5 @@ def test_save_and_from_json_roundtrip(tmp_path):
 def test_artifact_dir_relative_path():
     exp = Experiment.from_dict(_valid_config())
     assert exp.artifact_dir.as_posix() == "artifacts/experiments/exp_btc1h_eth4h_rsi_bb_v1"
+
 

@@ -1,6 +1,6 @@
 import json
 
-from scripts.autowfo.notifier import NotificationEvent, notify
+from autowfo.notifier import NotificationEvent, notify
 
 
 def test_notify_noop_when_config_absent(tmp_path):
@@ -49,7 +49,7 @@ def test_notify_webhook_posts_event_payload_schema(tmp_path, monkeypatch):
         captured["body"] = json.loads(req.data.decode("utf-8"))
         return _DummyResponse()
 
-    import scripts.autowfo.notifier as notifier_mod
+    import autowfo.notifier as notifier_mod
 
     monkeypatch.setattr(notifier_mod.urllib_request, "urlopen", _fake_urlopen)
     result = notify(
@@ -91,3 +91,4 @@ def test_notify_telegram_missing_credentials_is_graceful_skip(tmp_path):
     assert result["ok"] is True
     assert result["sent"] == []
     assert "telegram_missing_credentials" in result["skipped"]
+

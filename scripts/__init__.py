@@ -1,2 +1,0 @@
-"""AUTOWFO scripts package namespace."""
-

@@ -5,10 +5,10 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo.artifact_store import ArtifactStore
-from scripts.autowfo.experiment import Experiment
-from scripts.autowfo.experiment_runner import ExperimentRunner
-from scripts.autowfo.signal_composer import compose
+from autowfo.artifact_store import ArtifactStore
+from autowfo.experiment import Experiment
+from autowfo.experiment_runner import ExperimentRunner
+from autowfo.signal_composer import compose
 
 
 def _make_ohlcv(
@@ -228,3 +228,4 @@ def test_empty_signals_still_stored_with_zero_trades(tmp_path):
     assert len(rows) == 2
     assert rows[0][1] == 0
     assert rows[1][1] == 0
+

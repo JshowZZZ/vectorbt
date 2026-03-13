@@ -1,5 +1,5 @@
-from scripts import run_btc_regime_sweep as sweep
-from scripts.autowfo import constants as c
+from autowfo import run_btc_regime_sweep as sweep
+from autowfo import constants as c
 
 
 def test_constants_reexport_identity():
@@ -21,3 +21,4 @@ def test_constants_characterization_snapshot():
     assert "cci" in c.INDICATOR_META
     assert "chop" in c.INDICATOR_META
     assert "trend_high" in c.REGIME_NAME_MAP
+

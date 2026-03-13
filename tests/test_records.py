@@ -3589,3 +3589,4 @@ class TestLogs:
                 index=pd.Index(['g1', 'g2'], dtype='object')
             ).rename('count')
         )
+

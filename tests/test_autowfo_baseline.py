@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scripts.autowfo import baseline as b
+from autowfo import baseline as b
 
 
 def test_extract_new_run_id_from_added_top10_file():
@@ -247,3 +247,4 @@ def test_read_combo_summary_for_run_falls_back_to_static_file(tmp_path):
     (target / "param_sweep_combo_summary.csv").write_text("a\n1\n", encoding="utf-8")
     df = b._read_combo_summary_for_run(target, "20260211_120001")
     assert len(df) == 1
+

@@ -111,12 +111,12 @@ def _default_scheduler_start_date() -> str:
 
 
 def _run_scheduler_queue_once(cwd: Path, cli_impl: Any) -> dict:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.artifact_store import ArtifactStore
-    from scripts.autowfo.data_multi import load_experiment_data
-    from scripts.autowfo.experiment import Experiment
-    from scripts.autowfo.experiment_runner import ExperimentRunner
-    from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.artifact_store import ArtifactStore
+    from autowfo.data_multi import load_experiment_data
+    from autowfo.experiment import Experiment
+    from autowfo.experiment_runner import ExperimentRunner
+    from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
     artifacts_dir = cwd / "artifacts"
     scheduler_config = SchedulerConfig.from_file(artifacts_dir / "scheduler.json")
@@ -182,10 +182,10 @@ def _run_scheduler_patrol_cycle(
     max_runs_per_patrol: int,
     enable_signal_scheduling: bool = False,
 ) -> dict:
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.discovery_loop import DiscoveryLoop
-    from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
-    from scripts.autowfo.signal_scheduler import SignalScheduler
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.discovery_loop import DiscoveryLoop
+    from autowfo.scheduler import ExperimentQueue, SchedulerConfig
+    from autowfo.signal_scheduler import SignalScheduler
 
     cycle_start_utc = cli_impl._utc_now_iso()
     artifacts_dir = cwd / "artifacts"
@@ -475,3 +475,4 @@ def cmd_cron(args: argparse.Namespace, cli_impl: Any) -> int:
         time.sleep(interval_minutes * 60)
 
     return 0
+

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -12,13 +12,13 @@ def test_discovery_burnin_three_rounds(tmp_path, monkeypatch):
     pytest.importorskip("duckdb")
     vbt = pytest.importorskip("vectorbt")
 
-    from scripts.autowfo import data_multi
-    from scripts.autowfo.analytics import AnalyticsStore
-    from scripts.autowfo.artifact_store import ArtifactStore
-    from scripts.autowfo.discovery_loop import DiscoveryLoop
-    from scripts.autowfo.experiment import Experiment
-    from scripts.autowfo.experiment_runner import ExperimentRunner
-    from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+    from autowfo import data_multi
+    from autowfo.analytics import AnalyticsStore
+    from autowfo.artifact_store import ArtifactStore
+    from autowfo.discovery_loop import DiscoveryLoop
+    from autowfo.experiment import Experiment
+    from autowfo.experiment_runner import ExperimentRunner
+    from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
     def _build_ohlcv(symbol: str, freq: str, bars: int, seed: int) -> pd.DataFrame:
         start = pd.Timestamp("2026-02-01 00:00:00", tz="UTC")
@@ -107,7 +107,7 @@ def test_discovery_burnin_three_rounds(tmp_path, monkeypatch):
             return 0.12
 
     monkeypatch.setattr(
-        "scripts.autowfo.experiment_runner.vbt.Portfolio.from_signals",
+        "autowfo.experiment_runner.vbt.Portfolio.from_signals",
         lambda *args, **kwargs: _FakePortfolio(sharpe_state["value"]),
     )
 
@@ -210,3 +210,4 @@ def test_discovery_burnin_three_rounds(tmp_path, monkeypatch):
 
     assert len(tick_summaries) == 3
     assert tick_summaries[0]["generated"] == 10
+

@@ -1,6 +1,6 @@
 import json
 
-from scripts.autowfo.paper_position import PaperPositionStore
+from autowfo.paper_position import PaperPositionStore
 
 
 def test_open_close_roundtrip_pnl(tmp_path):
@@ -135,3 +135,4 @@ def test_portfolio_snapshot_unrealized_pnl_with_latest_prices(tmp_path):
     assert round(float(rows["sig_port_1"]["unrealized_pnl_pct"]), 8) == 20.0
     assert round(float(rows["sig_port_2"]["unrealized_pnl_pct"]), 8) == -10.0
     assert round(float(snapshot["total_unrealized_pnl_pct"]), 8) == 10.0
+

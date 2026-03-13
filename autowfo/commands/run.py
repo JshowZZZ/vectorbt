@@ -52,3 +52,4 @@ def cmd_baseline(args: argparse.Namespace, cli_impl: Any) -> int:
         workers=args.workers,
     )
     return 0
+

@@ -1,9 +1,9 @@
 import json
 
 from autowfo import cli
-from scripts.autowfo.discovery_loop import DiscoveryLoop
-from scripts.autowfo.pool_discovery import generate_experiment_configs
-from scripts.autowfo.scheduler import ExperimentQueue, SchedulerConfig
+from autowfo.discovery_loop import DiscoveryLoop
+from autowfo.pool_discovery import generate_experiment_configs
+from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 
 
 class DummyAnalyticsStore:
@@ -120,3 +120,4 @@ def test_tick_cold_start_uses_full_pool_expansion(tmp_path, caplog):
     assert result["enqueued"] == 6
     assert result["queue_depth"] == 6
     assert "analytics cold-start: using full pool expansion" in caplog.text
+

@@ -19,3 +19,4 @@ def isclose(a, b, rel_tol=1e-06, abs_tol=0.0):
 def record_arrays_close(x, y):
     for field in x.dtype.names:
         np.testing.assert_allclose(x[field], y[field], rtol=1e-06)
+

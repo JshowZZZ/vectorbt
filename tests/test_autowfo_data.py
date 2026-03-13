@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from scripts.autowfo import data as d
+from autowfo import data as d
 
 
 def _make_ohlcv(index, base=100.0):
@@ -156,3 +156,4 @@ def test_refresh_ohlcv_cache_keeps_partial_results_on_symbol_error(tmp_path):
     ]
     assert payload["errors"]
     assert "ETH/BTC" in payload["errors"][0]
+
