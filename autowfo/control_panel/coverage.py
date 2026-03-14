@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlparse
+from autowfo.control_panel.state import _shared_views_source_status
 
 
 def _cp():
@@ -83,6 +84,7 @@ def _with_cp(fn):
 @_with_cp
 def _coverage_registry_path():
     return ARTIFACTS / "run_registry.json"
+
 
 @_with_cp
 def _coverage_slug_text(value):
@@ -335,6 +337,7 @@ def _coverage_matrix_payload():
 
     return {
         "generated_utc": _now_iso(),
+        "source_status": _shared_views_source_status(),
         "timeframes": timeframes,
         "symbols": symbols,
         "cells": cells,

@@ -108,6 +108,7 @@ def _build_finalize_pipeline_kwargs(
     write_run_metadata_fn,
     update_run_registry_fn,
     combo_seed=None,
+    workspace_paths=None,
 ):
     top_by_score_fn = lambda df, top_n, tie_break_avg_hold: top_by_score_impl_fn(
         df,
@@ -186,6 +187,7 @@ def _build_finalize_pipeline_kwargs(
         "run_metadata_path": run_metadata_path,
         "run_metadata_path_run": run_metadata_path_run,
         "registry_path": registry_path,
+        "workspace_paths": workspace_paths,
         "search_mode": search_mode,
         "config_path": config_path,
         "prepare_timeframe_context_fn": prepare_timeframe_context_fn,
@@ -292,6 +294,7 @@ def _build_finalize_pipeline_context(
     write_run_metadata_fn,
     update_run_registry_fn,
     combo_seed=None,
+    workspace_paths=None,
 ):
     return {
         "combo_path": combo_path,
@@ -363,6 +366,7 @@ def _build_finalize_pipeline_context(
         "run_metadata_path": run_metadata_path,
         "run_metadata_path_run": run_metadata_path_run,
         "registry_path": registry_path,
+        "workspace_paths": workspace_paths,
         "search_mode": search_mode,
         "config_path": config_path,
         "prepare_timeframe_context_fn": prepare_timeframe_context_fn,
@@ -419,6 +423,7 @@ def _build_finalize_pipeline_context_from_shared(
     combine_data_fingerprints_fn,
     write_run_metadata_fn,
     update_run_registry_fn,
+    workspace_paths=None,
 ):
     shared = dict(shared_pipeline_runtime_context)
     return _build_finalize_pipeline_context(
@@ -491,6 +496,7 @@ def _build_finalize_pipeline_context_from_shared(
         run_metadata_path=run_metadata_path,
         run_metadata_path_run=run_metadata_path_run,
         registry_path=registry_path,
+        workspace_paths=workspace_paths,
         search_mode=search_mode,
         config_path=config_path,
         prepare_timeframe_context_fn=prepare_timeframe_context_fn,
@@ -534,6 +540,23 @@ def _write_run_snapshot_files(combo_df, per_symbol_df, out_dir, run_id):
     if not per_symbol_df.empty:
         per_symbol_df.to_csv(per_symbol_path_run, index=False)
     return combo_path_run, per_symbol_path_run
+
+
+def _derive_workspace_report_paths(workspace_paths, report_file_run, run_id):
+    if not workspace_paths:
+        return None
+    report_paths = workspace_paths.get("report_paths")
+    if report_paths:
+        return report_paths
+    reports_dir = workspace_paths.get("reports_dir")
+    if not reports_dir:
+        return None
+    report_name = os.path.basename(report_file_run)
+    latest_name = report_name.replace(f"_{run_id}", "")
+    return {
+        "report_run": os.path.join(reports_dir, report_name),
+        "report_latest": os.path.join(reports_dir, latest_name),
+    }
 
 
 def _select_current_combo_df(combo_df, timeframe_configs):
@@ -991,6 +1014,7 @@ def _run_finalize_pipeline(
     write_run_metadata_fn=None,
     update_run_registry_fn=None,
     combo_seed=None,
+    workspace_paths=None,
 ):
     combo_df, per_symbol_df = _load_result_frames(combo_path, per_symbol_path)
     _write_run_snapshot_files(combo_df, per_symbol_df, out_dir, run_id)
@@ -1009,7 +1033,11 @@ def _run_finalize_pipeline(
     )
 
     top10, _ = top_by_score_fn(filtered, top_n=10, tie_break_avg_hold=True)
-    top10_path = os.path.join(out_dir, f"param_sweep_top10_{run_id}.csv")
+    top10_path = (workspace_paths.get("top10_path") if workspace_paths else None) or os.path.join(
+        out_dir,
+        f"param_sweep_top10_{run_id}.csv",
+    )
+    os.makedirs(os.path.dirname(top10_path), exist_ok=True)
     top10.to_csv(top10_path, index=False)
 
     best, best_timeframe, best_data_days = _pick_best_from_top(
@@ -1158,6 +1186,7 @@ def _run_finalize_pipeline(
     report_file_run = report_paths["report_file_run"]
     report_path_latest = report_paths["report_path_latest"]
     report_path_run = report_paths["report_path_run"]
+    workspace_report_paths = _derive_workspace_report_paths(workspace_paths, report_file_run, run_id)
 
     leaderboard_row = _build_leaderboard_row_payload(
         run_id=run_id,
@@ -1234,7 +1263,14 @@ def _run_finalize_pipeline(
         plot_symbol=plot_symbol,
         plot_html=plot_html,
     )
-    _write_report_files(report_path_latest=report_path_latest, report_path_run=report_path_run, html=html)
+    if workspace_report_paths:
+        _write_report_files(
+            report_path_latest=workspace_report_paths["report_latest"],
+            report_path_run=workspace_report_paths["report_run"],
+            html=html,
+        )
+    else:
+        _write_report_files(report_path_latest=report_path_latest, report_path_run=report_path_run, html=html)
 
     _persist_result = _persist_run_metadata_and_registry(
         timeframe_fingerprints=timeframe_fingerprints,
@@ -1292,8 +1328,8 @@ def _run_finalize_pipeline(
         registry_path=registry_path,
         run_metadata_path=run_metadata_path,
         run_metadata_path_run=run_metadata_path_run,
-        report_path_latest=report_path_latest,
-        report_path_run=report_path_run,
+        report_path_latest=(workspace_report_paths["report_latest"] if workspace_report_paths else None) or report_path_latest,
+        report_path_run=(workspace_report_paths["report_run"] if workspace_report_paths else None) or report_path_run,
     )
     if notebook_path is not None:
         completion_outputs["experiment_notebook"] = str(notebook_path)

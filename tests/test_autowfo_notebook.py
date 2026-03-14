@@ -72,6 +72,13 @@ class TestMdMetadataSection:
         md = _md_metadata_section({})
         assert "unknown" in md
 
+    def test_formats_dict_timeframes(self, sample_metadata):
+        metadata = dict(sample_metadata)
+        metadata["timeframes"] = [{"timeframe": "4h", "days": 180}, {"timeframe": "1h", "days": 30}]
+        md = _md_metadata_section(metadata)
+        assert "4h (180d)" in md
+        assert "1h (30d)" in md
+
 
 class TestCodeImports:
     def test_contains_pandas(self):
@@ -259,6 +266,16 @@ class TestBuildExperimentNotebook:
             run_id="minimal",
             out_dir=tmp_path,
             metadata={},
+        )
+        assert nb_path.exists()
+
+    def test_accepts_structured_timeframes(self, tmp_path, sample_metadata):
+        metadata = dict(sample_metadata)
+        metadata["timeframes"] = [{"timeframe": "4h", "days": 180}]
+        nb_path = build_experiment_notebook(
+            run_id="structured",
+            out_dir=tmp_path,
+            metadata=metadata,
         )
         assert nb_path.exists()
 

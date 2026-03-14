@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import pandas as pd
 
 from autowfo.analytics import AnalyticsStore, duckdb as analytics_duckdb
 from autowfo.artifact_store import ArtifactStore
 from autowfo.paper_position import PAPER_POSITIONS_SCHEMA_VERSION, PaperPositionStore
+from autowfo import registry as autowfo_registry
 from autowfo.scheduler import ExperimentQueue, SchedulerConfig
 from autowfo.signal_scheduler import SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION, SignalScheduler
 from autowfo.storage_contract import (
@@ -350,6 +355,65 @@ def _inspect_analytics_store(artifacts_dir: Path) -> dict:
     }
 
 
+def _inspect_shared_views(artifacts_dir: Path) -> dict:
+    manifest_path = _shared_views_manifest_path(artifacts_dir)
+    issues: list[dict] = []
+    protected_files: list[str] = []
+    latest_run_id = ""
+    trusted_runs = 0
+    latest_run_root = None
+
+    payload, error = _read_json(manifest_path) if manifest_path.exists() else (None, "")
+    if manifest_path.exists():
+        if error or not isinstance(payload, dict):
+            issues.append(_issue("shared_views", "error", f"unreadable shared views manifest: {error or 'invalid payload'}", manifest_path))
+        else:
+            trusted = payload.get("trusted_runs")
+            trusted_runs = len(trusted) if isinstance(trusted, list) else 0
+            latest_run_id = str(payload.get("latest_run_id") or "").strip()
+            latest_run_root = str(payload.get("latest_run_root") or "").strip()
+            protected_files = [str(row) for row in payload.get("protected_files", []) if str(row).strip()]
+            if latest_run_id:
+                candidate = Path(latest_run_root) if latest_run_root else artifacts_dir / "runs" / latest_run_id
+                if not candidate.exists():
+                    issues.append(
+                        _issue(
+                            "shared_views",
+                            "warn",
+                            f"latest trusted run root missing for '{latest_run_id}'",
+                            candidate,
+                        )
+                    )
+            missing_protected = [row for row in protected_files if not Path(row).exists()]
+            for missing_path in missing_protected:
+                issues.append(_issue("shared_views", "warn", "protected shared view missing", Path(missing_path)))
+    else:
+        legacy_candidates = []
+        for pattern in LEGACY_ROOT_PATTERNS:
+            legacy_candidates.extend(path for path in artifacts_dir.glob(pattern) if path.is_file())
+        legacy_candidates = [path for path in legacy_candidates if path.name != manifest_path.name]
+        if legacy_candidates:
+            issues.append(
+                _issue(
+                    "shared_views",
+                    "warn",
+                    "shared views manifest missing while legacy root outputs still exist",
+                    artifacts_dir,
+                )
+            )
+
+    return {
+        "path": str(manifest_path),
+        "exists": manifest_path.exists(),
+        "trusted_runs": int(trusted_runs),
+        "latest_run_id": latest_run_id,
+        "latest_run_root": latest_run_root or "",
+        "protected_files": int(len(protected_files)),
+        "issues": issues,
+        "status": _component_status(issues),
+    }
+
+
 def validate_storage(artifacts_dir: str | Path = "artifacts") -> dict:
     artifacts = Path(artifacts_dir)
     components = {
@@ -358,6 +422,7 @@ def validate_storage(artifacts_dir: str | Path = "artifacts") -> dict:
         "paper_positions": _inspect_paper_positions(artifacts),
         "signal_scheduler": _inspect_signal_scheduler_state(artifacts),
         "analytics": _inspect_analytics_store(artifacts),
+        "shared_views": _inspect_shared_views(artifacts),
     }
     issues = []
     warn_count = 0
@@ -378,6 +443,7 @@ def validate_storage(artifacts_dir: str | Path = "artifacts") -> dict:
         "experiments_root": str(artifacts / "experiments"),
         "run_meta_files": int(run_meta.get("total_files", 0)),
         "run_meta_legacy_files": int(run_meta.get("legacy_files", 0)),
+        "trusted_runs": int(components["shared_views"].get("trusted_runs", 0)),
         "warnings": int(warn_count),
         "errors": int(error_count),
     }
@@ -500,6 +566,309 @@ def rebuild_analytics(artifacts_dir: str | Path = "artifacts") -> dict:
         "experiments_imported": len(experiments_imported),
         "combos_imported": combos_imported,
         "schema_version": str(metadata.get("schema_version") or ""),
+    }
+
+
+def _iter_trusted_run_roots(artifacts_dir: Path) -> list[Path]:
+    runs_root = artifacts_dir / "runs"
+    if not runs_root.exists():
+        return []
+    return sorted(path for path in runs_root.iterdir() if path.is_dir())
+
+
+def _read_csv_or_empty(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(path, low_memory=False)
+
+
+def _latest_run_key(payload: dict) -> tuple[str, str]:
+    return (
+        str(payload.get("timestamp_utc") or ""),
+        str(payload.get("run_id") or ""),
+    )
+
+
+def _shared_views_manifest_path(artifacts_dir: Path) -> Path:
+    return artifacts_dir / "shared_views_manifest.json"
+
+
+def _iter_trusted_run_payloads(artifacts_dir: Path) -> list[dict]:
+    payloads: list[dict] = []
+    for run_root in _iter_trusted_run_roots(artifacts_dir):
+        run_id = run_root.name
+
+        # Phase 44 layout: artifacts/runs/{run_id}/{results,metadata,reports}
+        #
+        # Pre-Phase 44 isolated pass trees under artifacts/runs/* may contain
+        # copied shared-root summaries from the old evidence model. They are
+        # no longer treated as trusted inputs for shared-view rebuilds.
+        new_layout = {
+            "run_id": run_id,
+            "run_root": run_root,
+            "metadata_path": run_root / "metadata" / "run_metadata.json",
+            "metadata_run_path": run_root / "metadata" / f"run_metadata_{run_id}.json",
+            "combo_path": run_root / "results" / "param_sweep_combo_summary.csv",
+            "symbol_path": run_root / "results" / "param_sweep_symbol_summary.csv",
+            "leaderboard_path": run_root / "results" / "leaderboard.csv",
+            "top10_path": run_root / "results" / f"param_sweep_top10_{run_id}.csv",
+            "reports_dir": run_root / "reports",
+        }
+        if new_layout["metadata_path"].exists():
+            payloads.append(new_layout)
+    return payloads
+
+
+def rebuild_shared_views(artifacts_dir: str | Path = "artifacts") -> dict:
+    artifacts = Path(artifacts_dir)
+    trusted_runs = []
+    issues: list[dict] = []
+    combo_frames: list[pd.DataFrame] = []
+    symbol_frames: list[pd.DataFrame] = []
+    leaderboard_frames: list[pd.DataFrame] = []
+    run_entries: list[dict] = []
+
+    for candidate in _iter_trusted_run_payloads(artifacts):
+        run_id = str(candidate.get("run_id") or "").strip()
+        run_root = Path(candidate["run_root"])
+        reports_dir = Path(candidate["reports_dir"])
+        metadata_path = Path(candidate["metadata_path"])
+        metadata_run_path = Path(candidate["metadata_run_path"])
+        combo_path = Path(candidate["combo_path"])
+        symbol_path = Path(candidate["symbol_path"])
+        leaderboard_path = Path(candidate["leaderboard_path"])
+        top10_path = Path(candidate["top10_path"])
+
+        metadata, error = _read_json(metadata_path)
+        if error or not isinstance(metadata, dict):
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: unreadable run metadata", metadata_path))
+            continue
+        if str(metadata.get("run_id") or "") != run_id:
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: metadata run_id mismatch", metadata_path))
+            continue
+        if not combo_path.exists() or not symbol_path.exists() or not leaderboard_path.exists() or not top10_path.exists():
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: missing required trusted run outputs", run_root))
+            continue
+
+        leaderboard_df = _read_csv_or_empty(leaderboard_path)
+        if leaderboard_df.empty:
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: empty leaderboard", leaderboard_path))
+            continue
+        leaderboard_row = leaderboard_df.iloc[-1].to_dict()
+        if str(leaderboard_row.get("run_id") or "") != run_id:
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: leaderboard run_id mismatch", leaderboard_path))
+            continue
+
+        report_file = str(leaderboard_row.get("report_file") or "").strip()
+        if report_file and not (reports_dir / report_file).exists():
+            issues.append(_issue("shared_views", "warn", f"skip {run_id}: report file missing", reports_dir / report_file))
+            continue
+
+        combo_df = _read_csv_or_empty(combo_path)
+        symbol_df = _read_csv_or_empty(symbol_path)
+        combo_frames.append(combo_df)
+        symbol_frames.append(symbol_df)
+        leaderboard_frames.append(leaderboard_df)
+        run_entries.append(autowfo_registry._build_run_entry(metadata, leaderboard_row))
+        trusted_runs.append(
+            {
+                "run_id": run_id,
+                "timestamp_utc": str(metadata.get("timestamp_utc") or ""),
+                "run_root": str(run_root),
+                "metadata_path": str(metadata_path),
+                "metadata_run_path": str(metadata_run_path),
+                "combo_path": str(combo_path),
+                "symbol_path": str(symbol_path),
+                "leaderboard_path": str(leaderboard_path),
+                "top10_path": str(top10_path),
+                "report_file": report_file,
+            }
+        )
+
+    combo_df = pd.concat(combo_frames, ignore_index=True) if combo_frames else pd.DataFrame()
+    symbol_df = pd.concat(symbol_frames, ignore_index=True) if symbol_frames else pd.DataFrame()
+    leaderboard_df = pd.concat(leaderboard_frames, ignore_index=True) if leaderboard_frames else pd.DataFrame()
+    if not leaderboard_df.empty and "timestamp_utc" in leaderboard_df.columns:
+        leaderboard_df = leaderboard_df.sort_values("timestamp_utc", ascending=False, kind="stable").reset_index(drop=True)
+    run_entries = sorted(run_entries, key=_latest_run_key, reverse=True)
+    registry_payload = {
+        "updated_utc": run_entries[0]["timestamp_utc"] if run_entries else "",
+        "runs": run_entries,
+        "coverage": autowfo_registry._build_coverage_map(symbol_df, run_entries),
+    }
+
+    combo_out = artifacts / "param_sweep_combo_summary.csv"
+    symbol_out = artifacts / "param_sweep_symbol_summary.csv"
+    leaderboard_out = artifacts / "leaderboard.csv"
+    registry_out = artifacts / "run_registry.json"
+    manifest_out = _shared_views_manifest_path(artifacts)
+    combo_df.to_csv(combo_out, index=False)
+    symbol_df.to_csv(symbol_out, index=False)
+    leaderboard_df.to_csv(leaderboard_out, index=False)
+    registry_out.write_text(json.dumps(registry_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    latest_payload = max(trusted_runs, key=_latest_run_key) if trusted_runs else None
+    copied_latest: list[str] = []
+    if latest_payload:
+        latest_run_root = Path(latest_payload["run_root"])
+        latest_run_id = latest_payload["run_id"]
+        latest_meta_src = Path(latest_payload["metadata_path"])
+        latest_meta_run_src = Path(latest_payload.get("metadata_run_path") or "")
+        latest_top10_src = Path(latest_payload["top10_path"])
+        latest_report_src = latest_run_root / str(latest_payload.get("report_file") or "")
+        latest_report_run_src = None
+        if latest_report_src.name:
+            latest_report_run_src = latest_run_root / latest_report_src.name.replace(".html", f"_{latest_run_id}.html")
+
+        compat_files = [
+            (latest_meta_src, artifacts / "run_metadata.json"),
+            (latest_meta_run_src, artifacts / f"run_metadata_{latest_run_id}.json"),
+            (latest_top10_src, artifacts / f"param_sweep_top10_{latest_run_id}.csv"),
+        ]
+        if latest_report_src and latest_report_src.exists():
+            compat_files.append((latest_report_src, artifacts / latest_report_src.name))
+        if latest_report_run_src and latest_report_run_src.exists():
+            compat_files.append((latest_report_run_src, artifacts / latest_report_run_src.name))
+        for src, dest in compat_files:
+            if not src.exists():
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+            copied_latest.append(str(dest))
+
+    protected_files = [
+        str(combo_out),
+        str(symbol_out),
+        str(leaderboard_out),
+        str(registry_out),
+        *copied_latest,
+    ]
+    manifest_payload = {
+        "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "trusted_runs": [row["run_id"] for row in trusted_runs],
+        "latest_run_id": latest_payload["run_id"] if latest_payload else "",
+        "latest_run_root": latest_payload["run_root"] if latest_payload else "",
+        "protected_files": protected_files,
+    }
+    manifest_out.write_text(json.dumps(manifest_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "ok": True,
+        "artifacts_dir": str(artifacts),
+        "trusted_runs": len(trusted_runs),
+        "skipped_runs": len(issues),
+        "combo_rows": int(len(combo_df)),
+        "symbol_rows": int(len(symbol_df)),
+        "leaderboard_rows": int(len(leaderboard_df)),
+        "registry_runs": int(len(run_entries)),
+        "issues": issues,
+        "outputs": {
+            "combo_summary": str(combo_out),
+            "per_symbol_summary": str(symbol_out),
+            "leaderboard": str(leaderboard_out),
+            "run_registry": str(registry_out),
+            "manifest": str(manifest_out),
+            "compatibility_files": copied_latest,
+        },
+    }
+
+
+LEGACY_ROOT_PATTERNS = (
+    "param_sweep_combo_summary*.csv",
+    "param_sweep_symbol_summary*.csv",
+    "param_sweep_top10_*.csv",
+    "leaderboard.csv",
+    "run_registry.json",
+    "run_metadata*.json",
+    "results.db",
+    "run_status.json",
+    "run_status.html",
+    "run_control.json",
+    "btc_regime_*.html",
+    "cross_run_report.html",
+    "cross_run_report.json",
+)
+
+
+def _load_protected_shared_views(artifacts_dir: Path) -> set[Path]:
+    manifest_path = _shared_views_manifest_path(artifacts_dir)
+    payload, error = _read_json(manifest_path) if manifest_path.exists() else ({}, "")
+    if error or not isinstance(payload, dict):
+        return set()
+    protected = set()
+    for raw in payload.get("protected_files") or []:
+        try:
+            protected.add(Path(raw).resolve())
+        except Exception:
+            continue
+    return protected
+
+
+def _unique_quarantine_path(quarantine_dir: Path, source: Path) -> Path:
+    candidate = quarantine_dir / source.name
+    if not candidate.exists():
+        return candidate
+    stem = source.stem
+    suffix = source.suffix
+    index = 1
+    while True:
+        candidate = quarantine_dir / f"{stem}.{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def purge_legacy_outputs(
+    artifacts_dir: str | Path = "artifacts",
+    *,
+    dry_run: bool = True,
+    delete: bool = False,
+    quarantine_dir: str | Path | None = None,
+) -> dict:
+    artifacts = Path(artifacts_dir)
+    protected = _load_protected_shared_views(artifacts)
+    candidates: list[Path] = []
+    seen = set()
+    for pattern in LEGACY_ROOT_PATTERNS:
+        for path in sorted(artifacts.glob(pattern)):
+            resolved = path.resolve()
+            if path.is_dir() or resolved in protected or resolved in seen:
+                continue
+            seen.add(resolved)
+            candidates.append(path)
+
+    quarantine_root = None
+    if quarantine_dir is not None:
+        quarantine_root = Path(quarantine_dir)
+    elif not delete:
+        quarantine_root = artifacts.parent / "artifacts_legacy_deleted"
+
+    actions = []
+    for path in candidates:
+        row = {"path": str(path), "action": "delete" if delete else "quarantine"}
+        if quarantine_root is not None and not delete:
+            row["destination"] = str(_unique_quarantine_path(quarantine_root, path))
+        actions.append(row)
+
+    if not dry_run:
+        for row in actions:
+            source = Path(row["path"])
+            if delete:
+                source.unlink(missing_ok=True)
+                continue
+            destination = Path(row["destination"])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(destination))
+
+    return {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "delete": bool(delete),
+        "artifacts_dir": str(artifacts),
+        "quarantine_dir": str(quarantine_root) if quarantine_root is not None else "",
+        "protected_files": sorted(str(path) for path in protected),
+        "actions": actions,
+        "candidates": len(actions),
     }
 
 

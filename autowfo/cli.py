@@ -259,6 +259,14 @@ def _cmd_storage_rebuild_analytics(args: argparse.Namespace) -> int:
     return cmd_storage.cmd_storage_rebuild_analytics(args, _self())
 
 
+def _cmd_storage_rebuild_shared_views(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_rebuild_shared_views(args, _self())
+
+
+def _cmd_storage_purge_legacy(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_purge_legacy(args, _self())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     parser.add_argument("--version", action="version", version=f"autowfo {AUTOWFO_VERSION}")

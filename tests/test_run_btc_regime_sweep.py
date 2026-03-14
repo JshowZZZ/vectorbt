@@ -1,5 +1,7 @@
 import datetime as dt
 import json
+import sqlite3
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,6 +11,7 @@ from autowfo import run_btc_regime_sweep as sweep
 from autowfo import data as autowfo_data
 from autowfo import metrics as autowfo_metrics
 from autowfo import portfolio as autowfo_portfolio
+from autowfo import run_workspace as autowfo_run_workspace
 from autowfo import split as autowfo_split
 from autowfo import strategy as autowfo_strategy
 
@@ -285,11 +288,22 @@ def test_main_smoke_integration(tmp_path, monkeypatch):
 
     sweep.main()
 
-    combo_path = artifacts / "param_sweep_combo_summary.csv"
-    registry_path = artifacts / "run_registry.json"
-    assert combo_path.exists()
-    assert registry_path.exists()
-    df = pd.read_csv(combo_path)
+    run_dirs = sorted((artifacts / "runs").glob("*"))
+    assert len(run_dirs) == 1
+    workspace = autowfo_run_workspace.build_run_workspace(Path(tmp_path), run_dirs[0].name)
+    assert not (artifacts / "param_sweep_combo_summary.csv").exists()
+    assert not (artifacts / "run_registry.json").exists()
+    assert workspace.runtime_config_path.exists()
+    assert workspace.status_json_path.exists()
+    assert workspace.combo_summary_path.exists()
+    assert workspace.symbol_summary_path.exists()
+    assert workspace.top10_path.exists()
+    assert workspace.run_metadata_path.exists()
+    assert workspace.registry_path.exists()
+    assert workspace.db_path.exists()
+
+    assert json.loads(workspace.runtime_config_path.read_text(encoding="utf-8")) == cfg
+    df = pd.read_csv(workspace.combo_summary_path)
     assert len(df) >= 1
 
 
@@ -494,19 +508,65 @@ def test_main_deterministic_artifacts_bit_identical(tmp_path, monkeypatch):
 
     artifacts_a = run_dirs[0] / "artifacts"
     artifacts_b = run_dirs[1] / "artifacts"
-    compare_files = [
+    root_legacy_outputs = [
         "param_sweep_combo_summary.csv",
         "param_sweep_symbol_summary.csv",
         f"param_sweep_combo_summary_{run_id}.csv",
         f"param_sweep_symbol_summary_{run_id}.csv",
         f"param_sweep_top10_{run_id}.csv",
         "leaderboard.csv",
+        "run_registry.json",
+        "run_metadata.json",
+        f"run_metadata_{run_id}.json",
+        "run_status.json",
+        "run_status.html",
+        "results.db",
     ]
+    for name in root_legacy_outputs:
+        assert not (artifacts_a / name).exists()
+        assert not (artifacts_b / name).exists()
 
-    for name in compare_files:
-        path_a = artifacts_a / name
-        path_b = artifacts_b / name
+    workspace_a = autowfo_run_workspace.build_run_workspace(run_dirs[0], run_id)
+    workspace_b = autowfo_run_workspace.build_run_workspace(run_dirs[1], run_id)
+    workspace_compare_files = [
+        workspace_a.runtime_config_path.relative_to(run_dirs[0]),
+        workspace_a.combo_summary_path.relative_to(run_dirs[0]),
+        workspace_a.symbol_summary_path.relative_to(run_dirs[0]),
+        workspace_a.top10_path.relative_to(run_dirs[0]),
+        workspace_a.leaderboard_path.relative_to(run_dirs[0]),
+        workspace_a.run_metadata_path.relative_to(run_dirs[0]),
+        workspace_a.registry_path.relative_to(run_dirs[0]),
+    ]
+    for rel_path in workspace_compare_files:
+        path_a = run_dirs[0] / rel_path
+        path_b = run_dirs[1] / rel_path
         assert path_a.exists()
         assert path_b.exists()
         assert path_a.read_bytes() == path_b.read_bytes()
+
+    assert workspace_a.status_json_path.exists()
+    assert workspace_b.status_json_path.exists()
+    status_a = json.loads(workspace_a.status_json_path.read_text(encoding="utf-8"))
+    status_b = json.loads(workspace_b.status_json_path.read_text(encoding="utf-8"))
+    for payload in (status_a, status_b):
+        payload["elapsed"] = ""
+        payload["eta"] = ""
+    assert status_a == status_b
+
+    assert workspace_a.db_path.exists()
+    assert workspace_b.db_path.exists()
+    with sqlite3.connect(workspace_a.db_path) as conn_a, sqlite3.connect(workspace_b.db_path) as conn_b:
+        tables_a = pd.read_sql_query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+            conn_a,
+        )
+        tables_b = pd.read_sql_query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+            conn_b,
+        )
+        assert tables_a.equals(tables_b)
+        for table_name in tables_a["name"].tolist():
+            count_a = pd.read_sql_query(f"SELECT COUNT(*) AS row_count FROM {table_name}", conn_a)
+            count_b = pd.read_sql_query(f"SELECT COUNT(*) AS row_count FROM {table_name}", conn_b)
+            assert count_a.equals(count_b)
 

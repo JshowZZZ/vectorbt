@@ -41,12 +41,14 @@ def test_cli_run_writes_runtime_config_and_invokes_sweep(tmp_path, monkeypatch):
         ]
     )
     assert code == 0
-    runtime_cfg = tmp_path / "artifacts" / "sweep_config.json"
+    run_id = calls[0]["env"]["VBT_RUN_ID"]
+    runtime_cfg = tmp_path / "artifacts" / "runs" / run_id / "runtime" / "sweep_config.json"
     payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
     assert payload["search_mode"] == "refine"
     assert payload["max_workers"] == 3
     assert calls[0]["cmd"] == [cli.sys.executable, "-m", "autowfo.run_btc_regime_sweep"]
     assert calls[0]["env"]["VBT_SWEEP_MODE"] == "refine"
+    assert calls[0]["env"]["VBT_RUNTIME_CONFIG_PATH"] == str(runtime_cfg)
 
 
 def test_cli_baseline_writes_runtime_config_and_invokes_baseline(tmp_path, monkeypatch):
@@ -74,10 +76,11 @@ def test_cli_baseline_writes_runtime_config_and_invokes_baseline(tmp_path, monke
         ]
     )
     assert code == 0
-    runtime_cfg = tmp_path / "artifacts" / "sweep_config.json"
+    runtime_cfg = Path(calls[0]["env"]["VBT_RUNTIME_CONFIG_PATH"])
     payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
     assert payload["max_workers"] == 2
     assert calls[0]["cmd"] == [cli.sys.executable, "-m", "autowfo.run_autowfo_baseline"]
+    assert runtime_cfg.parent == tmp_path / "artifacts" / "baseline_runtime"
 
 
 def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
@@ -2196,4 +2199,53 @@ def test_cli_storage_rebuild_analytics_builds_duckdb(tmp_path):
 
     assert code == 0
     assert (artifacts / "analytics.duckdb").exists()
+
+
+def test_cli_storage_rebuild_shared_views_builds_root_compatibility_outputs(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    workspace = cli.importlib.import_module("autowfo.run_workspace").build_run_workspace(tmp_path, "20260314_050000")
+    workspace.ensure_directories()
+    (workspace.combo_summary_path).write_text("timeframe,symbol\n1h,ETH/BTC\n", encoding="utf-8")
+    (workspace.symbol_summary_path).write_text("timeframe,symbol\n1h,ETH/BTC\n", encoding="utf-8")
+    (workspace.leaderboard_path).write_text(
+        "run_id,timestamp_utc,timeframe,data_days,avg_total_return_pct,oos_avg_total_return_pct,report_file\n"
+        "20260314_050000,2026-03-14T05:00:00Z,1h,30,1.0,0.5,btc_regime_ETH-BTC.html\n",
+        encoding="utf-8",
+    )
+    metadata = {
+        "run_id": "20260314_050000",
+        "timestamp_utc": "2026-03-14T05:00:00Z",
+        "search_mode": "combo",
+        "config_sha256": "cfg-cli",
+        "data_fingerprint": "fp-cli",
+        "trade_symbols": ["ETH/BTC"],
+        "timeframes": [{"timeframe": "1h", "days": 30}],
+    }
+    workspace.run_metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    workspace.run_metadata_run_path.write_text(json.dumps(metadata), encoding="utf-8")
+    workspace.top10_path.write_text("timeframe,symbol\n1h,ETH/BTC\n", encoding="utf-8")
+    (workspace.reports_dir / "btc_regime_ETH-BTC.html").write_text("<html>latest</html>", encoding="utf-8")
+    (workspace.reports_dir / "btc_regime_ETH-BTC_20260314_050000.html").write_text(
+        "<html>run</html>",
+        encoding="utf-8",
+    )
+
+    code = cli.main(["storage", "rebuild-shared-views", "--artifacts-dir", str(artifacts), "--cwd", str(tmp_path)])
+
+    assert code == 0
+    assert (artifacts / "run_registry.json").exists()
+    assert (artifacts / "leaderboard.csv").exists()
+    assert (artifacts / "param_sweep_combo_summary.csv").exists()
+
+
+def test_cli_storage_purge_legacy_dry_run_preserves_files(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    legacy_path = artifacts / "param_sweep_top10_legacy.csv"
+    legacy_path.write_text("timeframe\n1h\n", encoding="utf-8")
+
+    code = cli.main(["storage", "purge-legacy", "--dry-run", "--artifacts-dir", str(artifacts), "--cwd", str(tmp_path)])
+
+    assert code == 0
+    assert legacy_path.exists()
 

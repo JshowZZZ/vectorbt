@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import subprocess
@@ -9,14 +10,25 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
+from autowfo.run_workspace import RunWorkspace, build_run_workspace, get_runs_dir
+
 from .core_utils import _load_config
+
+
+def _build_run_workspace(cwd: Path, run_id: str) -> RunWorkspace:
+    return build_run_workspace(cwd=cwd, run_id=run_id)
+
+
+def _new_run_id() -> str:
+    return dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
 
 def _write_runtime_config(
     cwd: Path,
     config_path: Path,
     mode: Optional[str],
     workers: Optional[int],
-) -> Path:
+) -> tuple[Path, Optional[str]]:
     artifacts_dir = cwd / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -26,16 +38,27 @@ def _write_runtime_config(
     if workers is not None:
         config["max_workers"] = int(workers)
 
-    runtime_config_path = artifacts_dir / "sweep_config.json"
+    run_id = None
+    if mode is not None:
+        run_id = _new_run_id()
+        workspace = _build_run_workspace(cwd, run_id)
+        workspace.ensure_directories()
+        runtime_config_path = workspace.runtime_config_path
+    else:
+        baseline_runtime_dir = artifacts_dir / "baseline_runtime"
+        baseline_runtime_dir.mkdir(parents=True, exist_ok=True)
+        runtime_config_path = baseline_runtime_dir / f"sweep_config_{_new_run_id()}.json"
     runtime_config_path.write_text(
         json.dumps(config, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return runtime_config_path
+    return runtime_config_path, run_id
+
 
 def _run_module(module_name: str, cwd: Path, env: Dict[str, str]) -> None:
     cmd = [sys.executable, "-m", module_name]
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+
 
 def _run_workflow(
     cwd: Path,
@@ -47,17 +70,20 @@ def _run_workflow(
     if workflow not in {"run", "baseline"}:
         raise ValueError(f"Unsupported workflow: {workflow}")
 
-    runtime_config_path = _write_runtime_config(
+    runtime_config_path, run_id = _write_runtime_config(
         cwd=cwd,
         config_path=config_path,
         mode=mode if workflow == "run" else None,
         workers=workers,
     )
     env = os.environ.copy()
+    env["VBT_RUNTIME_CONFIG_PATH"] = str(runtime_config_path)
 
     if workflow == "run":
         if mode:
             env["VBT_SWEEP_MODE"] = mode
+        if run_id:
+            env["VBT_RUN_ID"] = run_id
         print(f"[autowfo] runtime_config={runtime_config_path}")
         print(f"[autowfo] mode={mode or 'config_default'} workers={workers or 'config_default'}")
         _run_module("autowfo.run_btc_regime_sweep", cwd=cwd, env=env)
@@ -67,8 +93,9 @@ def _run_workflow(
     print(f"[autowfo] baseline workers={workers or 'config_default'}")
     _run_module("autowfo.run_autowfo_baseline", cwd=cwd, env=env)
 
+
 def _latest_run_label(cwd: Path) -> Optional[str]:
-    runs_dir = cwd / "artifacts" / "runs"
+    runs_dir = get_runs_dir(cwd)
     if not runs_dir.exists():
         return None
     candidates = [p for p in runs_dir.iterdir() if p.is_dir()]
@@ -77,11 +104,13 @@ def _latest_run_label(cwd: Path) -> Optional[str]:
     latest = max(candidates, key=lambda p: p.stat().st_mtime)
     return latest.name
 
+
 def _list_run_labels(cwd: Path) -> Set[str]:
-    runs_dir = cwd / "artifacts" / "runs"
+    runs_dir = get_runs_dir(cwd)
     if not runs_dir.exists():
         return set()
     return {p.name for p in runs_dir.iterdir() if p.is_dir()}
+
 
 def _resolve_gate_c_target_mode(
     *,
@@ -102,8 +131,9 @@ def _resolve_gate_c_target_mode(
         raise ValueError(f"unsupported target mode for Gate C: {mode_value}")
     return mode_value
 
+
 def _resolve_gate_c_run_dir(cwd: Path, run_label: str, target_mode: str) -> Path:
-    run_root = cwd / "artifacts" / "runs" / run_label
+    run_root = get_runs_dir(cwd) / run_label
     mode_dir = run_root / target_mode
     if mode_dir.exists() and mode_dir.is_dir():
         return mode_dir

@@ -1,6 +1,8 @@
 import datetime as dt
 import os
+import shutil
 import time
+from pathlib import Path
 
 import pandas as pd
 
@@ -20,6 +22,7 @@ from autowfo import engine_helpers
 from autowfo import engine_runtime
 from autowfo import engine_search
 from autowfo import engine_finalize
+from autowfo.run_workspace import build_run_workspace
 
 from autowfo.constants import (
     FILTER_NAME_MAP,
@@ -118,12 +121,14 @@ def main():
     default_trade_symbols = autowfo_data._fetch_top_trade_symbols(
         exchange, limit=10, fallback=fallback_trade_symbols
     )
-    out_dir = "artifacts"
-    os.makedirs(out_dir, exist_ok=True)
+    artifacts_root = "artifacts"
+    os.makedirs(artifacts_root, exist_ok=True)
+    runtime_config_override = os.getenv("VBT_RUNTIME_CONFIG_PATH")
 
     default_config = engine_helpers._load_runtime_config(
-        out_dir,
+        artifacts_root,
         env_mode=os.getenv("VBT_SWEEP_MODE"),
+        config_path=runtime_config_override,
     )
     runtime_settings = engine_helpers._resolve_runtime_settings(
         default_config=default_config,
@@ -134,7 +139,7 @@ def main():
     )
     search_mode = runtime_settings["search_mode"]
     config_sha256 = autowfo_artifacts._compute_config_sha256(default_config)
-    config_path = os.path.join(out_dir, "sweep_config.json")
+    config_path = runtime_config_override or os.path.join(artifacts_root, "sweep_config.json")
     timeframe_configs = runtime_settings["timeframe_configs"]
     combo_sizes = runtime_settings["combo_sizes"]
     combo_seed = runtime_settings["combo_seed"]
@@ -196,10 +201,12 @@ def main():
     init_cash_usdt = runtime_settings["init_cash_usdt"]
     order_size_pct = runtime_settings["order_size_pct"]
     max_concurrent_positions = runtime_settings["max_concurrent_positions"]
-    cache_dir = os.path.join(out_dir, "cache_ccxt")
+    cache_dir = os.path.join(artifacts_root, "cache_ccxt")
     cache_format = "parquet" if autowfo_data._has_parquet_engine() else "csv"
-    run_id = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    run_id = os.getenv("VBT_RUN_ID") or dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     timestamp_utc = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    workspace = build_run_workspace(Path.cwd(), run_id)
+    workspace.ensure_directories()
     # Quality filters can be tuned via sweep_config.json.
     min_avg_daily_trades_target = runtime_settings["min_avg_daily_trades_target"]
     min_oos_trades_target = runtime_settings["min_oos_trades_target"]
@@ -207,18 +214,23 @@ def main():
     ranking_config = runtime_settings["ranking_config"]
     pruning_config = runtime_settings.get("pruning_config")
     history_rows = 20
-    leaderboard_path = os.path.join(out_dir, "leaderboard.csv")
-    registry_path = os.path.join(out_dir, "run_registry.json")
-    status_json_path = os.path.join(out_dir, "run_status.json")
-    status_html_path = os.path.join(out_dir, "run_status.html")
-    run_metadata_path = os.path.join(out_dir, "run_metadata.json")
-    run_metadata_path_run = os.path.join(out_dir, f"run_metadata_{run_id}.json")
-    db_path = os.path.join(out_dir, "results.db")
-    control_path = os.path.join(out_dir, "run_control.json")
+    leaderboard_path = str(workspace.leaderboard_path)
+    registry_path = str(workspace.registry_path)
+    status_json_path = str(workspace.status_json_path)
+    status_html_path = str(workspace.status_html_path)
+    run_metadata_path = str(workspace.run_metadata_path)
+    run_metadata_path_run = str(workspace.run_metadata_run_path)
+    db_path = str(workspace.db_path)
+    control_path = str(workspace.control_path)
     engine_helpers._ensure_control_file(control_path)
+    if runtime_config_override and os.path.exists(runtime_config_override):
+        config_path = os.path.relpath(Path(runtime_config_override), Path.cwd())
+    elif os.path.exists(config_path):
+        shutil.copy2(config_path, workspace.runtime_config_path)
+        config_path = os.path.relpath(workspace.runtime_config_path, Path.cwd())
 
-    combo_path = os.path.join(out_dir, "param_sweep_combo_summary.csv")
-    per_symbol_path = os.path.join(out_dir, "param_sweep_symbol_summary.csv")
+    combo_path = str(workspace.combo_summary_path)
+    per_symbol_path = str(workspace.symbol_summary_path)
     existing_combo_df = pd.read_csv(combo_path, low_memory=False) if os.path.exists(combo_path) else pd.DataFrame()
     existing_symbol_df = pd.read_csv(per_symbol_path, low_memory=False) if os.path.exists(per_symbol_path) else pd.DataFrame()
     autowfo_artifacts._ensure_csv_schema(combo_path, COMBO_RESULT_FIELDS)
@@ -282,6 +294,7 @@ def main():
     # AWF-108(c): checkpoint / progress frequency configurable via sweep_config.json
     _checkpoint_every_n = max(int(default_config.get("checkpoint_every_n", 200) or 200), 1)
     _progress_every_n = max(int(default_config.get("progress_every_n", 25) or 25), 1)
+
     lifecycle = engine_helpers._build_run_lifecycle_callbacks(
         total_combos=total_combos,
         run_id=run_id,
@@ -450,11 +463,15 @@ def main():
         safe_int_fn=engine_helpers._safe_int,
         pruning_config=pruning_config,
     )
+    workspace_paths = {
+        **workspace.as_dict(),
+        "report_paths": None,
+    }
     finalize_pipeline_context = engine_finalize._build_finalize_pipeline_context_from_shared(
         shared_pipeline_runtime_context=shared_pipeline_runtime_context,
         combo_path=combo_path,
         per_symbol_path=per_symbol_path,
-        out_dir=out_dir,
+        out_dir=str(workspace.results_dir),
         run_id=run_id,
         timeframe_configs=timeframe_configs,
         timeframe_days_map=timeframe_days_map,
@@ -470,6 +487,7 @@ def main():
         run_metadata_path=run_metadata_path,
         run_metadata_path_run=run_metadata_path_run,
         registry_path=registry_path,
+        workspace_paths=workspace_paths,
         search_mode=search_mode,
         config_path=config_path,
         prepare_timeframe_context_fn=autowfo_data._prepare_timeframe_context,

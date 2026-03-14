@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlparse
+from autowfo.control_panel.state import _shared_views_source_status
 
 
 def _cp():
@@ -89,7 +90,7 @@ def _cross_run_payload(top_n=20):
 
     registry_path = _coverage_registry_path()
     top_n_i = _normalize_top_n(top_n)
-    return cross_run.validate_cross_run_payload(
+    payload = cross_run.validate_cross_run_payload(
         cross_run.normalize_cross_run_payload(
             cross_run.build_cross_run_payload(
                 artifacts_dir=ARTIFACTS,
@@ -100,16 +101,20 @@ def _cross_run_payload(top_n=20):
         ),
         require_v1=True,
     )
+    payload["source_status"] = _shared_views_source_status()
+    return payload
 
 @_with_cp
 def _cross_run_cached_payload(top_n=20):
     from autowfo import cross_run
 
     payload_path = ARTIFACTS / "cross_run_report.json"
-    return cross_run.load_cross_run_payload(
+    payload = cross_run.load_cross_run_payload(
         payload_path=payload_path,
         top_n=_normalize_top_n(top_n),
     )
+    payload["source_status"] = _shared_views_source_status()
+    return payload
 
 @_with_cp
 def _cross_run_generate_report(top_n=20):
@@ -125,6 +130,7 @@ def _cross_run_generate_report(top_n=20):
         out_json_path=out_json,
         top_n=_normalize_top_n(top_n),
     )
+    payload["source_status"] = _shared_views_source_status()
     return payload, out_html
 
 @_with_cp
@@ -153,6 +159,7 @@ def _cross_run_cache_fallback_meta(reason, fallback_for, request_id=None):
         "endpoint": endpoint,
         "request_id": str(request_id or _new_request_id()),
         "fallback_utc": _now_iso(),
+        "source_status": _shared_views_source_status(),
     }
 
 @_with_cp

@@ -242,13 +242,13 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
     }
 
 
-def _load_runtime_config(out_dir, env_mode=None):
+def _load_runtime_config(out_dir, env_mode=None, config_path=None):
     config = copy.deepcopy(DEFAULT_CONFIG)
-    config_path = os.path.join(out_dir, "sweep_config.json")
-    if os.path.exists(config_path):
+    resolved_config_path = config_path or os.path.join(out_dir, "sweep_config.json")
+    if os.path.exists(resolved_config_path):
         try:
             # Accept UTF-8 files with or without BOM to avoid silent fallback to defaults.
-            with open(config_path, "r", encoding="utf-8-sig") as f:
+            with open(resolved_config_path, "r", encoding="utf-8-sig") as f:
                 override = json.load(f)
             for key, value in override.items():
                 if isinstance(value, dict) and isinstance(config.get(key), dict):

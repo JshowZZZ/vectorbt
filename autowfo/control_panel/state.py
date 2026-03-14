@@ -206,6 +206,63 @@ def _relative_path_or_str(path):
             return str(path).replace("\\", "/")
 
 
+def _shared_views_manifest_path():
+    paths = _paths()
+    artifacts = paths.artifacts if paths is not None else Path("artifacts")
+    return artifacts / "shared_views_manifest.json"
+
+
+def _read_shared_views_manifest():
+    manifest_path = _shared_views_manifest_path()
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _latest_trusted_run_root():
+    payload = _read_shared_views_manifest()
+    if not isinstance(payload, dict):
+        return None
+    latest_run_root = str(payload.get("latest_run_root") or "").strip()
+    if latest_run_root:
+        run_root = Path(latest_run_root)
+        if run_root.exists():
+            return run_root
+    latest_run_id = str(payload.get("latest_run_id") or "").strip()
+    if latest_run_id:
+        paths = _paths()
+        artifacts = paths.artifacts if paths is not None else Path("artifacts")
+        run_root = artifacts / "runs" / latest_run_id
+        if run_root.exists():
+            return run_root
+    return None
+
+
+def _shared_views_source_status():
+    manifest_path = _shared_views_manifest_path()
+    payload = _read_shared_views_manifest()
+    if not isinstance(payload, dict):
+        return {
+            "mode": "legacy_or_missing",
+            "manifest_path": str(manifest_path),
+            "manifest_exists": manifest_path.exists(),
+            "trusted_runs": 0,
+            "latest_run_id": "",
+        }
+    trusted_runs = payload.get("trusted_runs")
+    return {
+        "mode": "trusted_derived",
+        "manifest_path": str(manifest_path),
+        "manifest_exists": True,
+        "trusted_runs": len(trusted_runs) if isinstance(trusted_runs, list) else 0,
+        "latest_run_id": str(payload.get("latest_run_id") or ""),
+    }
+
+
 def _start_run():
     cp = _cp()
     paths = _paths()
@@ -504,7 +561,7 @@ def _estimate_discovery_candidates() -> int:
 def _read_overview_next_action():
     cp = _cp()
     if cp is None:
-        return {"scheduler_enabled": False, "queue_depth": 0}
+        return {"scheduler_enabled": False, "queue_depth": 0, "source_status": _shared_views_source_status()}
 
     status = _read_status()
     scheduler_path = cp.ARTIFACTS / "scheduler.json"
@@ -516,6 +573,7 @@ def _read_overview_next_action():
             "is_running": False,
             "latest_run_summary": None,
             "discovery_candidates": 0,
+            "source_status": _shared_views_source_status(),
             "status_stage": str(status.get("stage", "idle")),
             "updated_utc": _now_iso(),
         }
@@ -537,6 +595,7 @@ def _read_overview_next_action():
         "last_error": str(scheduler_status.get("last_error", "") or ""),
         "latest_run_summary": _collect_latest_experiment_run_summary(),
         "discovery_candidates": _estimate_discovery_candidates(),
+        "source_status": _shared_views_source_status(),
         "status_stage": str(status.get("stage", "idle")),
         "updated_utc": _now_iso(),
     }
@@ -646,6 +705,10 @@ __all__ = [
     "_safe_json_read",
     "_parse_utc",
     "_relative_path_or_str",
+    "_shared_views_manifest_path",
+    "_read_shared_views_manifest",
+    "_latest_trusted_run_root",
+    "_shared_views_source_status",
     "_start_run",
     "_start_tests",
     "_stop_tests",

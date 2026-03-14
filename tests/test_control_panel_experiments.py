@@ -492,6 +492,7 @@ def test_get_storage_health_endpoint_reports_summary(tmp_path, monkeypatch):
     run_dir = artifacts / "experiments" / exp_id / "runs" / "20260313_050000"
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run_meta.json").write_text(json.dumps({"run_id": "20260313_050000"}), encoding="utf-8")
+    (artifacts / "leaderboard.csv").write_text("run_id\nlegacy\n", encoding="utf-8")
 
     with _serve_handler_connection() as conn:
         conn.request("GET", "/ops/storage-health.json")
@@ -500,7 +501,9 @@ def test_get_storage_health_endpoint_reports_summary(tmp_path, monkeypatch):
         assert response.status == 200
         assert payload["summary"]["run_meta_files"] == 1
         assert payload["summary"]["run_meta_legacy_files"] == 1
+        assert payload["summary"]["trusted_runs"] == 0
         assert payload["components"]["run_meta"]["status"] == "warn"
+        assert payload["components"]["shared_views"]["status"] == "warn"
 
 
 def test_get_analytics_report_html_endpoint_returns_html(tmp_path, monkeypatch):

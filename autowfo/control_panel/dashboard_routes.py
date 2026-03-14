@@ -283,17 +283,18 @@ def try_handle_post(handler, parsed):
             _cross_run_validate_payload(report_payload)
             handler._send(
                 json.dumps(
-                    {
-                        "ok": True,
-                        "message": "cross-run report generated",
-                        "payload_source": "live",
-                        "request_id": request_id,
-                        "report_path": str(report_path.relative_to(ROOT)),
-                        "summary": report_payload.get("summary", {}),
-                    },
-                    ensure_ascii=False,
-                ),
-                "application/json; charset=utf-8",
+                        {
+                            "ok": True,
+                            "message": "cross-run report generated",
+                            "payload_source": "live",
+                            "request_id": request_id,
+                            "report_path": str(report_path.relative_to(ROOT)),
+                            "summary": report_payload.get("summary", {}),
+                            "source_status": report_payload.get("source_status", _shared_views_source_status()),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "application/json; charset=utf-8",
             )
             return True
         except Exception as exc:
@@ -327,6 +328,7 @@ def try_handle_post(handler, parsed):
                             "request_id": request_id,
                             "report_path": str(cached_path.relative_to(ROOT)),
                             "summary": cached_payload.get("summary", {}),
+                            "source_status": cached_payload.get("source_status", _shared_views_source_status()),
                             "cache_fallback": fallback_meta,
                         },
                         ensure_ascii=False,

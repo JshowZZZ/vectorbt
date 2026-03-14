@@ -128,6 +128,7 @@ def test_get_results_payload_timeframe_filter(tmp_path, monkeypatch):
     assert all(row["timeframe"] == "15m" for row in combo["rows"])
     assert set(payload["timeframes"]) == {"15m", "3m"}
     assert payload["errors"] == []
+    assert payload["source_status"]["mode"] == "legacy_or_missing"
 
 
 def test_get_results_payload_applies_refresh_state_data_end(tmp_path, monkeypatch):
@@ -186,9 +187,16 @@ def test_get_results_payload_top10_dual_path(tmp_path, monkeypatch):
             [("15m", "5.5"), ("15m", "9.9"), ("15m", "1.1")],
         )
 
-    # Write a latest-run top10 file with different content (only 1 row)
-    latest_csv = tmp_path / "param_sweep_top10_r999.csv"
+    # Under Phase 44, latest-run Top10 must come from a trusted run root rather than
+    # an unscoped root-level CSV fallback.
+    trusted_run = tmp_path / "runs" / "r999"
+    (trusted_run / "results").mkdir(parents=True, exist_ok=True)
+    latest_csv = trusted_run / "results" / "param_sweep_top10_r999.csv"
     latest_csv.write_text("timeframe,oos_avg_total_return_pct\n15m,2.2\n", encoding="utf-8")
+    (tmp_path / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r999"], "latest_run_id": "r999"}),
+        encoding="utf-8",
+    )
 
     cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
 
@@ -210,6 +218,89 @@ def test_get_results_payload_top10_dual_path(tmp_path, monkeypatch):
     lr_rows = payload["top10_latest_run"]["rows"]
     assert len(lr_rows) == 1, f"top10_latest_run should have 1 row but got {len(lr_rows)}"
     assert lr_rows[0].get("oos_avg_total_return_pct") == "2.2"
+
+
+def test_get_results_payload_reports_trusted_derived_source_status(tmp_path, monkeypatch):
+    db_path = tmp_path / "results.db"
+    _setup_db(db_path)
+    (tmp_path / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r1", "r2"], "latest_run_id": "r2"}),
+        encoding="utf-8",
+    )
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
+
+    payload = cp._get_results_payload(timeframe="15m")
+    assert payload["source_status"]["mode"] == "trusted_derived"
+    assert payload["source_status"]["trusted_runs"] == 2
+    assert payload["source_status"]["latest_run_id"] == "r2"
+
+
+def test_get_results_payload_prefers_trusted_run_top10_file(tmp_path, monkeypatch):
+    db_path = tmp_path / "results.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE combo_summary ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "created_utc TEXT DEFAULT CURRENT_TIMESTAMP, "
+            "timeframe TEXT, "
+            "oos_avg_total_return_pct TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO combo_summary (timeframe, oos_avg_total_return_pct) VALUES (?, ?)",
+            ("15m", "9.9"),
+        )
+
+    trusted_run = tmp_path / "runs" / "r_trusted"
+    (trusted_run / "results").mkdir(parents=True, exist_ok=True)
+    (trusted_run / "results" / "param_sweep_top10_r_trusted.csv").write_text(
+        "timeframe,oos_avg_total_return_pct\n15m,7.7\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r_trusted"], "latest_run_id": "r_trusted"}),
+        encoding="utf-8",
+    )
+    (tmp_path / "param_sweep_top10_r_legacy.csv").write_text(
+        "timeframe,oos_avg_total_return_pct\n15m,2.2\n",
+        encoding="utf-8",
+    )
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
+
+    payload = cp._get_results_payload()
+    lr_rows = payload["top10_latest_run"]["rows"]
+    assert len(lr_rows) == 1
+    assert lr_rows[0].get("oos_avg_total_return_pct") == "7.7"
+
+
+def test_get_results_payload_suppresses_legacy_root_top10_without_manifest(tmp_path, monkeypatch):
+    db_path = tmp_path / "results.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE combo_summary ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "created_utc TEXT DEFAULT CURRENT_TIMESTAMP, "
+            "timeframe TEXT, "
+            "oos_avg_total_return_pct TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO combo_summary (timeframe, oos_avg_total_return_pct) VALUES (?, ?)",
+            ("15m", "9.9"),
+        )
+
+    (tmp_path / "param_sweep_top10_r_legacy.csv").write_text(
+        "timeframe,oos_avg_total_return_pct\n15m,2.2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "btc_regime_legacy.html").write_text("<html>legacy</html>", encoding="utf-8")
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
+
+    payload = cp._get_results_payload()
+    assert payload["source_status"]["mode"] == "legacy_or_missing"
+    assert payload["top10_latest_run"]["rows"] == []
+    assert payload["latest_report"] == ""
 
 
 def test_sanitize_config_walk_forward_fields():
@@ -333,6 +424,10 @@ def _setup_batch_env(tmp_path, monkeypatch):
 
 def test_overview_next_action_includes_scheduler_queue_depth(tmp_path, monkeypatch):
     artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r1", "r2"], "latest_run_id": "r2"}),
+        encoding="utf-8",
+    )
     (artifacts / "scheduler.json").write_text(
         json.dumps(
             {
@@ -389,6 +484,9 @@ def test_overview_next_action_includes_scheduler_queue_depth(tmp_path, monkeypat
     assert payload["next_experiment_id"] == "exp_queue_next"
     assert payload["discovery_candidates"] == 3
     assert payload["latest_run_summary"]["run_id"] == "20260301_020000"
+    assert payload["source_status"]["mode"] == "trusted_derived"
+    assert payload["source_status"]["trusted_runs"] == 2
+    assert payload["source_status"]["latest_run_id"] == "r2"
 
 
 def test_overview_patrol_history_endpoint_reads_recent_rows(tmp_path, monkeypatch):
@@ -810,10 +908,27 @@ def test_coverage_matrix_payload_marks_tested_and_queued(tmp_path, monkeypatch):
     assert payload["summary"]["queued"] == 1
     assert payload["summary"]["untested"] == 0
     assert payload["summary"]["coverage_pct"] == 50.0
+    assert payload["source_status"]["mode"] == "legacy_or_missing"
 
     cell_map = {(cell["timeframe"], cell["symbol"]): cell["status"] for cell in payload["cells"]}
     assert cell_map[("1h", "ETH/USDT")] == "tested"
     assert cell_map[("1h", "SOL/USDT")] == "queued"
+
+
+def test_coverage_matrix_payload_reports_trusted_derived_source_status(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r1"]}),
+        encoding="utf-8",
+    )
+    (artifacts / "run_registry.json").write_text(
+        json.dumps({"coverage": {"timeframes": [], "symbols": [], "tested_pairs": [], "untested_pairs": []}}),
+        encoding="utf-8",
+    )
+
+    payload = cp._coverage_matrix_payload()
+    assert payload["source_status"]["mode"] == "trusted_derived"
+    assert payload["source_status"]["trusted_runs"] == 1
 
 
 def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatch):
@@ -880,6 +995,10 @@ def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatc
 
 def test_cross_run_payload_and_report_generation(tmp_path, monkeypatch):
     artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r100"], "latest_run_id": "r100"}),
+        encoding="utf-8",
+    )
     (artifacts / "run_registry.json").write_text(
         json.dumps(
             {
@@ -914,9 +1033,12 @@ def test_cross_run_payload_and_report_generation(tmp_path, monkeypatch):
     assert payload["summary"]["total_runs"] == 1
     assert payload["summary"]["coverage_pct"] == 50.0
     assert len(payload["combo_stability"]) == 1
+    assert payload["source_status"]["mode"] == "trusted_derived"
+    assert payload["source_status"]["latest_run_id"] == "r100"
 
     report_payload, report_path = cp._cross_run_generate_report(top_n=10)
     assert report_payload["summary"]["total_runs"] == 1
+    assert report_payload["source_status"]["mode"] == "trusted_derived"
     assert report_path.exists()
     assert "AUTOWFO Cross-Run Report" in report_path.read_text(encoding="utf-8")
 
@@ -1816,6 +1938,10 @@ def test_batch_endpoints_enqueue_queue_remove_smoke_integration(tmp_path, monkey
 
 
 def _seed_dashboard_cross_run_artifacts(artifacts: Path) -> None:
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r100"], "latest_run_id": "r100"}),
+        encoding="utf-8",
+    )
     (artifacts / "run_registry.json").write_text(
         json.dumps(
             {
@@ -1861,6 +1987,8 @@ def test_dashboard_cross_run_endpoint_smoke_integration(tmp_path, monkeypatch):
         _assert_dashboard_cross_run_payload_schema(payload)
         assert payload["payload_source"] == "live"
         _assert_request_id(payload["request_id"])
+        assert payload["source_status"]["mode"] == "trusted_derived"
+        assert payload["source_status"]["latest_run_id"] == "r100"
         assert payload["summary"]["total_runs"] == 1
         assert payload["summary"]["coverage_pct"] == 50.0
         assert len(payload["combo_stability"]) == 1
@@ -1885,6 +2013,7 @@ def test_dashboard_report_generate_endpoint_smoke_integration(tmp_path, monkeypa
         assert generate_payload["ok"] is True
         assert generate_payload["payload_source"] == "live"
         _assert_request_id(generate_payload["request_id"])
+        assert generate_payload["source_status"]["mode"] == "trusted_derived"
         report_rel_path = generate_payload["report_path"]
         report_path = tmp_path / report_rel_path
         assert report_path.exists()
@@ -1904,6 +2033,7 @@ def test_cross_run_payload_contract_global_leaderboard(tmp_path, monkeypatch):
     payload = cp._cross_run_payload(top_n=10)
 
     _assert_dashboard_cross_run_payload_schema(payload)
+    assert payload["source_status"]["mode"] == "trusted_derived"
     assert payload["summary"]["total_runs"] == 1
     assert payload["summary"]["coverage_pct"] == 50.0
     assert len(payload["global_leaderboard"]) == 1

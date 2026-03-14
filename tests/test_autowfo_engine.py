@@ -3529,7 +3529,6 @@ def test_build_completion_output_map_order():
     ]
     assert outputs["report_run"] == "i.html"
 
-
 def _base_finalize_kwargs(tmp_path, *, combo_path, per_symbol_path):
     out_dir = tmp_path / "artifacts"
     out_dir.mkdir(parents=True, exist_ok=True)

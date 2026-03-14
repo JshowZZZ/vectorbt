@@ -36,6 +36,31 @@ def add_storage_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: A
     rebuild_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
     rebuild_parser.set_defaults(handler=cli_impl._cmd_storage_rebuild_analytics)
 
+    shared_views_parser = storage_subparsers.add_parser(
+        "rebuild-shared-views",
+        help="Rebuild shared compatibility views from trusted run roots",
+    )
+    shared_views_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    shared_views_parser.add_argument("--cwd", default=".", help="Working directory")
+    shared_views_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    shared_views_parser.set_defaults(handler=cli_impl._cmd_storage_rebuild_shared_views)
+
+    purge_parser = storage_subparsers.add_parser(
+        "purge-legacy",
+        help="Dry-run or quarantine legacy root-level run outputs",
+    )
+    purge_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    purge_parser.add_argument("--cwd", default=".", help="Working directory")
+    purge_parser.add_argument("--dry-run", action="store_true", help="Report planned actions without mutating files")
+    purge_parser.add_argument("--delete", action="store_true", help="Permanently delete candidates instead of moving them")
+    purge_parser.add_argument(
+        "--quarantine-dir",
+        default="",
+        help="Directory used when moving legacy outputs out of the artifacts root",
+    )
+    purge_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    purge_parser.set_defaults(handler=cli_impl._cmd_storage_purge_legacy)
+
 
 def _resolve_artifacts_dir(args: argparse.Namespace, cli_impl: Any) -> Path:
     cwd = Path(args.cwd).resolve()
@@ -76,5 +101,27 @@ def cmd_storage_rebuild_analytics(args: argparse.Namespace, cli_impl: Any) -> in
     from autowfo.storage_ops import rebuild_analytics
 
     payload = rebuild_analytics(_resolve_artifacts_dir(args, cli_impl))
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_rebuild_shared_views(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo.storage_ops import rebuild_shared_views
+
+    payload = rebuild_shared_views(_resolve_artifacts_dir(args, cli_impl))
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_purge_legacy(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo.storage_ops import purge_legacy_outputs
+
+    quarantine_dir = str(args.quarantine_dir or "").strip()
+    payload = purge_legacy_outputs(
+        _resolve_artifacts_dir(args, cli_impl),
+        dry_run=bool(args.dry_run),
+        delete=bool(args.delete),
+        quarantine_dir=(cli_impl._resolve_path(Path(args.cwd).resolve(), quarantine_dir) if quarantine_dir else None),
+    )
     _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
     return 0 if payload.get("ok") else 1

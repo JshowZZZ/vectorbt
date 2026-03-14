@@ -40,16 +40,23 @@ def _clean_temp_outputs(repo_root: Path) -> Dict[str, bool]:
     return removed
 
 
-def _run_sweep(repo_root: Path, mode: str) -> None:
+def _run_sweep(repo_root: Path, mode: str, runtime_config_path: Path) -> None:
     env = os.environ.copy()
     env["VBT_SWEEP_MODE"] = mode
+    env["VBT_RUNTIME_CONFIG_PATH"] = str(runtime_config_path)
     cmd = [sys.executable, "-m", "autowfo.run_btc_regime_sweep"]
     subprocess.run(cmd, cwd=str(repo_root), env=env, check=True)
 
 
-def _run_pass(repo_root: Path, artifacts_dir: Path, pass_dir: Path, mode: str) -> Tuple[str, Dict[str, object]]:
+def _run_pass(
+    repo_root: Path,
+    artifacts_dir: Path,
+    pass_dir: Path,
+    mode: str,
+    runtime_config_path: Path,
+) -> Tuple[str, Dict[str, object]]:
     before = autowfo_baseline._list_artifact_files(artifacts_dir)
-    _run_sweep(repo_root, mode)
+    _run_sweep(repo_root, mode, runtime_config_path)
     after = autowfo_baseline._list_artifact_files(artifacts_dir)
     run_id = autowfo_baseline._extract_new_run_id(before, after)
     if run_id is None:
@@ -75,7 +82,8 @@ def _run_pass(repo_root: Path, artifacts_dir: Path, pass_dir: Path, mode: str) -
 def main() -> None:
     repo_root = Path.cwd().resolve()
     artifacts_dir = repo_root / "artifacts"
-    config_path = artifacts_dir / "sweep_config.json"
+    runtime_config_override = os.getenv("VBT_RUNTIME_CONFIG_PATH")
+    config_path = Path(runtime_config_override) if runtime_config_override else artifacts_dir / "sweep_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Missing config: {config_path}")
     config_payload = _load_config_payload(config_path)
@@ -101,14 +109,14 @@ def main() -> None:
     }
     autowfo_baseline._write_json(run_root / "manifest.json", manifest)
 
-    combo_run_id, combo_snapshot = _run_pass(repo_root, artifacts_dir, combo_dir, "combo")
+    combo_run_id, combo_snapshot = _run_pass(repo_root, artifacts_dir, combo_dir, "combo", config_path)
     manifest["passes"].append({"mode": "combo", "run_id": combo_run_id, "snapshot": combo_snapshot})
     autowfo_baseline._write_json(run_root / "manifest.json", manifest)
 
     # Ensure refine run gets a distinct run_id when script resolution is per-second.
     time.sleep(1.2)
 
-    refine_run_id, refine_snapshot = _run_pass(repo_root, artifacts_dir, refine_dir, "refine")
+    refine_run_id, refine_snapshot = _run_pass(repo_root, artifacts_dir, refine_dir, "refine", config_path)
     manifest["passes"].append({"mode": "refine", "run_id": refine_run_id, "snapshot": refine_snapshot})
 
     if int(refine_snapshot.get("run_total", 0)) == 0:

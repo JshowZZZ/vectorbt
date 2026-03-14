@@ -20,7 +20,9 @@ from functools import wraps
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlparse
 from autowfo.control_panel.state import (
+    _latest_trusted_run_root,
     _log_html,
+    _shared_views_source_status,
     _test_log_html,
     _read_log_tail,
     _read_test_log_tail,
@@ -92,13 +94,24 @@ def _with_cp(fn):
 
 @_with_cp
 def _latest_report_path():
-    reports = sorted(ARTIFACTS.glob("btc_regime_*.html"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return reports[0] if reports else None
+    latest_run_root = _latest_trusted_run_root()
+    if latest_run_root is not None:
+        reports_dir = latest_run_root / "reports"
+        reports = sorted(reports_dir.glob("btc_regime_*.html"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if reports:
+            return reports[0]
+    return None
+
 
 @_with_cp
 def _latest_top10_path():
-    tops = sorted(ARTIFACTS.glob("param_sweep_top10_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return tops[0] if tops else None
+    latest_run_root = _latest_trusted_run_root()
+    if latest_run_root is not None:
+        results_dir = latest_run_root / "results"
+        tops = sorted(results_dir.glob("param_sweep_top10_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if tops:
+            return tops[0]
+    return None
 
 @_with_cp
 def _parse_float(value):
@@ -309,6 +322,7 @@ def _get_results_payload(timeframe=None):
         timeframes = _get_timeframes(combo_path)
     return {
         "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "source_status": _shared_views_source_status(),
         "combo": combo,
         "leaderboard": leaderboard,
         "top10": top10,
