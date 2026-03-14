@@ -57,14 +57,22 @@
 11. Rebuild analytics from experiment artifacts:
    - `python -m autowfo storage rebuild-analytics --cwd .`
 
+## Evidence Integrity Transition Policy
+- Effective 2026-03-14, treat root-level run outputs under `artifacts/` as a legacy surface, not a primary evidence source.
+- Phase 44 completed on 2026-03-14. Primary evidence now lives under `artifacts/runs/<run_id>/...`, and root compatibility views must be rebuilt from trusted run-local roots.
+- Do not manually place run outputs under root `artifacts/` and treat them as single-run truth.
+- If old root-level outputs are discovered outside the shared-view manifest, treat them as legacy evidence and quarantine/purge them via `python -m autowfo storage purge-legacy --dry-run`.
+
 ## Output Locations
-- Latest sweep artifacts:
+- Trusted evidence (preferred):
+  - `artifacts/runs/<run_id>/...`
+  - Legacy isolated working roots used during the transition can remain for audit, but they are not part of the trusted rebuild set.
+- Legacy root-level outputs (do not treat as trusted single-run evidence):
   - `artifacts/param_sweep_combo_summary.csv`
   - `artifacts/param_sweep_symbol_summary.csv`
   - `artifacts/leaderboard.csv`
   - `artifacts/run_registry.json`
   - `artifacts/run_metadata.json`
-- Run snapshots:
   - `artifacts/param_sweep_top10_<run_id>.csv`
   - `artifacts/run_metadata_<run_id>.json`
 - Gate C report:
@@ -96,9 +104,11 @@
 2. Runtime config not applied as expected:
    - Confirm the command `--config` path.
    - Check effective runtime file: `artifacts/sweep_config.json`.
+   - If the run used shared root `artifacts/`, do not assume the resulting root-level summaries are trusted evidence.
 3. Data/cache anomalies:
    - Inspect `artifacts/cache_ccxt`.
    - Re-run with same config to verify reproducibility.
+   - For evidence-sensitive reruns, use an isolated `--cwd`.
 4. Indicator lookback/key mismatch errors:
    - Ensure current code includes evaluator coercion fix (`cf56d0a` or later).
    - Re-run the same baseline config to validate recovery.
@@ -117,6 +127,10 @@
 9. Analytics store looks stale or metadata is missing:
    - Run `python -m autowfo storage rebuild-analytics --cwd .`.
    - Recheck with `python -m autowfo doctor --cwd .`.
+10. You suspect run contamination or mixed-symbol outputs:
+   - Stop using root-level `artifacts/` summaries for interpretation.
+   - Re-run the campaign under a dedicated isolated `--cwd`.
+   - Treat the affected root-level outputs as legacy evidence pending Phase 44 purge/reset.
 
 ## Post-Run Checklist
 1. Confirm pass completion in `manifest.json` (`run_done == run_total`).

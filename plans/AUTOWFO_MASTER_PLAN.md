@@ -30,7 +30,7 @@ indicators, symbols, and time windows to discover robust combinations.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-03-13. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores carry explicit schema-version contracts plus operator-facing validation/migration/rebuild tooling; Gates A+D remain passed.
+> Updated 2026-03-14. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores carry explicit schema-version contracts plus operator-facing validation/migration/rebuild tooling. New operational risk discovered on 2026-03-14: root-level `artifacts/` run outputs can lose single-run provenance when reused as a shared workspace, so evidence-integrity reset is now the active focus. Gates A+D remain passed.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -389,8 +389,31 @@ indicators, symbols, and time windows to discover robust combinations.
 - Validation: focused storage/CLI/control-panel suites, consumer suites, JS syntax smoke, CLI doctor smoke, and full repository regression completed before closure.
 - Linked TODO: `AWF-211`, `AWF-212`, `AWF-213`, `AWF-214`, `AWF-215`, `AWF-216`.
 
+### Phase 44: Evidence Reset and Run Isolation (AWF-217~AWF-224) [Done]
+- Goal: reset AUTOWFO's evidence model so runs are isolated by construction, shared summaries become derived views, and legacy root-level outputs with broken provenance are removed instead of left behind as technical debt.
+- Root cause: `autowfo run` currently uses `cwd/artifacts/` as a shared mutable workspace for runtime config, checkpoints, result CSV/DB files, and registry/leaderboard updates; run-scoped snapshots can therefore reflect shared-state contamination rather than single-run truth.
+- Evidence policy:
+  - `trusted` = run-local outputs produced under the isolated model
+  - `legacy` = historical root-level outputs retained only until purge/reset completes
+  - `invalid` = outputs whose provenance cannot be safely used by product code or analysis
+- Direction:
+  - isolate runtime config, status, results, reports, and metadata under `artifacts/runs/{run_id}/`
+  - rebuild shared registry/leaderboard/analytics from trusted runs only (backward-compatible formats)
+  - add purge tooling for root-level legacy artifacts with dry-run support
+  - re-run only the decision-relevant campaigns after the new model is in place
+- Implementation refinement (2026-03-13 architect review):
+  - AWF-218 split into 218a/b/c to reduce blast radius: RunWorkspace abstraction → dual-write migration with bit-identical verification → root assumption removal.
+  - AWF-219 adds backward-compatibility constraint: rebuilt shared views must preserve file formats and API response shapes for gradual UI migration.
+  - Dual-write smoke test in AWF-218b serves as safety gate before purge (AWF-220) proceeds.
+- Outcome (2026-03-14):
+  - `autowfo run` now writes runtime config, status, results, metadata, reports, registry, and leaderboard under `artifacts/runs/{run_id}/...`.
+  - Root legacy evidence was quarantined into `artifacts_legacy_deleted/`, and shared compatibility views are now rebuilt from trusted run-local roots only.
+  - Decision-relevant trusted reruns completed for `BNB/BTC 2h seg8`, `SOL/BTC 2h seg16`, `SOL/USDT 2h seg16`, and `XRP/BTC 4h 180d`.
+- Exit criteria: root-level legacy run outputs no longer act as primary evidence; control panel and analytics read trusted sources only; important recent campaigns have trusted reruns.
+- Linked TODO: `AWF-217`, `AWF-218a`, `AWF-218b`, `AWF-218c`, `AWF-219`, `AWF-220`, `AWF-221`, `AWF-222`, `AWF-223`, `AWF-224`.
+
 ## Steady State
-- Status: Re-entered after Phase 43 closure. UI-1, namespace/package convergence, control-panel runtime hardening, storage-contract hardening, and storage-ops tooling completed and closed.
+- Status: Restored after Phase 44 closure. UI-1, namespace/package convergence, control-panel runtime hardening, storage-contract hardening, storage-ops tooling, and evidence integrity reset are complete.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
 - Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, explicit control-panel root/artifacts startup contract, versioned mutable-state/artifact payloads, and first-class storage validation/migration/rebuild commands.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
@@ -469,6 +492,7 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-03-13: Phase 44 architect review — AWF-218 split into 218a/b/c (RunWorkspace abstraction → dual-write migration → root assumption removal) to reduce blast radius on engine write paths; AWF-219 gains backward-compatibility constraint on rebuilt shared views; dual-write smoke test in 218b serves as safety gate before purge. Post-Phase-44 strategy: rerun decision-relevant campaigns → evaluate ranking with new evidence → then consider production.
 - 2026-03-05: UI-1 phase completed (AWF-190~192): sidebar navigation verified, 107 action-button migrations, KpiCard component, skeleton loading on 4 main views, Chart.js MutationObserver theme adaptation, CSS cleanup. All 14 JS files syntax-check pass; 1427 tests green. System returns to Steady State.
 - 2026-03-04: UI-1 phase opened (AWF-190~192): control panel UX overhaul — sidebar navigation, shared component library + i18n completion, page-level visual polish. Frontend-only; no backend API changes.
 - 2026-03-02: AWF-189 (Maintenance): warning cleanup + pandas 2.x downgrade verification. Warning count 513→30 (target <50 met). `-W error::DeprecationWarning` gate passes.
@@ -609,3 +633,4 @@ Each experiment should record:
 - 2026-03-13: Phase 41 完成交付（AWF-199~204）：新增 `autowfo.control_panel.runtime` 統一路徑、process、data-refresh、scheduler 狀態；control panel 啟動入口支援 `--host/--port/--root/--artifacts-dir` 與環境變數覆寫；既有路由模組透過 alias/runtime 同步維持相容；README、RUNBOOK、MASTER_PLAN、TODO、AWF 報告與完整回歸同步完成收尾。
 - 2026-03-13: Phase 42 完成交付（AWF-205~210）：新增 `autowfo.storage_contract` 統一 storage schema-version 常數；`run_meta.json`、scheduler queue、paper position、signal scheduler state 與 analytics DuckDB metadata 全部帶入顯式版本標記；legacy payload 透過 reader normalization 保持可讀；MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
 - 2026-03-13: Phase 43 完成交付（AWF-211~216）：新增 `autowfo.storage_ops` 作為 storage validation / migration / analytics rebuild 核心；CLI 新增 `doctor` 與 `storage validate|migrate|rebuild-analytics`；control panel Overview 新增 storage health 摘要並暴露 `/ops/storage-health.json`；README、RUNBOOK、MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
+- 2026-03-14: Evidence-integrity risk formally escalated into Phase 44（AWF-217~224）。新結論：root-level `artifacts/` 共享工作區會破壞單 run provenance，run-specific 檔名不足以保證單 run 真相；後續方向改為 run isolation、shared-view derivation、legacy purge，以及只在新制度下重跑決策相關 campaign。MASTER_PLAN、TODO、PHASE44_SPEC、RUNBOOK 先行完成文件凍結。
