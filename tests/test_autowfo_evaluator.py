@@ -1,6 +1,7 @@
 import pandas as pd
 
 from autowfo import evaluator as autowfo_evaluator
+from autowfo import metrics as autowfo_metrics
 from autowfo import strategy as autowfo_strategy
 
 
@@ -362,6 +363,39 @@ def test_evaluator_rolling_mode_reoptimizes_filter_policy_per_window(monkeypatch
     assert result["oos_metrics"]["oos_avg_total_return_pct"] == 9.0
     assert (4, "unfiltered") in calls
     assert (2, "unfiltered") in calls
+
+
+def test_aggregate_oos_symbol_metrics_uses_symbol_segment_rows():
+    rows = [
+        {
+            "total_return_pct": 1.0,
+            "total_trades": 10.0,
+            "win_rate_pct": 50.0,
+            "avg_trade_pct": 0.4,
+            "max_drawdown_pct": -2.0,
+            "position_coverage_pct": 20.0,
+            "avg_hold_hours": 3.0,
+            "avg_daily_trades": 1.0,
+        },
+        {
+            "total_return_pct": -0.5,
+            "total_trades": 20.0,
+            "win_rate_pct": 60.0,
+            "avg_trade_pct": 0.2,
+            "max_drawdown_pct": -4.0,
+            "position_coverage_pct": 25.0,
+            "avg_hold_hours": 4.0,
+            "avg_daily_trades": 2.0,
+        },
+    ]
+
+    got = autowfo_metrics._aggregate_oos_symbol_metrics(rows)
+
+    assert got["oos_avg_total_return_pct"] == 0.25
+    assert got["oos_min_total_trades"] == 10.0
+    assert got["oos_avg_total_trades"] == 15.0
+    assert got["oos_positive_segment_ratio"] == 0.5
+    assert got["oos_segments"] == 2
 
 
 def test_apply_indicator_combo_fills_missing_ppo_threshold():

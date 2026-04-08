@@ -328,6 +328,8 @@ def _prepare_timeframe_context(
 
     start = f"{data_days} days ago UTC"
     end = "now UTC"
+    requested_window_start = None
+    requested_window_end = None
     all_symbols = [base_symbol] + trade_symbols
     symbol_data = {}
     for symbol in all_symbols:
@@ -344,6 +346,8 @@ def _prepare_timeframe_context(
         latest_end = min(df.index.max() for df in symbol_data.values() if not df.empty)
         if pd.notna(latest_end):
             window_start = latest_end - pd.Timedelta(days=int(data_days))
+            requested_window_start = window_start
+            requested_window_end = latest_end
             for symbol, df in list(symbol_data.items()):
                 clipped = df.loc[df.index >= window_start]
                 if not clipped.empty:
@@ -366,6 +370,8 @@ def _prepare_timeframe_context(
     trade_close = close[trade_symbols]
     trade_close = trade_close.dropna(axis=1, how="all")
     trade_symbols = list(trade_close.columns)
+    trade_high = high[trade_symbols]
+    trade_low = low[trade_symbols]
     btc_high = high[base_symbol]
     btc_low = low[base_symbol]
     btc_volume = volume[base_symbol]
@@ -387,7 +393,20 @@ def _prepare_timeframe_context(
     if common_index.empty:
         raise RuntimeError("No overlapping timestamps after alignment.")
 
+    symbol_data_ranges = {}
+    for symbol, df in symbol_data.items():
+        if df.empty:
+            continue
+        symbol_data_ranges[symbol] = {
+            "start": str(df.index[0]),
+            "end": str(df.index[-1]),
+            "rows": int(len(df.index)),
+            "days": int(df.index.normalize().nunique()),
+        }
+
     trade_close = trade_close.loc[common_index]
+    trade_high = trade_high.loc[common_index]
+    trade_low = trade_low.loc[common_index]
     btc_close = btc_close.loc[common_index]
     btc_high = btc_high.loc[common_index]
     btc_low = btc_low.loc[common_index]
@@ -413,6 +432,10 @@ def _prepare_timeframe_context(
     bb_lower = bbands.lower
     atr = vbt.ATR.run(btc_high, btc_low, btc_close, window=atr_window).atr
     atr_ratio = atr / btc_close
+    trade_atr = vbt.ATR.run(trade_high, trade_low, trade_close, window=atr_window).atr
+    if isinstance(trade_atr.columns, pd.MultiIndex):
+        trade_atr.columns = trade_atr.columns.get_level_values(-1)
+    trade_atr_ratio = trade_atr.divide(trade_close.replace(0, np.nan))
 
     ma_trend_by_pair = {}
     for fast, slow in ma_pairs:
@@ -571,6 +594,19 @@ def _prepare_timeframe_context(
         chop_by_lb[lb] = 100 * np.log10(chop_atr_sum / chop_range) / np.log10(lb)
 
     data_range = f"{trade_close.index[0]} -> {trade_close.index[-1]}"
+    overlap_diagnostics = {
+        "requested_data_days": int(data_days),
+        "requested_window_start": str(requested_window_start) if requested_window_start is not None else None,
+        "requested_window_end": str(requested_window_end) if requested_window_end is not None else None,
+        "realized_shared_start": str(common_index[0]),
+        "realized_shared_end": str(common_index[-1]),
+        "realized_shared_days": total_days,
+        "requested_symbol_count": len(all_symbols) - 1,
+        "available_trade_symbol_count": len(trade_symbols),
+        "base_symbol": base_symbol,
+        "trade_symbols": list(trade_symbols),
+        "symbol_data_ranges": symbol_data_ranges,
+    }
 
     return {
         "timeframe": timeframe,
@@ -579,6 +615,8 @@ def _prepare_timeframe_context(
         "end": end,
         "trade_symbols": trade_symbols,
         "trade_close": trade_close,
+        "trade_high": trade_high,
+        "trade_low": trade_low,
         "btc_close": btc_close,
         "btc_high": btc_high,
         "btc_low": btc_low,
@@ -593,6 +631,7 @@ def _prepare_timeframe_context(
         "bb_upper": bb_upper,
         "bb_lower": bb_lower,
         "atr_ratio": atr_ratio,
+        "trade_atr_ratio": trade_atr_ratio,
         "ma_trend_by_pair": ma_trend_by_pair,
         "macd_hist_ratio_series": macd_hist_ratio_series,
         "stoch_k": stoch_k,
@@ -617,5 +656,6 @@ def _prepare_timeframe_context(
         "ppo_hist_series": ppo_hist_series,
         "chop_by_lb": chop_by_lb,
         "data_range": data_range,
+        "overlap_diagnostics": overlap_diagnostics,
     }
 

@@ -68,6 +68,10 @@ class RunWorkspace:
         return self.results_dir / "param_sweep_symbol_summary.csv"
 
     @property
+    def oos_symbol_summary_path(self) -> Path:
+        return self.results_dir / "param_sweep_symbol_oos_summary.csv"
+
+    @property
     def leaderboard_path(self) -> Path:
         return self.results_dir / "leaderboard.csv"
 
@@ -139,6 +143,7 @@ class _RunWorkspaceSerializable:
     status_html_path: Path
     combo_summary_path: Path
     symbol_summary_path: Path
+    oos_symbol_summary_path: Path
     leaderboard_path: Path
     registry_path: Path
     top10_path: Path
@@ -164,6 +169,7 @@ class _RunWorkspaceSerializable:
             status_html_path=workspace.status_html_path,
             combo_summary_path=workspace.combo_summary_path,
             symbol_summary_path=workspace.symbol_summary_path,
+            oos_symbol_summary_path=workspace.oos_symbol_summary_path,
             leaderboard_path=workspace.leaderboard_path,
             registry_path=workspace.registry_path,
             top10_path=workspace.top10_path,

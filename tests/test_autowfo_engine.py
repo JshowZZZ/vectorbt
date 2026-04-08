@@ -115,9 +115,11 @@ def test_build_sweep_schema_fields_contract():
     combo_key_fields = fields["combo_key_fields"]
     combo_result_fields = fields["combo_result_fields"]
     symbol_result_fields = fields["symbol_result_fields"]
+    oos_symbol_result_fields = fields["oos_symbol_result_fields"]
     strict_config_fields = fields["strict_config_fields"]
 
     assert combo_key_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
+    assert "risk_mode" in combo_key_fields
     assert combo_key_fields[-4:] == ["cmf_threshold", "vroc_lookback", "vroc_threshold", "ad_lookback"]
     assert combo_result_fields[0 : len(combo_key_fields)] == combo_key_fields
     assert combo_result_fields[len(combo_key_fields) : len(combo_key_fields) + 2] == metadata_fields
@@ -125,12 +127,20 @@ def test_build_sweep_schema_fields_contract():
     assert combo_result_fields[-1] == "oos_segments"
 
     assert symbol_result_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
-    assert symbol_result_fields[17:19] == metadata_fields
+    assert symbol_result_fields[18:20] == metadata_fields
     assert symbol_result_fields[-4:] == [
         "avg_trade_pct",
         "max_drawdown_pct",
         "position_coverage_pct",
         "avg_hold_hours",
+    ]
+    assert oos_symbol_result_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
+    assert oos_symbol_result_fields[18:20] == metadata_fields
+    assert oos_symbol_result_fields[-4:] == [
+        "oos_sharpe_like",
+        "oos_low_trade_segment_ratio",
+        "oos_low_trade_penalty",
+        "oos_segments",
     ]
 
     assert strict_config_fields == [
@@ -139,6 +149,7 @@ def test_build_sweep_schema_fields_contract():
         "trade_symbols_key",
         "capital_mode",
         "fees",
+        "risk_mode",
         "order_size_pct",
         "max_concurrent_positions",
         "init_cash_usdt",
@@ -163,6 +174,10 @@ def test_resolve_runtime_settings_normalizes_fields():
         "combo_segment_size": 10,
         "combo_group_fields": ["indicator_list"],
         "trade_symbols": "ETH/BTC,BTC/USDT,SOL/BTC",
+        "indicator_subset": "mfi,cmf,missing,mfi",
+        "regime_preset": "pilot_trend_3",
+        "pilot_fixed_indicator_params": "true",
+        "pilot_single_trend_mom": "yes",
         "wf_train_days": 7,
         "wf_test_days": 2,
         "wf_step_days": 2,
@@ -170,6 +185,7 @@ def test_resolve_runtime_settings_normalizes_fields():
         "slippage_bps": 1.5,
         "spread_bps": 2.5,
         "funding_rate_daily": 0.001,
+        "risk_mode": "atr_multiple",
         "capital_mode": "unknown",
         "init_cash_usdt": 2000,
         "order_size_pct": 25,
@@ -190,6 +206,7 @@ def test_resolve_runtime_settings_normalizes_fields():
         config,
         base_symbol="BTC/USDT",
         default_trade_symbols=["BNB/BTC"],
+        available_indicator_keys=["mfi", "cmf", "macd_hist"],
         normalize_split_mode_fn=_normalize_mode,
         resolve_ranking_config_fn=lambda ranking: {"resolved": ranking.get("mode")},
     )
@@ -201,6 +218,10 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["combo_segment_size"] == 10
     assert got["combo_group_fields"] == ["indicator_list"]
     assert got["trade_symbols"] == ["ETH/BTC", "SOL/BTC"]
+    assert got["indicator_subset"] == ["mfi", "cmf"]
+    assert got["regime_preset"] == "pilot_trend_3"
+    assert got["pilot_fixed_indicator_params"] is True
+    assert got["pilot_single_trend_mom"] is True
     assert got["wf_train_days"] == 7
     assert got["wf_test_days"] == 2
     assert got["wf_step_days"] == 2
@@ -209,6 +230,7 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["slippage_bps"] == 1.5
     assert got["spread_bps"] == 2.5
     assert got["funding_rate_daily"] == 0.001
+    assert got["risk_mode"] == "atr_multiple"
     assert got["capital_mode"] == "shared"
     assert got["init_cash_usdt"] == 2000.0
     assert got["order_size_pct"] == 0.25
@@ -229,10 +251,12 @@ def test_resolve_runtime_settings_uses_default_trade_symbols_when_empty():
         config,
         base_symbol="BTC/USDT",
         default_trade_symbols=["BNB/BTC", "SOL/BTC"],
+        available_indicator_keys=["mfi", "cmf"],
         normalize_split_mode_fn=lambda mode: "anchored",
         resolve_ranking_config_fn=lambda ranking: {"mode": "composite"},
     )
     assert got["trade_symbols"] == ["BNB/BTC", "SOL/BTC"]
+    assert got["indicator_subset"] == ["mfi", "cmf"]
 
 
 def test_build_regime_variants_characterization():
@@ -242,6 +266,11 @@ def test_build_regime_variants_characterization():
     assert "trend_high" in names
     assert "rsi_revert_low" in names
     assert "bb_breakout_high" in names
+
+
+def test_build_regime_variants_pilot_trend_3():
+    variants = e._build_regime_variants([(30, 70)], preset="pilot_trend_3")
+    assert [v["regime_name"] for v in variants] == ["trend_high", "trend_low", "trend_any"]
 
 
 def test_count_coarse_combos_small_case():
@@ -356,6 +385,7 @@ def test_checkpoint_pending_rows_flushes_and_updates_state():
     warnings = []
     pending_combo_rows = [{"x": 1}]
     pending_symbol_rows = [{"symbol": "ETH/BTC"}]
+    pending_oos_symbol_rows = [{"symbol": "ETH/BTC", "oos_avg_total_return_pct": 1.0}]
 
     def _append_rows(path, rows, fields):
         append_rows_calls.append((path, list(rows), list(fields)))
@@ -373,11 +403,14 @@ def test_checkpoint_pending_rows_flushes_and_updates_state():
         checkpoint_min_seconds=30,
         pending_combo_rows=pending_combo_rows,
         pending_symbol_rows=pending_symbol_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         combo_path="combo.csv",
         per_symbol_path="symbol.csv",
+        oos_symbol_path="symbol_oos.csv",
         db_path="results.db",
         combo_result_fields=["x"],
         symbol_result_fields=["symbol"],
+        oos_symbol_result_fields=["symbol", "oos_avg_total_return_pct"],
         should_checkpoint_fn=e._should_checkpoint,
         append_rows_fn=_append_rows,
         append_db_rows_fn=_append_db_rows,
@@ -390,8 +423,9 @@ def test_checkpoint_pending_rows_flushes_and_updates_state():
     assert result["last_checkpoint_ts"] == 120.0
     assert pending_combo_rows == []
     assert pending_symbol_rows == []
-    assert [call[0] for call in append_rows_calls] == ["combo.csv", "symbol.csv"]
-    assert [call[1] for call in append_db_calls] == ["combo_summary", "symbol_summary"]
+    assert pending_oos_symbol_rows == []
+    assert [call[0] for call in append_rows_calls] == ["combo.csv", "symbol.csv", "symbol_oos.csv"]
+    assert [call[1] for call in append_db_calls] == ["combo_summary", "symbol_summary", "symbol_oos_summary"]
     assert warnings == []
 
 
@@ -447,6 +481,7 @@ def test_build_run_lifecycle_callbacks_progress_and_counters():
         symbol_result_fields=["symbol"],
         pending_combo_rows=[],
         pending_symbol_rows=[],
+        pending_oos_symbol_rows=[],
         format_duration_fn=lambda x: f"{int(x)}s" if x is not None else "",
         write_status_fn=lambda json_path, html_path, payload, labels: writes.append(
             {
@@ -496,11 +531,14 @@ def test_build_run_lifecycle_callbacks_wait_if_paused_emits_and_sleeps():
         control_path="control.json",
         combo_path="combo.csv",
         per_symbol_path="symbol.csv",
+        oos_symbol_path="symbol_oos.csv",
         db_path="results.db",
         combo_result_fields=["x"],
         symbol_result_fields=["symbol"],
+        oos_symbol_result_fields=["symbol", "oos_avg_total_return_pct"],
         pending_combo_rows=[],
         pending_symbol_rows=[],
+        pending_oos_symbol_rows=[],
         format_duration_fn=lambda x: f"{int(x)}s" if x is not None else "",
         write_status_fn=lambda _json_path, _html_path, payload, _labels: writes.append(payload),
         append_rows_fn=lambda *args, **kwargs: None,
@@ -525,6 +563,7 @@ def test_build_run_lifecycle_callbacks_checkpoint_tracks_state():
     now_values = iter([300.0, 300.0, 301.0, 302.0])
     pending_combo_rows = [{"x": 1}]
     pending_symbol_rows = [{"symbol": "ETH/BTC"}]
+    pending_oos_symbol_rows = [{"symbol": "ETH/BTC", "oos_avg_total_return_pct": 1.0}]
 
     def _checkpoint_pending_rows_fn(**kwargs):
         checkpoint_calls.append(kwargs)
@@ -543,11 +582,14 @@ def test_build_run_lifecycle_callbacks_checkpoint_tracks_state():
         control_path="control.json",
         combo_path="combo.csv",
         per_symbol_path="symbol.csv",
+        oos_symbol_path="symbol_oos.csv",
         db_path="results.db",
         combo_result_fields=["x"],
         symbol_result_fields=["symbol"],
+        oos_symbol_result_fields=["symbol", "oos_avg_total_return_pct"],
         pending_combo_rows=pending_combo_rows,
         pending_symbol_rows=pending_symbol_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         format_duration_fn=lambda x: f"{int(x)}s" if x is not None else "",
         write_status_fn=lambda *args, **kwargs: None,
         append_rows_fn=lambda *args, **kwargs: None,
@@ -570,6 +612,7 @@ def test_build_run_lifecycle_callbacks_checkpoint_tracks_state():
     assert checkpoint_calls[0]["last_checkpoint_done"] == 0
     assert checkpoint_calls[0]["pending_combo_rows"] is pending_combo_rows
     assert checkpoint_calls[0]["pending_symbol_rows"] is pending_symbol_rows
+    assert checkpoint_calls[0]["pending_oos_symbol_rows"] is pending_oos_symbol_rows
     assert checkpoint_calls[1]["force"] is False
     assert checkpoint_calls[1]["last_checkpoint_done"] == 5
     assert checkpoint_calls[1]["last_checkpoint_ts"] == 301.0
@@ -1144,6 +1187,59 @@ def test_build_symbol_and_combo_rows():
     )
     assert symbol_row["symbol"] == "ETH/BTC"
     assert symbol_row["total_return_pct"] == 10.0
+
+    oos_symbol_row = e._build_oos_symbol_row(
+        timeframe="3m",
+        data_days=60,
+        exchange="binance",
+        base_symbol="BTC/USDT",
+        trade_symbols_tf=["ETH/BTC"],
+        capital_mode="shared",
+        fees=0.001,
+        order_size_pct=0.5,
+        max_concurrent_positions=2,
+        init_cash_usdt=1000.0,
+        wf_train_days=120,
+        wf_test_days=30,
+        wf_step_days=30,
+        data_start="2024-01-01",
+        data_end="2024-01-31",
+        symbol="ETH/BTC",
+        regime={"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high"},
+        regime_rsi_long=None,
+        regime_rsi_short=None,
+        filter_name="none",
+        indicator_list="rsi",
+        indicator_combo=("rsi",),
+        vol_lookback=24,
+        vol_z=0.8,
+        mom_lookback=6,
+        trade_mom_lookback=3,
+        tp_stop=0.003,
+        sl_stop=0.006,
+        max_hold=2,
+        rsi_window=14,
+        variant_params=variant_params,
+        oos_metrics={
+            "oos_avg_total_return_pct": pd.Series({"ETH/BTC": 0.5}),
+            "oos_avg_win_rate_pct": pd.Series({"ETH/BTC": 60.0}),
+            "oos_avg_avg_trade_pct": pd.Series({"ETH/BTC": 1.0}),
+            "oos_avg_max_drawdown_pct": pd.Series({"ETH/BTC": -2.0}),
+            "oos_avg_position_coverage_pct": pd.Series({"ETH/BTC": 30.0}),
+            "oos_avg_total_trades": pd.Series({"ETH/BTC": 4.0}),
+            "oos_min_total_trades": pd.Series({"ETH/BTC": 2.0}),
+            "oos_avg_daily_trades": pd.Series({"ETH/BTC": 0.5}),
+            "oos_avg_hold_hours": pd.Series({"ETH/BTC": 2.0}),
+            "oos_return_std": pd.Series({"ETH/BTC": 0.1}),
+            "oos_positive_segment_ratio": pd.Series({"ETH/BTC": 0.5}),
+            "oos_sharpe_like": pd.Series({"ETH/BTC": 5.0}),
+            "oos_low_trade_segment_ratio": pd.Series({"ETH/BTC": 0.0}),
+            "oos_low_trade_penalty": pd.Series({"ETH/BTC": 0.0}),
+            "oos_segments": pd.Series({"ETH/BTC": 2.0}),
+        },
+    )
+    assert oos_symbol_row["symbol"] == "ETH/BTC"
+    assert oos_symbol_row["oos_avg_total_return_pct"] == 0.5
 
     combo_row = e._build_combo_row(
         timeframe="3m",
@@ -2835,6 +2931,7 @@ def test_run_finalize_after_timeframe_loop_injects_loop_outputs_and_forces_check
         timeframe_loop_result={
             "timeframe_ranges": ["1h (30d): A to B"],
             "timeframe_fingerprints": ["fp-1h"],
+            "timeframe_diagnostics": [{"timeframe": "1h"}],
         },
         checkpoint_fn=_checkpoint,
         run_finalize_pipeline_fn=_run_finalize_pipeline,
@@ -2850,14 +2947,17 @@ def test_run_finalize_after_timeframe_loop_injects_loop_outputs_and_forces_check
     assert finalize_calls[0]["combo_path"] == "artifacts/combo.csv"
     assert finalize_calls[0]["timeframe_ranges"] == ["1h (30d): A to B"]
     assert finalize_calls[0]["timeframe_fingerprints"] == ["fp-1h"]
+    assert finalize_calls[0]["timeframe_diagnostics"] == [{"timeframe": "1h"}]
     assert result["ok"] is True
 
 
 def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
     pending_symbol_rows = []
     pending_combo_rows = []
+    pending_oos_symbol_rows = []
     symbol_calls = []
     combo_calls = []
+    oos_symbol_calls = []
 
     result = e._append_eval_result_rows(
         result={"metrics_values": None},
@@ -2887,12 +2987,15 @@ def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
         ctx_total_days=10,
         pending_symbol_rows=pending_symbol_rows,
         pending_combo_rows=pending_combo_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         build_symbol_row_fn=lambda **kwargs: symbol_calls.append(kwargs),
         build_combo_row_fn=lambda **kwargs: combo_calls.append(kwargs),
+        build_oos_symbol_row_fn=lambda **kwargs: oos_symbol_calls.append(kwargs),
     )
     assert result is False
     assert pending_symbol_rows == []
     assert pending_combo_rows == []
+    assert pending_oos_symbol_rows == []
 
     task_meta = {
         "regime": {"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high"},
@@ -2963,6 +3066,23 @@ def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
             "avg_hold_hours": 2.0,
         },
         "oos_metrics": {"oos_avg_total_return_pct": 0.5},
+        "oos_symbol_metrics_values": {
+            "oos_avg_total_return_pct": {"ETH/BTC": 0.5},
+            "oos_avg_win_rate_pct": {"ETH/BTC": 50.0},
+            "oos_avg_avg_trade_pct": {"ETH/BTC": 1.0},
+            "oos_avg_max_drawdown_pct": {"ETH/BTC": -2.0},
+            "oos_avg_position_coverage_pct": {"ETH/BTC": 30.0},
+            "oos_avg_total_trades": {"ETH/BTC": 4.0},
+            "oos_min_total_trades": {"ETH/BTC": 2.0},
+            "oos_avg_daily_trades": {"ETH/BTC": 0.5},
+            "oos_avg_hold_hours": {"ETH/BTC": 2.0},
+            "oos_return_std": {"ETH/BTC": 0.1},
+            "oos_positive_segment_ratio": {"ETH/BTC": 0.5},
+            "oos_sharpe_like": {"ETH/BTC": 5.0},
+            "oos_low_trade_segment_ratio": {"ETH/BTC": 0.0},
+            "oos_low_trade_penalty": {"ETH/BTC": 0.0},
+            "oos_segments": {"ETH/BTC": 2.0},
+        },
     }
 
     def _build_symbol_row(**kwargs):
@@ -2972,6 +3092,10 @@ def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
     def _build_combo_row(**kwargs):
         combo_calls.append(kwargs)
         return {"timeframe": kwargs["timeframe"]}
+
+    def _build_oos_symbol_row(**kwargs):
+        oos_symbol_calls.append(kwargs)
+        return {"symbol": kwargs["symbol"], "oos_avg_total_return_pct": kwargs["oos_metrics"]["oos_avg_total_return_pct"][kwargs["symbol"]]}
 
     result = e._append_eval_result_rows(
         result=eval_result,
@@ -3001,15 +3125,19 @@ def test_append_eval_result_rows_appends_and_skips_invalid_metrics():
         ctx_total_days=10,
         pending_symbol_rows=pending_symbol_rows,
         pending_combo_rows=pending_combo_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         build_symbol_row_fn=_build_symbol_row,
         build_combo_row_fn=_build_combo_row,
+        build_oos_symbol_row_fn=_build_oos_symbol_row,
     )
 
     assert result is True
     assert pending_symbol_rows == [{"symbol": "ETH/BTC"}]
     assert pending_combo_rows == [{"timeframe": "1h"}]
+    assert pending_oos_symbol_rows == [{"symbol": "ETH/BTC", "oos_avg_total_return_pct": 0.5}]
     assert symbol_calls[-1]["symbol"] == "ETH/BTC"
     assert combo_calls[-1]["timeframe"] == "1h"
+    assert oos_symbol_calls[-1]["symbol"] == "ETH/BTC"
     # AWF-106d: capital_mode must be forwarded to build_combo_row_fn
     assert combo_calls[-1]["capital_mode"] == "shared"
 
@@ -3039,6 +3167,7 @@ def test_run_timeframe_search_loop_tracks_state_and_warnings():
                     "ctx": {"total_days": 5},
                     "timeframe_range": "1h (30d): A to B",
                     "timeframe_data_fingerprint": "fp-1h",
+                    "timeframe_diagnostics": {"timeframe": "1h"},
                     "wf_windows": [],
                 },
             }
@@ -3051,6 +3180,7 @@ def test_run_timeframe_search_loop_tracks_state_and_warnings():
                 "ctx": {"total_days": 20},
                 "timeframe_range": "1d (90d): C to D",
                 "timeframe_data_fingerprint": "fp-1d",
+                "timeframe_diagnostics": {"timeframe": "1d"},
                 "wf_windows": [("x", "y")],
             },
         }
@@ -3088,6 +3218,7 @@ def test_run_timeframe_search_loop_tracks_state_and_warnings():
 
     assert result["timeframe_ranges"] == ["1h (30d): A to B", "1d (90d): C to D"]
     assert result["timeframe_fingerprints"] == ["fp-1h", "fp-1d"]
+    assert result["timeframe_diagnostics"] == [{"timeframe": "1h"}, {"timeframe": "1d"}]
     assert len(warnings) == 1
     assert "timeframe 1h has no walk-forward segments" in warnings[0]
 
@@ -3195,6 +3326,7 @@ def test_prepare_timeframe_runtime_builds_payload():
             ),
             "data_range": "2024-01-01 to 2024-01-01",
             "total_days": 1,
+            "overlap_diagnostics": {"realized_shared_days": 1, "requested_data_days": 5},
         }
 
     def _build_walk_forward_windows_fn(idx, train_days, test_days, step_days, mode=None, valid_days=0):
@@ -3268,6 +3400,8 @@ def test_prepare_timeframe_runtime_builds_payload():
     assert got["timeframe_data_fingerprint"] == "fp-123"
     assert len(got["wf_windows"]) == 1
     assert len(got["wf_slices"]) == 1
+    assert got["timeframe_diagnostics"]["realized_shared_days"] == 1
+    assert got["timeframe_diagnostics"]["requested_data_days"] == 5
     assert got["runtime_eval"]["wf_mode"] == "rolling"
     assert got["runtime_eval"]["config_sha256"] == "cfg123"
     assert got["runtime_eval"]["data_fingerprint"] == "fp-123"
@@ -3329,6 +3463,7 @@ def test_build_run_metadata_payload():
         base_symbol="BTC/USDT",
         trade_symbols=["ETH/BTC"],
         timeframe_configs=[{"timeframe": "1h", "days": 30}],
+        timeframe_diagnostics=[{"timeframe": "1h", "realized_shared_days": 24}],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -3342,6 +3477,7 @@ def test_build_run_metadata_payload():
     assert payload["data_fingerprint"] == "fp-run"
     assert payload["combo_seed"] == 42
     assert payload["timeframes"] == [{"timeframe": "1h", "days": 30}]
+    assert payload["timeframe_diagnostics"] == [{"timeframe": "1h", "realized_shared_days": 24}]
     assert payload["wf_mode"] == "rolling"
     assert payload["ranking"]["mode"] == "composite"
 
@@ -4131,4 +4267,36 @@ def test_append_leaderboard_row_and_build_views(tmp_path):
     assert "href=" in lb_view.iloc[0]["report"]
     assert lb_recent.iloc[0]["run_id"] == "r2"
     assert lb_best.iloc[0]["run_id"] == "r2"
+
+
+# ---------------------------------------------------------------------------
+#  AWF-231: Leaderboard is_latest marking
+# ---------------------------------------------------------------------------
+
+
+def test_append_leaderboard_marks_is_latest(tmp_path):
+    """is_latest should be True only for the newest run per (plot_symbol, timeframe)."""
+    lb_path = tmp_path / "leaderboard.csv"
+    row1 = {"run_id": "r1", "timestamp_utc": "2026-01-01T00:00:00Z", "plot_symbol": "BNB/BTC", "timeframe": "2h"}
+    row2 = {"run_id": "r2", "timestamp_utc": "2026-01-02T00:00:00Z", "plot_symbol": "BNB/BTC", "timeframe": "2h"}
+    row3 = {"run_id": "r3", "timestamp_utc": "2026-01-01T12:00:00Z", "plot_symbol": "SOL/BTC", "timeframe": "4h"}
+
+    e._append_leaderboard_row(str(lb_path), row1)
+    e._append_leaderboard_row(str(lb_path), row2)
+    lb_df = e._append_leaderboard_row(str(lb_path), row3)
+
+    assert "is_latest" in lb_df.columns
+    # BNB/BTC 2h: r2 is latest (newer timestamp)
+    bnb_rows = lb_df[lb_df["plot_symbol"] == "BNB/BTC"]
+    assert bnb_rows[bnb_rows["is_latest"] == True]["run_id"].iloc[0] == "r2"
+    assert not bnb_rows[bnb_rows["run_id"] == "r1"]["is_latest"].iloc[0]
+    # SOL/BTC 4h: r3 is the only row → is_latest
+    sol_rows = lb_df[lb_df["plot_symbol"] == "SOL/BTC"]
+    assert sol_rows["is_latest"].iloc[0] == True
+
+
+def test_mark_leaderboard_is_latest_empty():
+    """Empty DataFrame returns empty without error."""
+    result = e._mark_leaderboard_is_latest(pd.DataFrame())
+    assert result.empty
 

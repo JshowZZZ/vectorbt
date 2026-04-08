@@ -15,6 +15,7 @@ def test_build_run_workspace_derives_run_local_paths(tmp_path):
     assert workspace.status_html_path == workspace.status_dir / "run_status.html"
     assert workspace.combo_summary_path == workspace.results_dir / "param_sweep_combo_summary.csv"
     assert workspace.symbol_summary_path == workspace.results_dir / "param_sweep_symbol_summary.csv"
+    assert workspace.oos_symbol_summary_path == workspace.results_dir / "param_sweep_symbol_oos_summary.csv"
     assert workspace.top10_path == workspace.results_dir / "param_sweep_top10_20260314_010203.csv"
     assert workspace.run_metadata_path == workspace.metadata_dir / "run_metadata.json"
     assert workspace.run_metadata_run_path == workspace.metadata_dir / "run_metadata_20260314_010203.json"

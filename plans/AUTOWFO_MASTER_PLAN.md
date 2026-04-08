@@ -51,6 +51,35 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
+### Phase 49: Trusted Ranking Rollout (AWF-239/240) [Done]
+- Use the now-complete trusted coverage matrix as the evidence base for a ranking-only rollout decision.
+- Produce aggregate `compare-ranking` reports for:
+  - `legacy -> composite`
+  - `composite absolute -> composite relative low-trade`
+- If the candidate is accepted, apply `storage rescore` and verify the updated shared views from the control panel.
+- Outcome:
+  - `legacy -> composite` on `46` trusted runs lowered average OOS return (`avg_delta=-0.6002`) but improved OOS min-trades (`+2.9159`) and drawdown (`+0.5235` on measured runs), confirming composite should be treated as a sample-sufficiency and risk-shaping upgrade rather than a pure return maximizer.
+  - `absolute -> relative` improved average OOS return (`avg_delta=+0.2994`, `42/44` improved) and Sharpe-like (`avg_delta=+0.1834`), while reducing OOS min-trades (`avg_delta=-1.6545`) and worsening drawdown (`avg_delta=-0.2848`).
+  - Operator decision: accept `low_trade_mode=relative` for trusted shared views.
+  - Rollout: `storage rescore` applied the ranking-only change to all `46` trusted runs and rebuilt shared views successfully.
+  - Control-panel verification after rollout:
+    - `Coverage` live matrix = `18/18`, `100%`
+    - `Dashboard` live payload = `46` trusted runs
+    - `Results` live payload reflects rescored Top10 / leaderboard data
+
+### Phase 48: Control-Panel Rerun Campaign Readiness (AWF-237/238) [Done]
+- Preserve hidden config fields when saving from the Config tab so rerun operations do not silently reset runtime knobs.
+- Promote Wave 0 / Wave 2 rerun combinations into first-class control-panel presets.
+- Validation scope: targeted control-panel regression for config preservation and preset endpoints plus JS syntax checks for touched frontend files.
+- Exit criteria: documented rerun waves can be prepared directly from Config and executed through Coverage/Batch without manual JSON editing.
+- Post-close hardening verified on 2026-03-28: batch completion now rebuilds shared views automatically, closing the last operator gap where Coverage/Batch reruns succeeded but Results/Dashboard stayed stale until manual storage repair.
+- 2026-03-28 operator note:
+  - Wave 1 exposed two different classes of problems: control-panel rerun semantics and exchange-data availability.
+  - The control-panel side is now validated: historical batch-name collisions and seen-key reuse no longer block Coverage-driven reruns.
+  - Coverage-driven reruns now also propagate automatically into shared views; browser verification with `ETH/BTC 1h` confirmed `Batch -> Coverage -> Results -> Dashboard` coherence for run pair `20260328_070150` / `20260328_070616`.
+  - The remaining `AMP/BTC`, `FTT/BTC`, `GTO/BTC`, `JASMY/BTC`, and `TCT/BTC` `1h/60d` cells are not an operator bug; on the current Binance spot feed they resolve to header-only cache files and no overlapping data.
+  - Active rerun priority therefore shifts to Wave 2 historical evidence rebuild (`BNB/BTC 2h`, `SOL/BTC 2h`, `XRP/BTC 4h`, optional `SOL/USDT 2h`).
+
 ### Phase 1: Decompose (AWF-000) [Done]
 - Extracted 10 modules from 3000-line monolith into the AUTOWFO runtime package (now `autowfo/`).
 - Bit-identical artifact output verified.
@@ -412,8 +441,37 @@ indicators, symbols, and time windows to discover robust combinations.
 - Exit criteria: root-level legacy run outputs no longer act as primary evidence; control panel and analytics read trusted sources only; important recent campaigns have trusted reruns.
 - Linked TODO: `AWF-217`, `AWF-218a`, `AWF-218b`, `AWF-218c`, `AWF-219`, `AWF-220`, `AWF-221`, `AWF-222`, `AWF-223`, `AWF-224`.
 
+### Phase 45: Search Ranking Quality (AWF-225~AWF-228) — CLOSED
+- Goal: fix ranking display and penalty logic so coarse results surface diverse indicator combos instead of risk-parameter variants of the same combo, and low-trade penalties retain discriminative power on inherently low-frequency asset/timeframe pairs.
+- Outcome:
+  - `_dedup_by_combo_group()` added to `ranking.py`; `engine_finalize.py` applies combo dedup before writing top10 CSV.
+  - `low_trade_mode: "relative"` option added; penalty computed against run population P75 of `oos_avg_daily_trades`.
+  - Before/after comparison on `20260314_104729` BNB/BTC 2h: Top10 unique combos improved from 1 → 5 (see `plans/ranking_comparison_phase45.json`).
+  - 9 new ranking tests; full suite 1462 passed, 0 failed.
+- Linked TODO: `AWF-225`, `AWF-226`, `AWF-227`, `AWF-228`.
+
+### Phase 46: Operational Integrity (AWF-229~AWF-232) — CLOSED
+- Goal: fix baseline workflow to comply with Phase 44 run isolation, add rescore CLI for ranking algorithm changes, add leaderboard per-pair dedup, and enable force-retest from coverage UI.
+- Delivered:
+  - AWF-229: `run_autowfo_baseline.py` now generates `VBT_RUN_ID` per internal pass and passes it via env var to `run_btc_regime_sweep`; results land in Phase 44 `artifacts/runs/{run_id}/` layout; `rebuild-shared-views` can discover them.
+  - AWF-230: `autowfo storage rescore [--ranking-config path]` recalculates composite_score + top10 from existing combo_summary.csv without re-running search.
+  - AWF-231: `_mark_leaderboard_is_latest()` adds `is_latest` flag per `(plot_symbol, timeframe)` on append and rebuild; control panel API filters by `is_latest=True` by default.
+  - AWF-232: Coverage tested cell dialog shows "重新測試" confirm button wired to enqueue flow; i18n keys added for EN/ZH.
+- Evidence: 1464 passed, 0 failed (2 new tests for AWF-231 + 9 existing Phase 45 tests).
+- Linked TODO: `AWF-229`, `AWF-230`, `AWF-231`, `AWF-232`.
+
+### Phase 47: Ranking Evidence Parity (AWF-233~AWF-236) — CLOSED
+- Goal: make non-rerun ranking evaluation trustworthy by aligning `storage rescore` with finalize-time candidate selection and by adding a trusted-run ranking comparison workflow before any new rerun campaign.
+- Delivered:
+  - AWF-233: `storage rescore` now loads each trusted run's run-local runtime config and applies finalize-time timeframe/day selection, quality filters, and fallback activity filters before rebuilding Top10/leaderboard.
+  - AWF-234: `autowfo storage compare-ranking` added with candidate/baseline ranking overrides plus JSON/HTML outputs.
+  - AWF-235: comparison output now includes aggregate improved/worsened counts and average deltas for return, Sharpe-like, drawdown, minimum trades, and Top10 unique combo signatures.
+  - AWF-236: targeted regression added for rescore parity, comparison reports, and CLI parser wiring.
+- Evidence: targeted regression green — `tests/test_autowfo_storage_ops.py`, `tests/test_autowfo_cli.py`, and `tests/test_autowfo_baseline.py` (`76 passed`, `0 failed`).
+- Linked TODO: `AWF-233`, `AWF-234`, `AWF-235`, `AWF-236`.
+
 ## Steady State
-- Status: Restored after Phase 44 closure. UI-1, namespace/package convergence, control-panel runtime hardening, storage-contract hardening, storage-ops tooling, and evidence integrity reset are complete.
+- Status: Phase 47 closed. Search ranking quality (Phase 45), operational integrity (Phase 46), ranking evidence parity (Phase 47), evidence integrity reset (Phase 44), UI-1, namespace/package convergence, control-panel runtime hardening, storage-contract hardening, and storage-ops tooling remain complete.
 - Scope closure: Phase 20~39 capabilities delivered end-to-end (experiment lifecycle, discovery/scheduler, analytics/UI, paper feedback loop, notifications, report export, and operational guardrails).
 - Runtime posture: unattended operation supported with anomaly notifications, bounded schedulers, explicit control-panel root/artifacts startup contract, versioned mutable-state/artifact payloads, and first-class storage validation/migration/rebuild commands.
 - Environment baseline: `pandas>=2.0,<3.0` (validated on 2.3.3), `numpy>=1.23,<2.4` (validated on 2.3.5), `numba>=0.60,<0.64` (validated on 0.63.1).
@@ -492,6 +550,15 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-04-08: Pilot evidence hardening completed after the initial cross-symbol gate. The legacy pilot path now emits `param_sweep_symbol_oos_summary.csv` plus metadata `timeframe_diagnostics`. Verification rerun `20260408_163100` confirmed the requested `180d` cohort collapsed to about `125d` of shared overlap because several BTC-cross symbols start materially later than the oldest symbols in the cohort.
+- 2026-04-08: Cross-symbol pilot decision recorded in `plans/AUTOWFO_SEARCH_V2_PILOT_DECISION_20260408.md`. Main pilot (`20260408_144415`) plus WFO sensitivity run (`20260408_151900`) produced only boundary evidence: one loose-threshold candidate in the main run, not reproduced in sensitivity. Decision: `NARROW-GO` for focused follow-up, `NO-GO` for full Search V2 funding under the realized pilot protocol.
+- 2026-03-29: Phase 49 opened (AWF-239/240): trusted ranking rollout — compare `legacy -> composite` and `absolute -> relative`, then decide whether the next ranking-only step is `storage rescore` rather than new reruns.
+- 2026-03-29: Phase 49 closed (AWF-239/240): paired comparison on `46` trusted runs accepted `low_trade_mode=relative` for trusted shared views; `storage rescore` completed on all trusted runs and control-panel live payloads validated `Coverage=18/18`, `Dashboard trusted_runs=46`, and rescored Results data.
+- 2026-03-28: Phase 47 opened (AWF-233~236): ranking evidence parity — fix `storage rescore` parity with finalize-time selection and add trusted-run comparison reports for candidate ranking config changes.
+- 2026-03-28: Phase 47 closed (AWF-233~236): `storage rescore` now follows finalize-time selection/filter rules and `storage compare-ranking` ships aggregate JSON/HTML reports. Targeted regression: 76 passed, 0 failed.
+- 2026-03-15: Phase 46 opened (AWF-229~232): operational integrity — baseline workflow Phase 44 migration, storage rescore CLI, leaderboard per-pair dedup (is_latest), coverage force-retest UI. Triggered by Phase 45 verification finding 29 baseline batch jobs invisible to coverage.
+- 2026-03-15: Phase 46 closed (AWF-229~232): operational integrity — baseline workflow VBT_RUN_ID migration, `storage rescore` CLI, leaderboard `is_latest` per-pair dedup (strategy Z), coverage force-retest UI. 2 new tests; 1464 passed, 0 failed.
+- 2026-03-15: Phase 45 closed (AWF-225~228): search ranking quality — Top10 combo dedup (1→5 unique combos), relative low-trade penalty mode, before/after comparison artifact committed. 9 new tests; 1462 passed, 0 failed.
 - 2026-03-13: Phase 44 architect review — AWF-218 split into 218a/b/c (RunWorkspace abstraction → dual-write migration → root assumption removal) to reduce blast radius on engine write paths; AWF-219 gains backward-compatibility constraint on rebuilt shared views; dual-write smoke test in 218b serves as safety gate before purge. Post-Phase-44 strategy: rerun decision-relevant campaigns → evaluate ranking with new evidence → then consider production.
 - 2026-03-05: UI-1 phase completed (AWF-190~192): sidebar navigation verified, 107 action-button migrations, KpiCard component, skeleton loading on 4 main views, Chart.js MutationObserver theme adaptation, CSS cleanup. All 14 JS files syntax-check pass; 1427 tests green. System returns to Steady State.
 - 2026-03-04: UI-1 phase opened (AWF-190~192): control panel UX overhaul — sidebar navigation, shared component library + i18n completion, page-level visual polish. Frontend-only; no backend API changes.
@@ -634,3 +701,4 @@ Each experiment should record:
 - 2026-03-13: Phase 42 完成交付（AWF-205~210）：新增 `autowfo.storage_contract` 統一 storage schema-version 常數；`run_meta.json`、scheduler queue、paper position、signal scheduler state 與 analytics DuckDB metadata 全部帶入顯式版本標記；legacy payload 透過 reader normalization 保持可讀；MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
 - 2026-03-13: Phase 43 完成交付（AWF-211~216）：新增 `autowfo.storage_ops` 作為 storage validation / migration / analytics rebuild 核心；CLI 新增 `doctor` 與 `storage validate|migrate|rebuild-analytics`；control panel Overview 新增 storage health 摘要並暴露 `/ops/storage-health.json`；README、RUNBOOK、MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
 - 2026-03-14: Evidence-integrity risk formally escalated into Phase 44（AWF-217~224）。新結論：root-level `artifacts/` 共享工作區會破壞單 run provenance，run-specific 檔名不足以保證單 run 真相；後續方向改為 run isolation、shared-view derivation、legacy purge，以及只在新制度下重跑決策相關 campaign。MASTER_PLAN、TODO、PHASE44_SPEC、RUNBOOK 先行完成文件凍結。
+- 2026-03-28: Post-Phase-48 operator hardening completed. Rebuilt local shared views from run-local artifacts (8 trusted runs restored to Coverage/Results/Dashboard), fixed a control-panel batch queue integrity bug by reserving historical `job_name` values from `artifacts/batch_state.json`, and launched Wave 1 coverage seeding from the browser workflow. Validation: `python -m pytest tests/test_control_panel.py -q` (`84 passed`).

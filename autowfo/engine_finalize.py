@@ -8,6 +8,7 @@ import pandas as pd
 
 from .benchmark import compute_bh_return_pct, compute_random_entry_return_pct
 from .engine_helpers import _fallback_activity_filter
+from .ranking import _dedup_by_combo_group
 from .engine_report import (
     _append_leaderboard_row,
     _build_best_report_frames,
@@ -721,6 +722,7 @@ def _build_run_metadata_payload(
     capital_mode,
     init_cash_usdt,
     ranking_config,
+    timeframe_diagnostics=None,
     combo_seed=None,
 ):
     return {
@@ -735,6 +737,7 @@ def _build_run_metadata_payload(
         "base_symbol": base_symbol,
         "trade_symbols": trade_symbols,
         "timeframes": timeframe_configs,
+        "timeframe_diagnostics": list(timeframe_diagnostics or []),
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -837,6 +840,7 @@ def _prepare_best_timeframe_context(
 def _persist_run_metadata_and_registry(
     *,
     timeframe_fingerprints,
+    timeframe_diagnostics=None,
     run_id,
     timestamp_utc,
     search_mode,
@@ -877,6 +881,7 @@ def _persist_run_metadata_and_registry(
         base_symbol=base_symbol,
         trade_symbols=trade_symbols,
         timeframe_configs=timeframe_configs,
+        timeframe_diagnostics=timeframe_diagnostics,
         wf_train_days=wf_train_days,
         wf_test_days=wf_test_days,
         wf_step_days=wf_step_days,
@@ -996,6 +1001,7 @@ def _run_finalize_pipeline(
     run_metadata_path_run,
     registry_path,
     timeframe_fingerprints,
+    timeframe_diagnostics=None,
     search_mode,
     config_path,
     per_symbol_df_for_registry=None,
@@ -1032,7 +1038,8 @@ def _run_finalize_pipeline(
         apply_quality_filters_fn=apply_quality_filters_fn,
     )
 
-    top10, _ = top_by_score_fn(filtered, top_n=10, tie_break_avg_hold=True)
+    top10_sorted, _ = top_by_score_fn(filtered, top_n=len(filtered), tie_break_avg_hold=True)
+    top10 = _dedup_by_combo_group(top10_sorted, ranking_config=ranking_config).head(10)
     top10_path = (workspace_paths.get("top10_path") if workspace_paths else None) or os.path.join(
         out_dir,
         f"param_sweep_top10_{run_id}.csv",
@@ -1274,6 +1281,7 @@ def _run_finalize_pipeline(
 
     _persist_result = _persist_run_metadata_and_registry(
         timeframe_fingerprints=timeframe_fingerprints,
+        timeframe_diagnostics=timeframe_diagnostics,
         run_id=run_id,
         timestamp_utc=timestamp_utc,
         search_mode=search_mode,

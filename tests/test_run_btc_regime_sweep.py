@@ -9,6 +9,7 @@ import pytest
 
 from autowfo import run_btc_regime_sweep as sweep
 from autowfo import data as autowfo_data
+from autowfo import evaluator as autowfo_evaluator
 from autowfo import metrics as autowfo_metrics
 from autowfo import portfolio as autowfo_portfolio
 from autowfo import run_workspace as autowfo_run_workspace
@@ -93,6 +94,45 @@ def test_resolve_risk_grid_from_config_overrides_and_fallback():
     assert fallback["max_holds"] == [2, 4]
 
 
+def test_resolve_risk_grid_from_config_atr_multiple():
+    got = sweep._resolve_risk_grid_from_config(
+        {
+            "risk_mode": "atr_multiple",
+            "tp_atr_multipliers": [1.5, "bad", 99],
+            "sl_atr_multipliers": [1.0, 0, -1],
+            "max_holds": [3],
+        }
+    )
+    assert got["risk_mode"] == "atr_multiple"
+    assert got["tp_stops"] == [1.5]
+    assert got["sl_stops"] == [1.0]
+    assert got["max_holds"] == [3]
+
+
+def test_select_indicator_param_options_filters_and_freezes():
+    options = {
+        "mfi": [{"mfi_long": 70, "mfi_short": 30}, {"mfi_long": 80, "mfi_short": 20}],
+        "cmf": [{"cmf_lookback": 20, "cmf_threshold": 0.05}],
+        "obv_roc": [{"obv_lookback": 12}, {"obv_lookback": 24}],
+    }
+    filtered, defaults = sweep._select_indicator_param_options(
+        options,
+        ["obv_roc", "mfi"],
+        fixed_params=False,
+    )
+    assert set(filtered) == {"obv_roc", "mfi"}
+    assert defaults["obv_roc"] == {"obv_lookback": 12}
+
+    frozen, frozen_defaults = sweep._select_indicator_param_options(
+        options,
+        ["obv_roc", "mfi"],
+        fixed_params=True,
+    )
+    assert frozen_defaults == defaults
+    assert frozen["obv_roc"] == [{"obv_lookback": 12}]
+    assert frozen["mfi"] == [{"mfi_long": 70, "mfi_short": 30}]
+
+
 def test_prepare_timeframe_context_success():
     index = pd.date_range("2024-01-01", periods=50, freq="h")
     base_df = _make_ohlcv(index, base=100.0)
@@ -106,8 +146,32 @@ def test_prepare_timeframe_context_success():
     )
 
     assert ctx["trade_close"].shape[1] == 2
+    assert ctx["trade_atr_ratio"].shape == ctx["trade_close"].shape
     assert ctx["total_days"] >= 1
     assert ctx["init_cash_btc"] > 0
+    assert ctx["overlap_diagnostics"]["available_trade_symbol_count"] == 2
+    assert ctx["overlap_diagnostics"]["realized_shared_days"] == ctx["total_days"]
+    assert "BTC/USDT" in ctx["overlap_diagnostics"]["symbol_data_ranges"]
+    assert "ETH/BTC" in ctx["overlap_diagnostics"]["symbol_data_ranges"]
+
+
+def test_resolve_pf_stops_atr_multiple_uses_trade_atr_ratio():
+    index = pd.date_range("2024-01-01", periods=3, freq="h")
+    trade_atr_ratio = pd.DataFrame(
+        {
+            "ETH/BTC": [0.01, 0.02, 0.03],
+            "BNB/BTC": [0.02, 0.03, 0.04],
+        },
+        index=index,
+    )
+    sl_stop, tp_stop = autowfo_evaluator._resolve_pf_stops(
+        ctx={"trade_atr_ratio": trade_atr_ratio},
+        risk_mode="atr_multiple",
+        sl_stop=1.0,
+        tp_stop=1.5,
+    )
+    pd.testing.assert_frame_equal(sl_stop, trade_atr_ratio)
+    pd.testing.assert_frame_equal(tp_stop, trade_atr_ratio * 1.5)
 
 
 def test_prepare_timeframe_context_no_overlap():

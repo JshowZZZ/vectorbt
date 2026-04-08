@@ -11,6 +11,7 @@ from .engine_runtime import (
     _append_eval_result_rows,
     _build_combo_row,
     _build_combo_task_payload,
+    _build_oos_symbol_row,
     _build_symbol_row,
     _prepare_timeframe_runtime,
 )
@@ -550,6 +551,7 @@ def _build_prepare_timeframe_runtime_kwargs(
     prepare_timeframe_context_fn,
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
+    risk_mode="fixed_pct",
 ):
     return {
         "timeframe": timeframe,
@@ -599,6 +601,7 @@ def _build_prepare_timeframe_runtime_kwargs(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
         "config_sha256": config_sha256,
@@ -662,6 +665,7 @@ def _build_prepare_timeframe_runtime_context(
     prepare_timeframe_context_fn,
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
+    risk_mode="fixed_pct",
 ):
     return {
         "base_symbol": base_symbol,
@@ -709,6 +713,7 @@ def _build_prepare_timeframe_runtime_context(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
         "config_sha256": config_sha256,
@@ -771,6 +776,7 @@ def _build_shared_pipeline_runtime_context(
     max_concurrent_positions,
     config_sha256,
     combo_seed=None,
+    risk_mode="fixed_pct",
 ):
     return {
         "base_symbol": base_symbol,
@@ -820,6 +826,7 @@ def _build_shared_pipeline_runtime_context(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
         "config_sha256": config_sha256,
@@ -881,6 +888,7 @@ def _build_prepare_timeframe_runtime_context_from_shared(
         slippage_bps=shared["slippage_bps"],
         spread_bps=shared["spread_bps"],
         funding_rate_daily=shared["funding_rate_daily"],
+        risk_mode=shared["risk_mode"],
         order_size_pct=shared["order_size_pct"],
         max_concurrent_positions=shared["max_concurrent_positions"],
         config_sha256=shared["config_sha256"],
@@ -951,6 +959,7 @@ def _build_timeframe_ready_search_kwargs(
     seen_keys,
     pending_symbol_rows,
     pending_combo_rows,
+    pending_oos_symbol_rows=None,
     combo_key_from_dict_fn,
     indicator_combo_label_fn,
     iter_indicator_param_combos_fn,
@@ -968,6 +977,7 @@ def _build_timeframe_ready_search_kwargs(
     refine_indicator_params_fn,
     safe_int_fn,
     pruning_config=None,
+    risk_mode="fixed_pct",
 ):
     return {
         "timeframe": timeframe,
@@ -1000,6 +1010,7 @@ def _build_timeframe_ready_search_kwargs(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
         "init_cash_usdt": init_cash_usdt,
@@ -1013,6 +1024,7 @@ def _build_timeframe_ready_search_kwargs(
         "seen_keys": seen_keys,
         "pending_symbol_rows": pending_symbol_rows,
         "pending_combo_rows": pending_combo_rows,
+        "pending_oos_symbol_rows": pending_oos_symbol_rows,
         "combo_key_from_dict_fn": combo_key_from_dict_fn,
         "indicator_combo_label_fn": indicator_combo_label_fn,
         "iter_indicator_param_combos_fn": iter_indicator_param_combos_fn,
@@ -1078,6 +1090,7 @@ def _build_timeframe_ready_search_context(
     seen_keys,
     pending_symbol_rows,
     pending_combo_rows,
+    pending_oos_symbol_rows=None,
     combo_key_from_dict_fn,
     indicator_combo_label_fn,
     iter_indicator_param_combos_fn,
@@ -1094,6 +1107,7 @@ def _build_timeframe_ready_search_context(
     refine_indicator_params_fn,
     safe_int_fn,
     pruning_config=None,
+    risk_mode="fixed_pct",
 ):
     return {
         "search_mode": search_mode,
@@ -1122,6 +1136,7 @@ def _build_timeframe_ready_search_context(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
         "init_cash_usdt": init_cash_usdt,
@@ -1136,6 +1151,7 @@ def _build_timeframe_ready_search_context(
         "seen_keys": seen_keys,
         "pending_symbol_rows": pending_symbol_rows,
         "pending_combo_rows": pending_combo_rows,
+        "pending_oos_symbol_rows": pending_oos_symbol_rows,
         "combo_key_from_dict_fn": combo_key_from_dict_fn,
         "indicator_combo_label_fn": indicator_combo_label_fn,
         "iter_indicator_param_combos_fn": iter_indicator_param_combos_fn,
@@ -1176,6 +1192,7 @@ def _build_timeframe_ready_search_context_from_shared(
     seen_keys,
     pending_symbol_rows,
     pending_combo_rows,
+    pending_oos_symbol_rows=None,
     combo_key_from_dict_fn,
     indicator_combo_label_fn,
     iter_indicator_param_combos_fn,
@@ -1221,6 +1238,7 @@ def _build_timeframe_ready_search_context_from_shared(
         slippage_bps=shared["slippage_bps"],
         spread_bps=shared["spread_bps"],
         funding_rate_daily=shared["funding_rate_daily"],
+        risk_mode=shared["risk_mode"],
         order_size_pct=shared["order_size_pct"],
         max_concurrent_positions=shared["max_concurrent_positions"],
         init_cash_usdt=shared["init_cash_usdt"],
@@ -1235,6 +1253,7 @@ def _build_timeframe_ready_search_context_from_shared(
         seen_keys=seen_keys,
         pending_symbol_rows=pending_symbol_rows,
         pending_combo_rows=pending_combo_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         combo_key_from_dict_fn=combo_key_from_dict_fn,
         indicator_combo_label_fn=indicator_combo_label_fn,
         iter_indicator_param_combos_fn=iter_indicator_param_combos_fn,
@@ -1361,6 +1380,7 @@ def _run_timeframe_search_loop(
 ):
     timeframe_ranges = []
     timeframe_fingerprints = []
+    timeframe_diagnostics = []
 
     for tf_cfg in timeframe_configs:
         timeframe = tf_cfg["timeframe"]
@@ -1383,6 +1403,7 @@ def _run_timeframe_search_loop(
         ctx = timeframe_runtime["ctx"]
         timeframe_ranges.append(timeframe_runtime["timeframe_range"])
         timeframe_fingerprints.append(timeframe_runtime["timeframe_data_fingerprint"])
+        timeframe_diagnostics.append(dict(timeframe_runtime.get("timeframe_diagnostics") or {}))
 
         wf_windows = timeframe_runtime["wf_windows"]
         if not wf_windows:
@@ -1404,6 +1425,7 @@ def _run_timeframe_search_loop(
     return {
         "timeframe_ranges": timeframe_ranges,
         "timeframe_fingerprints": timeframe_fingerprints,
+        "timeframe_diagnostics": timeframe_diagnostics,
     }
 
 
@@ -1452,6 +1474,7 @@ def _run_timeframe_ready_search(
     seen_keys,
     pending_symbol_rows,
     pending_combo_rows,
+    pending_oos_symbol_rows=None,
     combo_key_from_dict_fn,
     indicator_combo_label_fn,
     iter_indicator_param_combos_fn,
@@ -1469,6 +1492,7 @@ def _run_timeframe_ready_search(
     refine_indicator_params_fn,
     safe_int_fn,
     pruning_config=None,
+    risk_mode="fixed_pct",
 ):
     ctx = timeframe_runtime["ctx"]
     trade_symbols_tf = timeframe_runtime["trade_symbols_tf"]
@@ -1505,6 +1529,7 @@ def _run_timeframe_ready_search(
             slippage_bps=slippage_bps,
             spread_bps=spread_bps,
             funding_rate_daily=funding_rate_daily,
+            risk_mode=risk_mode,
             order_size_pct=order_size_pct,
             max_concurrent_positions=max_concurrent_positions,
             init_cash_usdt=init_cash_usdt,
@@ -1561,8 +1586,10 @@ def _run_timeframe_ready_search(
             ctx_total_days=ctx["total_days"],
             pending_symbol_rows=pending_symbol_rows,
             pending_combo_rows=pending_combo_rows,
+            pending_oos_symbol_rows=pending_oos_symbol_rows,
             build_symbol_row_fn=_build_symbol_row,
             build_combo_row_fn=_build_combo_row,
+            build_oos_symbol_row_fn=_build_oos_symbol_row,
         )
 
     def _eval_combo(
@@ -1679,6 +1706,7 @@ def _run_finalize_after_timeframe_loop(
     run_kwargs = dict(finalize_kwargs)
     run_kwargs["timeframe_ranges"] = timeframe_loop_result["timeframe_ranges"]
     run_kwargs["timeframe_fingerprints"] = timeframe_loop_result["timeframe_fingerprints"]
+    run_kwargs["timeframe_diagnostics"] = timeframe_loop_result.get("timeframe_diagnostics", [])
     return run_finalize_pipeline_fn(**run_kwargs)
 
 

@@ -39,6 +39,10 @@ DEFAULT_CONFIG = {
     },
     "combo_group_fields": ["indicator_list", "regime_name", "vol_mode"],
     "trade_symbols": ["ETH/BTC", "BNB/BTC", "SOL/BTC"],
+    "indicator_subset": None,
+    "regime_preset": "full",
+    "pilot_fixed_indicator_params": False,
+    "pilot_single_trend_mom": False,
     "capital_mode": "shared",
     "init_cash_usdt": 1000,
     "order_size_pct": 0.5,
@@ -46,6 +50,7 @@ DEFAULT_CONFIG = {
     "slippage_bps": 2.0,
     "spread_bps": 2.0,
     "funding_rate_daily": 0.0,
+    "risk_mode": "fixed_pct",
     # AWF-108: checkpoint/progress tunables
     "checkpoint_every_n": 200,
     "progress_every_n": 25,
@@ -64,6 +69,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "slippage_bps",
         "spread_bps",
         "funding_rate_daily",
+        "risk_mode",
         "order_size_pct",
         "max_concurrent_positions",
         "init_cash_usdt",
@@ -157,6 +163,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "trade_symbols_key",
         "capital_mode",
         "fees",
+        "risk_mode",
         "order_size_pct",
         "max_concurrent_positions",
         "init_cash_usdt",
@@ -216,12 +223,88 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "avg_hold_hours",
     ]
 
+    oos_symbol_result_fields = [
+        "timeframe",
+        "data_days",
+        "exchange",
+        "base_symbol",
+        "trade_symbols_key",
+        "capital_mode",
+        "fees",
+        "risk_mode",
+        "order_size_pct",
+        "max_concurrent_positions",
+        "init_cash_usdt",
+        "wf_train_days",
+        "wf_test_days",
+        "wf_step_days",
+        "wf_valid_days",
+        "wf_mode",
+        "data_start",
+        "data_end",
+        *list(artifact_row_metadata_fields),
+        "symbol",
+        "regime_name",
+        "regime_type",
+        "vol_mode",
+        "regime_rsi_long",
+        "regime_rsi_short",
+        "filter_name",
+        "indicator_list",
+        "indicator_count",
+        "vol_lookback",
+        "vol_z",
+        "mom_lookback",
+        "trade_mom_lookback",
+        "tp_stop",
+        "sl_stop",
+        "max_hold",
+        "rsi_window",
+        "rsi_long",
+        "rsi_short",
+        "bb_width",
+        "atr_ratio",
+        "ma_fast",
+        "ma_slow",
+        "macd_hist_ratio",
+        "stoch_long",
+        "stoch_short",
+        "obv_lookback",
+        "volume_lookback",
+        "volume_z",
+        "roc_lookback",
+        "roc_threshold",
+        "mfi_long",
+        "mfi_short",
+        "cmf_lookback",
+        "cmf_threshold",
+        "vroc_lookback",
+        "vroc_threshold",
+        "ad_lookback",
+        "oos_avg_total_return_pct",
+        "oos_avg_win_rate_pct",
+        "oos_avg_avg_trade_pct",
+        "oos_avg_max_drawdown_pct",
+        "oos_avg_position_coverage_pct",
+        "oos_avg_total_trades",
+        "oos_min_total_trades",
+        "oos_avg_daily_trades",
+        "oos_avg_hold_hours",
+        "oos_return_std",
+        "oos_positive_segment_ratio",
+        "oos_sharpe_like",
+        "oos_low_trade_segment_ratio",
+        "oos_low_trade_penalty",
+        "oos_segments",
+    ]
+
     strict_config_fields = [
         "exchange",
         "base_symbol",
         "trade_symbols_key",
         "capital_mode",
         "fees",
+        "risk_mode",
         "order_size_pct",
         "max_concurrent_positions",
         "init_cash_usdt",
@@ -238,6 +321,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "combo_key_fields": combo_key_fields,
         "combo_result_fields": combo_result_fields,
         "symbol_result_fields": symbol_result_fields,
+        "oos_symbol_result_fields": oos_symbol_result_fields,
         "strict_config_fields": strict_config_fields,
     }
 
@@ -305,6 +389,20 @@ def _safe_positive_config_int(config, name, default):
     return value if value > 0 else default
 
 
+def _safe_bool(value, default=False):
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off"}:
+            return False
+    return bool(value)
+
+
 def _safe_int(value, default):
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return default
@@ -315,6 +413,37 @@ def _safe_float(value, default):
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return default
     return float(value)
+
+
+def _normalize_indicator_subset(indicator_subset, available_indicator_keys):
+    if not available_indicator_keys:
+        return []
+    values = indicator_subset
+    if values in (None, ""):
+        return list(available_indicator_keys)
+    if isinstance(values, str):
+        values = [value.strip() for value in values.split(",") if value.strip()]
+    normalized = []
+    for value in values:
+        key = str(value).strip()
+        if not key or key not in available_indicator_keys or key in normalized:
+            continue
+        normalized.append(key)
+    return normalized or list(available_indicator_keys)
+
+
+def _normalize_regime_preset(value):
+    preset = str(value or "full").strip().lower()
+    if preset not in {"full", "pilot_trend_3"}:
+        return "full"
+    return preset
+
+
+def _normalize_risk_mode(value):
+    risk_mode = str(value or "fixed_pct").strip().lower()
+    if risk_mode not in {"fixed_pct", "atr_multiple"}:
+        return "fixed_pct"
+    return risk_mode
 
 
 def _has_all_config_fields(values, strict_fields):
@@ -382,6 +511,7 @@ def _resolve_runtime_settings(
     *,
     base_symbol,
     default_trade_symbols,
+    available_indicator_keys=None,
     normalize_split_mode_fn,
     resolve_ranking_config_fn,
 ):
@@ -400,6 +530,19 @@ def _resolve_runtime_settings(
         base_symbol=base_symbol,
         default_trade_symbols=default_trade_symbols,
     )
+    indicator_subset = _normalize_indicator_subset(
+        default_config.get("indicator_subset"),
+        available_indicator_keys or [],
+    )
+    regime_preset = _normalize_regime_preset(default_config.get("regime_preset", "full"))
+    pilot_fixed_indicator_params = _safe_bool(
+        default_config.get("pilot_fixed_indicator_params", False),
+        False,
+    )
+    pilot_single_trend_mom = _safe_bool(
+        default_config.get("pilot_single_trend_mom", False),
+        False,
+    )
 
     wf_train_days = _safe_positive_config_int(default_config, "wf_train_days", 120)
     wf_test_days = _safe_positive_config_int(default_config, "wf_test_days", 30)
@@ -412,6 +555,7 @@ def _resolve_runtime_settings(
     slippage_bps = float(default_config.get("slippage_bps", 0.0) or 0.0)
     spread_bps = float(default_config.get("spread_bps", 0.0) or 0.0)
     funding_rate_daily = float(default_config.get("funding_rate_daily", 0.0) or 0.0)
+    risk_mode = _normalize_risk_mode(default_config.get("risk_mode", "fixed_pct"))
 
     capital_mode = str(default_config.get("capital_mode", "shared") or "shared").lower()
     if capital_mode not in {"shared", "per_symbol"}:
@@ -447,6 +591,10 @@ def _resolve_runtime_settings(
         "combo_segment_size": combo_segment_size,
         "combo_group_fields": combo_group_fields,
         "trade_symbols": trade_symbols,
+        "indicator_subset": indicator_subset,
+        "regime_preset": regime_preset,
+        "pilot_fixed_indicator_params": pilot_fixed_indicator_params,
+        "pilot_single_trend_mom": pilot_single_trend_mom,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -455,6 +603,7 @@ def _resolve_runtime_settings(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "risk_mode": risk_mode,
         "capital_mode": capital_mode,
         "init_cash_usdt": init_cash_usdt,
         "order_size_pct": order_size_pct,
@@ -479,12 +628,15 @@ def _build_ma_pairs(base_ma_pairs):
     )
 
 
-def _build_regime_variants(rsi_revert_pairs):
-    regime_variants = [
+def _build_regime_variants(rsi_revert_pairs, preset="full"):
+    trend_variants = [
         {"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high", "rsi_pair": None},
         {"regime_name": "trend_low", "regime_type": "trend", "vol_mode": "low", "rsi_pair": None},
         {"regime_name": "trend_any", "regime_type": "trend", "vol_mode": "any", "rsi_pair": None},
     ]
+    if _normalize_regime_preset(preset) == "pilot_trend_3":
+        return trend_variants
+    regime_variants = list(trend_variants)
     for rsi_pair in rsi_revert_pairs:
         regime_variants.append(
             {
@@ -775,18 +927,21 @@ def _checkpoint_pending_rows(
     checkpoint_min_seconds,
     pending_combo_rows,
     pending_symbol_rows,
+    pending_oos_symbol_rows=None,
     combo_path,
     per_symbol_path,
+    oos_symbol_path=None,
     db_path,
     combo_result_fields,
     symbol_result_fields,
+    oos_symbol_result_fields=None,
     should_checkpoint_fn,
     append_rows_fn,
     append_db_rows_fn,
     normalize_key_value_fn,
     warn_fn=print,
 ):
-    if not pending_combo_rows and not pending_symbol_rows:
+    if not pending_combo_rows and not pending_symbol_rows and not pending_oos_symbol_rows:
         return {
             "checkpointed": False,
             "last_checkpoint_done": last_checkpoint_done,
@@ -810,6 +965,8 @@ def _checkpoint_pending_rows(
 
     append_rows_fn(combo_path, pending_combo_rows, combo_result_fields)
     append_rows_fn(per_symbol_path, pending_symbol_rows, symbol_result_fields)
+    if oos_symbol_path and oos_symbol_result_fields:
+        append_rows_fn(oos_symbol_path, pending_oos_symbol_rows or [], oos_symbol_result_fields)
     try:
         append_db_rows_fn(
             db_path,
@@ -825,10 +982,20 @@ def _checkpoint_pending_rows(
             symbol_result_fields,
             normalize_key_value_fn=normalize_key_value_fn,
         )
+        if oos_symbol_result_fields:
+            append_db_rows_fn(
+                db_path,
+                "symbol_oos_summary",
+                pending_oos_symbol_rows or [],
+                oos_symbol_result_fields,
+                normalize_key_value_fn=normalize_key_value_fn,
+            )
     except Exception as exc:
         warn_fn(f"[warn] db write failed: {exc}")
     pending_combo_rows.clear()
     pending_symbol_rows.clear()
+    if pending_oos_symbol_rows is not None:
+        pending_oos_symbol_rows.clear()
 
     return {
         "checkpointed": True,
@@ -850,8 +1017,11 @@ def _build_run_lifecycle_callbacks(
     db_path,
     combo_result_fields,
     symbol_result_fields,
+    oos_symbol_result_fields=None,
     pending_combo_rows,
     pending_symbol_rows,
+    pending_oos_symbol_rows=None,
+    oos_symbol_path=None,
     format_duration_fn,
     write_status_fn,
     append_rows_fn,
@@ -933,11 +1103,14 @@ def _build_run_lifecycle_callbacks(
             checkpoint_min_seconds=checkpoint_min_seconds,
             pending_combo_rows=pending_combo_rows,
             pending_symbol_rows=pending_symbol_rows,
+            pending_oos_symbol_rows=pending_oos_symbol_rows,
             combo_path=combo_path,
             per_symbol_path=per_symbol_path,
+            oos_symbol_path=oos_symbol_path,
             db_path=db_path,
             combo_result_fields=combo_result_fields,
             symbol_result_fields=symbol_result_fields,
+            oos_symbol_result_fields=oos_symbol_result_fields,
             should_checkpoint_fn=should_checkpoint_fn,
             append_rows_fn=append_rows_fn,
             append_db_rows_fn=append_db_rows_fn,

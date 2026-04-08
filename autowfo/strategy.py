@@ -40,8 +40,11 @@ def _pick_series_from_map(series_map, key, default_key=None):
 
 def _get_coarse_indicator_param_defaults():
     global _COARSE_INDICATOR_PARAM_DEFAULTS
-    if _COARSE_INDICATOR_PARAM_DEFAULTS is None:
-        _COARSE_INDICATOR_PARAM_DEFAULTS = _indicator_defaults(_build_indicator_param_options_coarse())
+    fresh_defaults = _indicator_defaults(_build_indicator_param_options_coarse())
+    if _COARSE_INDICATOR_PARAM_DEFAULTS is None or any(
+        key not in _COARSE_INDICATOR_PARAM_DEFAULTS for key in fresh_defaults
+    ):
+        _COARSE_INDICATOR_PARAM_DEFAULTS = fresh_defaults
     return _COARSE_INDICATOR_PARAM_DEFAULTS
 
 

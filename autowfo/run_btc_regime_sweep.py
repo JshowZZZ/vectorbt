@@ -41,6 +41,7 @@ SWEEP_SCHEMA_FIELDS = engine_helpers._build_sweep_schema_fields(
 COMBO_KEY_FIELDS = SWEEP_SCHEMA_FIELDS["combo_key_fields"]
 COMBO_RESULT_FIELDS = SWEEP_SCHEMA_FIELDS["combo_result_fields"]
 SYMBOL_RESULT_FIELDS = SWEEP_SCHEMA_FIELDS["symbol_result_fields"]
+OOS_SYMBOL_RESULT_FIELDS = SWEEP_SCHEMA_FIELDS["oos_symbol_result_fields"]
 STRICT_CONFIG_FIELDS = SWEEP_SCHEMA_FIELDS["strict_config_fields"]
 
 
@@ -50,9 +51,29 @@ RISK_GRID_LIMITS = {
     "max_holds": (1, 240),
 }
 
+ATR_RISK_GRID_LIMITS = {
+    "tp_atr_multipliers": (0.05, 20.0),
+    "sl_atr_multipliers": (0.05, 20.0),
+}
+
+
+def _select_indicator_param_options(indicator_param_options, indicator_keys, *, fixed_params):
+    filtered_options = {
+        key: list(indicator_param_options.get(key, [{}]))
+        for key in indicator_keys
+    }
+    indicator_defaults = autowfo_strategy._indicator_defaults(filtered_options)
+    if not fixed_params:
+        return filtered_options, indicator_defaults
+    fixed_options = {}
+    for key in indicator_keys:
+        fixed_options[key] = [dict(indicator_defaults.get(key, {}))]
+    return fixed_options, indicator_defaults
+
 
 def _resolve_risk_grid_from_config(config):
     cfg = config if isinstance(config, dict) else {}
+    risk_mode = engine_helpers._normalize_risk_mode(cfg.get("risk_mode", "fixed_pct"))
 
     def _coerce_grid(raw, default_values, cast_fn, min_value=None, max_value=None):
         if raw in (None, ""):
@@ -78,7 +99,34 @@ def _resolve_risk_grid_from_config(config):
             unique.append(value)
         return unique
 
+    if risk_mode == "atr_multiple":
+        return {
+            "risk_mode": risk_mode,
+            "tp_stops": _coerce_grid(
+                cfg.get("tp_atr_multipliers"),
+                [1.5],
+                float,
+                min_value=ATR_RISK_GRID_LIMITS["tp_atr_multipliers"][0],
+                max_value=ATR_RISK_GRID_LIMITS["tp_atr_multipliers"][1],
+            ),
+            "sl_stops": _coerce_grid(
+                cfg.get("sl_atr_multipliers"),
+                [1.0],
+                float,
+                min_value=ATR_RISK_GRID_LIMITS["sl_atr_multipliers"][0],
+                max_value=ATR_RISK_GRID_LIMITS["sl_atr_multipliers"][1],
+            ),
+            "max_holds": _coerce_grid(
+                cfg.get("max_holds"),
+                [2, 4],
+                int,
+                min_value=RISK_GRID_LIMITS["max_holds"][0],
+                max_value=RISK_GRID_LIMITS["max_holds"][1],
+            ),
+        }
+
     return {
+        "risk_mode": risk_mode,
         "tp_stops": _coerce_grid(
             cfg.get("tp_stops"),
             [0.003, 0.005],
@@ -134,6 +182,7 @@ def main():
         default_config=default_config,
         base_symbol=base_symbol,
         default_trade_symbols=default_trade_symbols,
+        available_indicator_keys=list(INDICATOR_META.keys()),
         normalize_split_mode_fn=autowfo_split._normalize_split_mode,
         resolve_ranking_config_fn=autowfo_ranking._resolve_ranking_config,
     )
@@ -148,6 +197,10 @@ def main():
     combo_segment_size = runtime_settings["combo_segment_size"]
     combo_group_fields = runtime_settings["combo_group_fields"]
     trade_symbols = runtime_settings["trade_symbols"]
+    indicator_keys = runtime_settings["indicator_subset"]
+    regime_preset = runtime_settings["regime_preset"]
+    pilot_fixed_indicator_params = runtime_settings["pilot_fixed_indicator_params"]
+    pilot_single_trend_mom = runtime_settings["pilot_single_trend_mom"]
     wf_train_days = runtime_settings["wf_train_days"]
     wf_test_days = runtime_settings["wf_test_days"]
     wf_step_days = runtime_settings["wf_step_days"]
@@ -159,9 +212,12 @@ def main():
     mom_lookbacks = [6, 12]
     trade_mom_lookbacks = [3]
     risk_grid = _resolve_risk_grid_from_config(default_config)
+    risk_mode = risk_grid["risk_mode"]
     tp_stops = risk_grid["tp_stops"]
     sl_stops = risk_grid["sl_stops"]
     max_holds = risk_grid["max_holds"]
+    if pilot_single_trend_mom and mom_lookbacks:
+        mom_lookbacks = [mom_lookbacks[0]]
 
     rsi_window = 14
     rsi_revert_pairs = [(30, 70), (35, 65), (40, 60)]
@@ -197,6 +253,7 @@ def main():
     slippage_bps = runtime_settings["slippage_bps"]
     spread_bps = runtime_settings["spread_bps"]
     funding_rate_daily = runtime_settings["funding_rate_daily"]
+    risk_mode = runtime_settings["risk_mode"]
     capital_mode = runtime_settings["capital_mode"]
     init_cash_usdt = runtime_settings["init_cash_usdt"]
     order_size_pct = runtime_settings["order_size_pct"]
@@ -231,10 +288,12 @@ def main():
 
     combo_path = str(workspace.combo_summary_path)
     per_symbol_path = str(workspace.symbol_summary_path)
+    oos_symbol_path = str(workspace.oos_symbol_summary_path)
     existing_combo_df = pd.read_csv(combo_path, low_memory=False) if os.path.exists(combo_path) else pd.DataFrame()
     existing_symbol_df = pd.read_csv(per_symbol_path, low_memory=False) if os.path.exists(per_symbol_path) else pd.DataFrame()
     autowfo_artifacts._ensure_csv_schema(combo_path, COMBO_RESULT_FIELDS)
     autowfo_artifacts._ensure_csv_schema(per_symbol_path, SYMBOL_RESULT_FIELDS)
+    autowfo_artifacts._ensure_csv_schema(oos_symbol_path, OOS_SYMBOL_RESULT_FIELDS)
     autowfo_artifacts._ensure_db_schema(
         db_path,
         "combo_summary",
@@ -250,6 +309,15 @@ def main():
             ("idx_symbol_symbol", ["symbol"]),
         ],
     )
+    autowfo_artifacts._ensure_db_schema(
+        db_path,
+        "symbol_oos_summary",
+        OOS_SYMBOL_RESULT_FIELDS,
+        indexes=[
+            ("idx_oos_symbol_timeframe", ["timeframe"]),
+            ("idx_oos_symbol_symbol", ["symbol"]),
+        ],
+    )
     if os.path.exists(combo_path):
         existing_combo_df = pd.read_csv(combo_path, low_memory=False)
     if os.path.exists(per_symbol_path):
@@ -259,17 +327,23 @@ def main():
         existing_symbol_df,
         COMBO_KEY_FIELDS,
     )
-    indicator_param_options = autowfo_strategy._build_indicator_param_options_coarse()
-    indicator_defaults = autowfo_strategy._indicator_defaults(indicator_param_options)
+    indicator_param_options, indicator_defaults = _select_indicator_param_options(
+        autowfo_strategy._build_indicator_param_options_coarse(),
+        indicator_keys,
+        fixed_params=pilot_fixed_indicator_params,
+    )
     combo_keys_all = engine_helpers._build_combo_keys(
-        indicator_keys=list(INDICATOR_META.keys()),
+        indicator_keys=indicator_keys,
         combo_sizes=combo_sizes,
         combo_seed=combo_seed,
         combo_segment_start=combo_segment_start,
         combo_segment_size=combo_segment_size,
     )
 
-    regime_variants = engine_helpers._build_regime_variants(rsi_revert_pairs)
+    regime_variants = engine_helpers._build_regime_variants(
+        rsi_revert_pairs,
+        preset=regime_preset,
+    )
 
     # scanning logic (multi-timeframe, incremental, two-space)
     regime_lookup = {regime["regime_name"]: regime for regime in regime_variants}
@@ -291,6 +365,7 @@ def main():
     total_combos = count_coarse_combos() * len(timeframe_configs) if search_mode == "combo" else 0
     pending_combo_rows = []
     pending_symbol_rows = []
+    pending_oos_symbol_rows = []
     # AWF-108(c): checkpoint / progress frequency configurable via sweep_config.json
     _checkpoint_every_n = max(int(default_config.get("checkpoint_every_n", 200) or 200), 1)
     _progress_every_n = max(int(default_config.get("progress_every_n", 25) or 25), 1)
@@ -304,11 +379,14 @@ def main():
         control_path=control_path,
         combo_path=combo_path,
         per_symbol_path=per_symbol_path,
+        oos_symbol_path=oos_symbol_path,
         db_path=db_path,
         combo_result_fields=COMBO_RESULT_FIELDS,
         symbol_result_fields=SYMBOL_RESULT_FIELDS,
+        oos_symbol_result_fields=OOS_SYMBOL_RESULT_FIELDS,
         pending_combo_rows=pending_combo_rows,
         pending_symbol_rows=pending_symbol_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         format_duration_fn=autowfo_report._format_duration,
         write_status_fn=autowfo_artifacts._write_status,
         append_rows_fn=autowfo_artifacts._append_rows,
@@ -415,6 +493,7 @@ def main():
         slippage_bps=slippage_bps,
         spread_bps=spread_bps,
         funding_rate_daily=funding_rate_daily,
+        risk_mode=risk_mode,
         order_size_pct=order_size_pct,
         max_concurrent_positions=max_concurrent_positions,
         config_sha256=config_sha256,
@@ -446,6 +525,7 @@ def main():
         seen_keys=seen_keys,
         pending_symbol_rows=pending_symbol_rows,
         pending_combo_rows=pending_combo_rows,
+        pending_oos_symbol_rows=pending_oos_symbol_rows,
         combo_key_from_dict_fn=combo_key_from_dict_fn,
         indicator_combo_label_fn=indicator_combo_label_fn,
         iter_indicator_param_combos_fn=autowfo_strategy._iter_indicator_param_combos,

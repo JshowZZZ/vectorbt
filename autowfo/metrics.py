@@ -131,8 +131,54 @@ def _aggregate_metrics(series_metrics):
 
 
 def _aggregate_oos_metrics(oos_rows):
+    metrics = _aggregate_oos_rows(
+        oos_rows=oos_rows,
+        return_field="avg_total_return_pct",
+        win_rate_field="avg_win_rate_pct",
+        avg_trade_field="avg_avg_trade_pct",
+        max_drawdown_field="avg_max_drawdown_pct",
+        coverage_field="avg_position_coverage_pct",
+        total_trades_field="avg_total_trades",
+        min_trades_field="min_total_trades",
+        daily_trades_field="avg_daily_trades",
+        hold_hours_field="avg_hold_hours",
+    )
+    _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
+    return metrics
+
+
+def _aggregate_oos_symbol_metrics(oos_rows):
+    metrics = _aggregate_oos_rows(
+        oos_rows=oos_rows,
+        return_field="total_return_pct",
+        win_rate_field="win_rate_pct",
+        avg_trade_field="avg_trade_pct",
+        max_drawdown_field="max_drawdown_pct",
+        coverage_field="position_coverage_pct",
+        total_trades_field="total_trades",
+        min_trades_field="total_trades",
+        daily_trades_field="avg_daily_trades",
+        hold_hours_field="avg_hold_hours",
+    )
+    _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_symbol_aggregate")
+    return metrics
+
+
+def _aggregate_oos_rows(
+    *,
+    oos_rows,
+    return_field,
+    win_rate_field,
+    avg_trade_field,
+    max_drawdown_field,
+    coverage_field,
+    total_trades_field,
+    min_trades_field,
+    daily_trades_field,
+    hold_hours_field,
+):
     if not oos_rows:
-        metrics = {
+        return {
             "oos_avg_total_return_pct": np.nan,
             "oos_avg_win_rate_pct": np.nan,
             "oos_avg_avg_trade_pct": np.nan,
@@ -149,8 +195,6 @@ def _aggregate_oos_metrics(oos_rows):
             "oos_low_trade_penalty": np.nan,
             "oos_segments": 0,
         }
-        _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
-        return metrics
 
     def safe_nanmean(values):
         arr = np.asarray(values, dtype="float64")
@@ -179,8 +223,8 @@ def _aggregate_oos_metrics(oos_rows):
             return np.nan
         return float(np.nanmean(arr[valid]))
 
-    returns = np.asarray([row["avg_total_return_pct"] for row in oos_rows], dtype="float64")
-    min_trades = np.asarray([row["min_total_trades"] for row in oos_rows], dtype="float64")
+    returns = np.asarray([row[return_field] for row in oos_rows], dtype="float64")
+    min_trades = np.asarray([row[min_trades_field] for row in oos_rows], dtype="float64")
     return_std = safe_nanstd(returns)
     avg_return = safe_nanmean(returns)
     sharpe_like = np.nan
@@ -210,14 +254,14 @@ def _aggregate_oos_metrics(oos_rows):
 
     metrics = {
         "oos_avg_total_return_pct": avg_return,
-        "oos_avg_win_rate_pct": safe_nanmean([row["avg_win_rate_pct"] for row in oos_rows]),
-        "oos_avg_avg_trade_pct": safe_nanmean([row["avg_avg_trade_pct"] for row in oos_rows]),
-        "oos_avg_max_drawdown_pct": safe_nanmean([row["avg_max_drawdown_pct"] for row in oos_rows]),
-        "oos_avg_position_coverage_pct": safe_nanmean([row["avg_position_coverage_pct"] for row in oos_rows]),
-        "oos_avg_total_trades": safe_nanmean([row["avg_total_trades"] for row in oos_rows]),
-        "oos_min_total_trades": safe_nanmin([row["min_total_trades"] for row in oos_rows]),
-        "oos_avg_daily_trades": safe_nanmean([row["avg_daily_trades"] for row in oos_rows]),
-        "oos_avg_hold_hours": safe_nanmean([row["avg_hold_hours"] for row in oos_rows]),
+        "oos_avg_win_rate_pct": safe_nanmean([row[win_rate_field] for row in oos_rows]),
+        "oos_avg_avg_trade_pct": safe_nanmean([row[avg_trade_field] for row in oos_rows]),
+        "oos_avg_max_drawdown_pct": safe_nanmean([row[max_drawdown_field] for row in oos_rows]),
+        "oos_avg_position_coverage_pct": safe_nanmean([row[coverage_field] for row in oos_rows]),
+        "oos_avg_total_trades": safe_nanmean([row[total_trades_field] for row in oos_rows]),
+        "oos_min_total_trades": safe_nanmin([row[min_trades_field] for row in oos_rows]),
+        "oos_avg_daily_trades": safe_nanmean([row[daily_trades_field] for row in oos_rows]),
+        "oos_avg_hold_hours": safe_nanmean([row[hold_hours_field] for row in oos_rows]),
         "oos_return_std": return_std,
         "oos_positive_segment_ratio": positive_segment_ratio,
         "oos_sharpe_like": sharpe_like,
@@ -225,6 +269,5 @@ def _aggregate_oos_metrics(oos_rows):
         "oos_low_trade_penalty": low_trade_penalty,
         "oos_segments": len(oos_rows),
     }
-    _assert_metric_keys(metrics, OOS_AGGREGATE_METRIC_FIELDS, "oos_aggregate")
     return metrics
 

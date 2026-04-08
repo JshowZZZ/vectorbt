@@ -1,4 +1,4 @@
-﻿# AUTOWFO TODO
+# AUTOWFO TODO
 
 ## Usage Rules
 - This file tracks only active-phase execution items.
@@ -7,44 +7,67 @@
 
 ## Active Phase
 
-- Phase 44: Evidence Reset and Run Isolation
-- Goal: replace shared-root run evidence with isolated run-local outputs, purge invalid legacy artifacts, and rebuild trusted evidence before more strategy conclusions are drawn.
-- Active items:
-  - `AWF-217` `done` - Freeze Phase 44 scope, evidence classes, and delete-first legacy policy in planning docs.
-  - `AWF-218a` `done` - Introduce RunWorkspace abstraction + path derivation (additive, no write-path changes).
-  - `AWF-218b` `done` - Dual-write migration verified for runtime config, status, result CSV/DB, reports, metadata, registry, and leaderboard via RunWorkspace-backed regressions.
-  - `AWF-218c` `done` - Root evidence writes removed from `autowfo run`; transitional mirror scaffolding cleaned up; run-local outputs are the only primary evidence path.
-  - `AWF-219` `done` - Added explicit `storage rebuild-shared-views` to rebuild root compatibility views from trusted run roots while preserving existing file formats.
-  - `AWF-220` `done` - Added manifest-aware `storage purge-legacy` with dry-run, quarantine, and explicit delete mode while protecting rebuilt shared compatibility views.
-  - `AWF-221` `done` - Switch control panel and analytics to trusted sources only.
-  - `AWF-222` `done` - Add regression guards and integrity checks for run isolation and purge behavior.
-  - `AWF-223` `done` - Executed evidence reset against root legacy artifacts via quarantine-mode purge; rebuilt empty compatibility views and removed stale cross-run caches from the primary artifacts root.
-  - `AWF-224` `done` - Re-run the decision-relevant campaigns under the new trusted model.
+- No active phase.
+- Last closed phase: Phase 49: Trusted Ranking Rollout.
+- Active items: none.
 
 ## Backlog
 
-No items.
+- `done` `AWF-239` Cross-symbol pilot protocol review and scope freeze.
+  Review `plans/AUTOWFO_SEARCH_V2_PROPOSAL.md`, confirm the revised priority order, and freeze the pilot protocol before implementation.
+- `done` `AWF-240` Legacy pilot protocol cleanup.
+  Added indicator subset support, 3-regime pilot preset, default-only pilot param freeze, single-trend-momentum freeze, ATR-relative exit mode, and a reproducible pilot config path on the legacy engine. Validation: `python -m pytest tests/test_autowfo_engine.py tests/test_run_btc_regime_sweep.py tests/test_autowfo_pruning.py -q` (`137 passed`).
+- `done` `AWF-241` Cross-symbol pilot execution and Search V2 decision gate.
+  Completed pilot runs `20260408_144415` and `20260408_151900`, wrote `plans/AUTOWFO_SEARCH_V2_PILOT_DECISION_20260408.md`, and concluded `NARROW-GO` for focused follow-up but `NO-GO` for full Search V2 funding under the realized pilot protocol.
+- `done` `AWF-242` Pilot evidence hardening: symbol-level OOS cohort output and overlap-window audit.
+  Added `param_sweep_symbol_oos_summary.csv`, persisted `timeframe_diagnostics` into run metadata, and verified via rerun `20260408_163100` that the shared-window shrink was caused by late-start BTC crosses rather than missing protocol wiring.
+- `todo` `AWF-243` Focused follow-up on boundary candidate family versus symbol clustering.
+  Narrow the next research pass to the `mfi + cmf + obv_roc` candidate family and compare that track against symbol clustering / subgroup discovery before reviving universal Search V2.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
 - Warning cleanup: reduce third-party and internal deprecation/future warnings without suppressing project-critical warnings (AWF-189 closed — 30 warnings baseline).
 
 ## Notes
+- 2026-03-29: Phase 49 opened. Focus: use the now-complete trusted coverage set to decide whether `low_trade_mode=relative` should be rolled into shared views via `compare-ranking` + `rescore`, then validate that the control panel absorbs the rescored leaderboard correctly.
+- 2026-04-08: `AWF-240` implemented on the legacy path.
+  - Added config/runtime support for `indicator_subset`, `regime_preset`, `pilot_fixed_indicator_params`, `pilot_single_trend_mom`, and `risk_mode`.
+  - Added ATR-relative stop handling using per-symbol ATR ratios in timeframe context and evaluator.
+  - Added pilot-ready config template: `artifacts/sweep_config_pilot_cross_symbol_7ind_2h_180d.json`.
+  - Targeted regression is green: `137 passed`.
+- 2026-04-08: `AWF-241` completed with a two-run pilot gate.
+  - Main run `20260408_144415` (`45/30/30`) produced one boundary candidate at a loose trade floor, but none at a stricter `>=5` trades-per-symbol floor.
+  - Sensitivity run `20260408_151900` (`60/30/30`) did not reproduce the boundary candidate's positive OOS result.
+  - Effective shared data overlap was only about `124d` (`2025-12-05` to `2026-04-08`), so both runs emitted only `2` OOS segments.
+  - Decision memo: `plans/AUTOWFO_SEARCH_V2_PILOT_DECISION_20260408.md`.
+  - Current outcome: `NARROW-GO` for focused follow-up, `NO-GO` for full Search V2 funding.
+- 2026-04-08: `AWF-242` completed.
+  - Added symbol-level OOS cohort artifact: `param_sweep_symbol_oos_summary.csv`.
+  - Added run metadata `timeframe_diagnostics` with requested window, realized shared window, and per-symbol data ranges.
+  - Verified on rerun `20260408_163100`: requested `180d` clipped to about `125d` shared overlap because `ADA/BTC`, `DOGE/BTC`, `DOT/BTC`, `LINK/BTC`, `LTC/BTC`, and `AVAX/BTC` start later than the oldest symbols in the cohort.
+- 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
+  - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
+  - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
+  - Operator decision: accept `low_trade_mode=relative` for trusted shared views, because the current campaign priority is ranking discrimination on low-frequency pairs and the paired evidence improved returns broadly enough to justify a ranking-layer rollout.
+- 2026-03-29: Applied `python -m autowfo storage rescore --ranking-config artifacts/reports/ranking_candidate_relative_low_trade.json --cwd .` to all `46` trusted runs. Shared views were rebuilt successfully, and the control panel validated the updated state:
+  - `Coverage` now reflects `18/18` tested cells (`BNB/BTC`, `ETH/BTC`, `SOL/BTC`, `SOL/USDT`, `WBTC/BTC`, `XRP/BTC` across `1h/2h/4h`).
+  - `Dashboard` live payload now reports `46` trusted runs and updated rescored OOS metrics.
+  - `Results` live payload now serves rescored combo/top10/leaderboard data from the rebuilt shared views.
+- 2026-03-28: Phase 48 opened to turn the rerun campaign plan into a safe operator workflow inside the control panel.
+- 2026-03-28: Phase 48 closed. Config saves now preserve hidden runtime fields, rerun campaign presets are available in the Config tab, and targeted control-panel regression is green (`82 passed`).
+- 2026-03-28: Rerun/backtest campaign planning is tracked in `plans/AUTOWFO_RERUN_CAMPAIGN_20260328.md` and should be executed primarily through the control panel Coverage/Batch workflow.
+- 2026-03-28: Phase 48 follow-up hardening closed a queue-integrity bug in the control panel. Coverage/Batch enqueue now reserves historical `job_name` values from `artifacts/batch_state.json`, so clearing the queue and re-enqueuing no longer marks fresh jobs as already done. Validation: `python -m pytest tests/test_control_panel.py -q` (`84 passed`).
+- 2026-03-28: Local shared views were rebuilt from run-local artifacts (`8` trusted runs visible again). Wave 0 is visible in Coverage/Results, and Wave 1 (`AMP/BTC`, `FTT/BTC`, `GTO/BTC`, `JASMY/BTC`, `TCT/BTC` on `1h/60d`) has been queued and started through the control panel.
+- 2026-03-28: Wave 1 execution is now split into two conclusions. Control-panel queue integrity and Coverage retest semantics are validated, but `AMP/BTC`, `FTT/BTC`, `GTO/BTC`, `JASMY/BTC`, and `TCT/BTC` produce header-only Binance cache files and `No overlapping data after download` on rerun. These five cells should be treated as exchange-data unavailable for the current feed, not as active retry debt. The next active rerun track is Wave 2 (`BNB/BTC 2h`, `SOL/BTC 2h`, `XRP/BTC 4h`, optional `SOL/USDT 2h`).
+- 2026-03-28: Phase 48 post-close verification completed through the web control panel. A missing shared-view rebuild after `autowfo batch` was fixed, so Coverage-triggered reruns now update Batch, Coverage, Results, and Dashboard without manual `storage rebuild-shared-views`. Browser validation used `ETH/BTC 1h` retest via Coverage -> Batch and confirmed new combo/refine runs (`20260328_070150` / `20260328_070616`) surfaced automatically.
+- 2026-03-28: Phase 47 opened. Focus narrowed to ranking evidence parity: rescore correctness and trusted-run config comparison before any new rerun campaign.
+- 2026-03-28: Phase 47 closed. `storage rescore` now follows finalize-time selection/filter rules, `storage compare-ranking` ships JSON/HTML trusted-run reports, and targeted regression is green (`76 passed`).
 - Phase 40 (`AWF-193`~`AWF-198`) closed after namespace and packaging convergence.
 - Phase 41 (`AWF-199`~`AWF-204`) closed after control-panel runtime/service hardening.
 - Phase 42 (`AWF-205`~`AWF-210`) closed after storage contract hardening and migration-readiness validation.
 - Phase 43 (`AWF-211`~`AWF-216`) closed after storage validation/migration/rebuild tooling and control-panel health surfacing.
-- Phase 44 (`AWF-217`~`AWF-224`) opened to reset evidence integrity: run isolation, shared-view derivation, legacy purge, and targeted reruns. AWF-218 split into 218a/b/c after architect review (2026-03-13).
-- 2026-03-14: AWF-218a completed. Added `autowfo.run_workspace` with run-local path derivation plus focused regression coverage; no engine write paths changed yet.
-- 2026-03-14: AWF-218b completed. Engine now dual-writes runtime config, status, combo/symbol summaries, top10, reports, metadata, registry, leaderboard, and results DB into `artifacts/runs/{run_id}`; focused regressions verify run-local copies and deterministic parity where byte-identical output is meaningful.
-- 2026-03-14: AWF-218c architect review — core isolation already complete (entry point routes all paths through workspace, tests assert root files absent). Remaining cleanup: rename `out_dir` → `artifacts_root`, remove dual-write mirror scaffolding (`_write_workspace_result_mirrors`, mirror calls for registry/db), verify no duplicate writes.
-- 2026-03-14: AWF-218c completed. `run_btc_regime_sweep.py` now treats `artifacts_root` as read/cache input only; finalize duplicate-write scaffolding removed; focused regressions confirm root evidence files are absent and run-local outputs remain deterministic.
-- 2026-03-14: AWF-219 completed. Added `python -m autowfo storage rebuild-shared-views` to rebuild root `run_registry.json`, `leaderboard.csv`, aggregate combo/symbol summaries, and latest compatibility files from trusted run roots only; focused storage/CLI regressions added.
-- 2026-03-14: AWF-220 completed. Added manifest-aware `python -m autowfo storage purge-legacy` with `--dry-run`, quarantine, and explicit `--delete`; purge skips any root files currently protected by the shared-view manifest emitted by AWF-219.
-- 2026-03-14: AWF-221/222 progressed. Control-panel results/coverage/dashboard/overview now surface a unified `source_status`, storage validation reports shared-view trust state, and `top10_latest_run` / `latest_report` no longer fall back to root legacy files without a trusted manifest.
-- 2026-03-14: AWF-223 completed. Root legacy evidence was quarantined into `artifacts_legacy_deleted/` using `storage purge-legacy`; stale `cross_run_report.{json,html}` caches were removed from the primary root; root compatibility views remain present but empty until trusted reruns land.
-- 2026-03-14: AWF-221/222 continued. `storage rebuild-shared-views` now trusts only Phase 44 run-local roots (`artifacts/runs/{run_id}/{results,metadata,reports}`) and no longer ingests pre-reset `combo/refine` pass trees as trusted evidence.
-- 2026-03-14: Phase 44 runtime-config leak fixed. `autowfo run` now allocates `VBT_RUN_ID` in `core_workflow`, writes runtime config straight to `artifacts/runs/{run_id}/runtime/sweep_config.json`, and passes it via `VBT_RUNTIME_CONFIG_PATH`; `baseline` now uses an isolated `artifacts/baseline_runtime/` config file instead of rewriting root `artifacts/sweep_config.json`.
-- 2026-03-14: AWF-224 progressed. Trusted reruns completed for `BNB/BTC 2h seg8` (`20260314_104729`), `SOL/BTC 2h seg16` (`20260314_113102`), `SOL/USDT 2h seg16` (`20260314_114333`), and `XRP/BTC 4h 180d` (`20260314_115559`); shared compatibility views were rebuilt from these trusted runs.
-- 2026-03-14: AWF-221/222 completed. Notebook export now accepts structured `timeframes` metadata, removing the Phase 44 rerun warning during experiment notebook generation; notebook-focused regression and a real trusted-run notebook build both pass.
-- AWF-113~AWF-216 completed items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
+- Phase 44 (`AWF-217`~`AWF-224`) closed after evidence integrity reset: run isolation, shared-view derivation, legacy purge, and targeted reruns.
+- Phase 45 (`AWF-225`~`AWF-228`) closed after search ranking quality: Top10 combo dedup, relative low-trade penalty, before/after comparison (1→5 unique combos in Top10).
+- 2026-03-15: Phase 46 opened. Baseline workflow gap, rescore CLI, leaderboard dedup, and coverage retest identified during Phase 45 verification.
+- 2026-03-15: Phase 46 closed. Baseline workflow VBT_RUN_ID migration, `storage rescore`, leaderboard `is_latest`, and coverage force-retest shipped.
+- AWF-113~AWF-238 completed items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
