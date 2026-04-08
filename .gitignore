@@ -18,3 +18,19 @@ artifacts_legacy_deleted/
 .agentsmd
 .claude/
 AGENTS.md.base.render.*
+
+# === AUTOWFO runtime outputs ===
+*.log
+*.nfo
+*.db
+leaderboard.csv
+param_sweep_*.csv
+run_registry.json
+shared_views_manifest.json
+tmp_*/
+
+# === Editor / OS ===
+*.swp
+*.swo
+*~
+Thumbs.db

@@ -1,1 +1,15 @@
+# Normalize line endings to LF on commit
+* text=auto eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+
+# Binary files
+*.gif binary
+*.png binary
+*.svg binary
 *.ipynb linguist-language=Python
