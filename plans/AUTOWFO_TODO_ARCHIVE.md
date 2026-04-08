@@ -188,3 +188,27 @@
 | AWF-214 | 43 | done | Analytics rebuild tooling | `plans/reports/AWF-214-report.md` |
 | AWF-215 | 43 | done | Control-panel storage health endpoint and surfacing | `plans/reports/AWF-215-report.md` |
 | AWF-216 | 43 | done | Regression validation + plan closure | `plans/reports/AWF-216-report.md` |
+| AWF-217 | 44 | done | Phase 44 documentation freeze + evidence reset scope | — |
+| AWF-218a | 44 | done | RunWorkspace abstraction + path derivation | — |
+| AWF-218b | 44 | done | Dual-write migration via RunWorkspace | — |
+| AWF-218c | 44 | done | Root evidence writes removed; run-local only | — |
+| AWF-219 | 44 | done | `storage rebuild-shared-views` from trusted runs | — |
+| AWF-220 | 44 | done | Manifest-aware `storage purge-legacy` | — |
+| AWF-221 | 44 | done | Control panel + analytics switch to trusted sources | — |
+| AWF-222 | 44 | done | Regression guards for run isolation and purge | — |
+| AWF-223 | 44 | done | Root legacy evidence quarantined; compatibility views rebuilt | — |
+| AWF-224 | 44 | done | Decision-relevant campaign reruns under trusted model | — |
+| AWF-225 | 45 | done | Top10 and Leaderboard combo deduplication | — |
+| AWF-226 | 45 | done | Relative low-trade penalty mode | — |
+| AWF-227 | 45 | done | Before/after ranking comparison (Phase 44 baseline) | `plans/ranking_comparison_phase45.json` |
+| AWF-228 | 45 | done | Phase 44/45 archive + regression closure | — |
+| AWF-229 | 46 | done | Baseline workflow Phase 44 migration (VBT_RUN_ID) | — |
+| AWF-230 | 46 | done | `storage rescore` CLI command | — |
+| AWF-231 | 46 | done | Leaderboard per-pair `is_latest` marking (strategy Z) | — |
+| AWF-232 | 46 | done | Coverage tested cell force-retest UI | — |
+| AWF-233 | 47 | done | Rescore parity with finalize-time selection/filter path | — |
+| AWF-234 | 47 | done | `storage compare-ranking` command with JSON/HTML outputs | — |
+| AWF-235 | 47 | done | Aggregate decision summary for candidate ranking configs | — |
+| AWF-236 | 47 | done | Targeted regression closure + planning sync | — |
+| AWF-237 | 48 | done | Control-panel Config save preserves hidden runtime fields | `plans/AUTOWFO_PHASE48_SPEC.md` |
+| AWF-238 | 48 | done | Rerun campaign presets + apply flow in Config tab | `plans/AUTOWFO_PHASE48_SPEC.md` |

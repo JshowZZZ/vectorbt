@@ -56,6 +56,10 @@
    - `python -m autowfo storage migrate --cwd .`
 11. Rebuild analytics from experiment artifacts:
    - `python -m autowfo storage rebuild-analytics --cwd .`
+12. Compare a candidate ranking config against trusted runs before rescoring:
+   - `python -m autowfo storage compare-ranking --candidate-config artifacts/ranking_candidate.json --cwd .`
+13. Rescore trusted runs after approving a ranking-only change:
+   - `python -m autowfo storage rescore --ranking-config artifacts/ranking_candidate.json --cwd .`
 
 ## Evidence Integrity Transition Policy
 - Effective 2026-03-14, treat root-level run outputs under `artifacts/` as a legacy surface, not a primary evidence source.
@@ -96,6 +100,37 @@
     - strategy quality
     - sample sufficiency
     - combo scarcity
+- Trusted-run config comparison artifacts:
+  - `artifacts/reports/ranking_config_compare.json`
+  - `artifacts/reports/ranking_config_compare.html`
+  - Use these before `storage rescore` when evaluating ranking-only changes.
+
+## Control Panel Rerun Workflow
+1. Open `Config` and set the campaign template:
+   - either hand-edit target `timeframes` / `trade_symbols`
+   - or apply one of the built-in rerun presets:
+     - `Wave 0 Smoke 1h/60d`
+     - `Wave 2 Core 2h/120d`
+     - `Wave 2 XRP 4h/180d`
+     - `Wave 2 SOL/USDT 2h/120d` (optional)
+   - worker count
+   - ranking config if you are intentionally testing a ranking variant
+2. Save config before using `Coverage`.
+3. Use `Coverage` for pair-targeted runs:
+   - `完整流程` = `baseline` (recommended for trusted evidence)
+   - `只廣搜` = `run combo`
+   - `只精煉` = `run refine` and should only be used when fresh combo-stage evidence already exists
+4. Click an `Untested` cell to enqueue one focused pair/timeframe job.
+5. Use `填補全部缺口` only after the template is correct for the current campaign wave.
+6. Open `Batch` and click `Start Batch` to execute queued coverage jobs.
+7. Validate in `Results` that Top10 / Leaderboard refresh after completion.
+8. Validate in `Coverage` that the cell changes to `Tested`.
+9. Click a `Tested` cell and use `重新測試` to validate the AWF-232 retest flow.
+10. Use `Results -> 重測 Top 10` only for full-config reruns with data refresh; it is not a pair-targeted coverage action.
+11. For the `Wave 0 Smoke 1h/60d` preset:
+   - use Coverage cells individually
+   - run `ETH/BTC` and `SOL/BTC` as `baseline`
+   - run `BNB/BTC` as `run combo`
 
 ## Failure Handling
 1. `refine` run shows `run_total=0`:
