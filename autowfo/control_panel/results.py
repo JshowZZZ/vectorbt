@@ -113,12 +113,32 @@ def _latest_top10_path():
             return tops[0]
     return None
 
+
+@_with_cp
+def _latest_status_html_path():
+    latest_run_root = _latest_trusted_run_root()
+    if latest_run_root is not None:
+        status_path = latest_run_root / "status" / "run_status.html"
+        if status_path.exists():
+            return status_path
+    if STATUS_HTML.exists():
+        return STATUS_HTML
+    return None
+
 @_with_cp
 def _parse_float(value):
     try:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+@_with_cp
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
 
 @_with_cp
 def _db_available():
@@ -280,7 +300,10 @@ def _get_results_payload(timeframe=None):
         combo = {"path": "", "columns": [], "rows": [], "total": 0, "truncated": False}
         errors.append(f"霈????閬仃?? {exc}")
     try:
-        leaderboard = _read_csv_rows(ARTIFACTS / "leaderboard.csv")
+        leaderboard_all = _read_csv_rows(ARTIFACTS / "leaderboard.csv")
+        lb_rows = leaderboard_all.get("rows", [])
+        lb_latest = [r for r in lb_rows if str(r.get("is_latest", "")).lower() in ("true", "1", "yes")]
+        leaderboard = {**leaderboard_all, "rows": lb_latest if lb_latest else lb_rows, "total": len(lb_latest) if lb_latest else len(lb_rows)}
     except Exception as exc:
         leaderboard = {"path": "", "columns": [], "rows": [], "total": 0, "truncated": False}
         errors.append(f"霈??銵?憭望?: {exc}")
@@ -479,7 +502,10 @@ def try_handle_get(handler, parsed, path):
         )
         return True
     if path == "/status":
-        return handler._send(_read_static_text("status.html", fallback=STATUS_HTML.read_text(encoding="utf-8"))) or True
+        status_path = _latest_status_html_path()
+        if status_path is not None:
+            return handler._send(status_path.read_text(encoding="utf-8")) or True
+        return handler._send("status page not found", status=HTTPStatus.NOT_FOUND) or True
     if path == "/report":
         report_path = _latest_report_path()
         if report_path:

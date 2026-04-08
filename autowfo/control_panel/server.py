@@ -347,6 +347,19 @@ class Handler(BaseHTTPRequestHandler):
                     "image/svg+xml",
                     headers=static_no_cache_headers,
                 )
+        if path.startswith("/artifacts/"):
+            artifact_name = path[len("/artifacts/") :].strip("/")
+            artifact_path = cp_state_mod._resolve_trusted_artifact_path(artifact_name)
+            if artifact_path is not None:
+                mime, _ = mimetypes.guess_type(str(artifact_path))
+                content_type = mime or "application/octet-stream"
+                if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"}:
+                    content_type = f"{content_type}; charset=utf-8"
+                return self._send_with_headers(
+                    artifact_path.read_bytes(),
+                    content_type,
+                    headers=static_no_cache_headers,
+                )
         static_path = _resolve_static_path(path)
         if static_path is not None:
             mime, _ = mimetypes.guess_type(str(static_path))

@@ -178,14 +178,14 @@ export const CoverageTab = {
         const timeLabel = testedAt
           ? t('coverage_cell_tested_at', '最後測試') + ': ' + testedAt.replace('T', ' ').replace(/\.\d+Z$|Z$/, ' UTC')
           : t('coverage_cell_tested_no_time', '測試時間未記錄')
-        await confirmAction({
+        const retest = await confirmAction({
           title: tf + ' × ' + sym,
           message: t('coverage_cell_status_tested', '狀態：已測試') + '\n' + timeLabel,
-          confirmText: t('coverage_cell_close', '關閉'),
+          confirmText: t('coverage_cell_retest', '重新測試'),
           cancelText: t('coverage_cell_close', '關閉'),
-          variant: 'info',
+          variant: 'warn',
         })
-        return
+        if (!retest) return
       }
       try {
         const ep = execPayload()

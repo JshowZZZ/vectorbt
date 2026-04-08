@@ -12,6 +12,20 @@ from typing import Any, Dict, List, Optional
 from .core_utils import _json_sha256, _load_config, _utc_now_iso
 from .core_workflow import _latest_run_label, _run_workflow
 
+def _coerce_bool_flag(value: Any, *, default: bool = False) -> bool:
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"invalid boolean flag: {value}")
+
 def _parse_batch_jobs(
     plan_payload: Dict[str, Any],
     cwd: Path,
@@ -65,6 +79,14 @@ def _parse_batch_jobs(
         if workers is not None and workers <= 0:
             raise ValueError(f"batch job '{name}': workers must be > 0")
 
+        try:
+            allow_seen_key_reuse = _coerce_bool_flag(
+                raw.get("allow_seen_key_reuse", defaults.get("allow_seen_key_reuse", False)),
+                default=False,
+            )
+        except ValueError as exc:
+            raise ValueError(f"batch job '{name}': {exc}") from exc
+
         jobs.append(
             {
                 "name": name,
@@ -73,6 +95,7 @@ def _parse_batch_jobs(
                 "cwd": job_cwd,
                 "mode": mode,
                 "workers": workers,
+                "allow_seen_key_reuse": allow_seen_key_reuse,
             }
         )
     return jobs
@@ -158,9 +181,10 @@ def _run_batch_job_single(
     """
     job_key = _compute_job_key(job)
     label = f"[batch][{idx}/{total}] {job['name']}"
+    allow_seen_key_reuse = bool(job.get("allow_seen_key_reuse"))
 
     with lock:
-        if job_key in state["seen_keys"]:
+        if not allow_seen_key_reuse and job_key in state["seen_keys"]:
             print(f"{label} skip (seen_key={job_key[:12]})")
             state["history"].append(
                 {

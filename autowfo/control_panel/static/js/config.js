@@ -20,7 +20,7 @@ export const ConfigTab = {
         </div>
       </div>
       <template v-else>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-3">
           <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ t('config_title', 'Sweep Config') }}</h2>
           <div class="flex gap-2">
             <action-button @click="loadCfg" :loading="loading" variant="secondary"
@@ -32,8 +32,51 @@ export const ConfigTab = {
           </div>
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400">
-          {{ t('config_hint_path', 'Writes to artifacts/sweep_config.json. Keep values stable for reproducible runs.') }}
+          {{ t('config_hint_path', 'Edits the base sweep template in artifacts/sweep_config.json. Each new run copies it into run-local runtime/sweep_config.json for reproducibility.') }}
         </p>
+
+        <div v-if="presets.length" class="rounded-xl p-5 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 space-y-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('config_campaign_title', 'Rerun Campaign Presets') }}
+              </h3>
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('config_campaign_hint', 'Apply a documented rerun wave to the base sweep template before using Coverage or Batch.') }}
+              </p>
+            </div>
+            <span v-if="presetLoading" class="text-[11px] text-gray-400 dark:text-gray-500">
+              {{ t('config_campaign_loading', 'Loading...') }}
+            </span>
+          </div>
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div v-for="preset in presets" :key="preset.preset_id"
+                 class="rounded-xl border border-gray-200 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-900/30 p-4 space-y-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ preset.title }}</div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ preset.summary }}</p>
+                </div>
+                <span v-if="preset.optional"
+                      class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                  {{ t('config_campaign_optional', 'Optional') }}
+                </span>
+              </div>
+              <div class="space-y-1 text-[11px] text-gray-500 dark:text-gray-400">
+                <p>{{ t('config_timeframe', 'Timeframe') }}: {{ formatPresetTimeframes(preset.timeframes) }}</p>
+                <p>{{ t('config_campaign_symbols', 'Symbols') }}: {{ formatPresetSymbols(preset.trade_symbols) }}</p>
+                <p v-if="preset.operator_note">{{ preset.operator_note }}</p>
+              </div>
+              <action-button
+                @click="applyPreset(preset.preset_id)"
+                :loading="presetApplying === preset.preset_id"
+                variant="secondary"
+                :label="t('config_campaign_apply', 'Apply Preset')"
+              >
+              </action-button>
+            </div>
+          </div>
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="rounded-xl p-5 border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 space-y-4">
@@ -264,6 +307,9 @@ export const ConfigTab = {
     const saving = ref(false)
     const advOpen = ref(false)
     const devOpen = ref(false)
+    const presets = ref([])
+    const presetLoading = ref(false)
+    const presetApplying = ref('')
     const testStatus = ref({})
     const testLog = ref('')
     let testTimer = null
@@ -306,40 +352,55 @@ export const ConfigTab = {
       }
     })
 
+    function applyConfigToForm(c) {
+      const configPayload = c || {}
+      const tf = configPayload.timeframes?.[0] || {}
+      cfg.value.search_mode = configPayload.search_mode || 'combo'
+      cfg.value.timeframe = tf.timeframe || ''
+      cfg.value.data_days = tf.days || null
+      cfg.value.wf_train_days = configPayload.wf_train_days ?? null
+      cfg.value.wf_test_days = configPayload.wf_test_days ?? null
+      cfg.value.wf_step_days = configPayload.wf_step_days ?? null
+      cfg.value.capital_mode = configPayload.capital_mode || 'shared'
+      cfg.value.init_cash = configPayload.init_cash_usdt ?? null
+      const pct = configPayload.order_size_pct ?? null
+      cfg.value.order_size_pct = pct > 0 && pct <= 1 ? pct * 100 : pct
+      cfg.value.max_positions = configPayload.max_concurrent_positions ?? null
+      const syms = Array.isArray(configPayload.trade_symbols) ? configPayload.trade_symbols : []
+      cfg.value.trade_symbols_raw = syms.join(',')
+      cfg.value.combo_sizes = Array.isArray(configPayload.combo_sizes) ? configPayload.combo_sizes.map(Number) : [2, 3, 4]
+      cfg.value.combo_seed = configPayload.combo_seed ?? null
+      cfg.value.slippage_bps = configPayload.slippage_bps ?? null
+      cfg.value.spread_bps = configPayload.spread_bps ?? null
+      cfg.value.funding_rate = configPayload.funding_rate_daily ?? null
+      cfg.value.seg_start = configPayload.combo_segment_start ?? null
+      cfg.value.seg_size = configPayload.combo_segment_size ?? null
+      cfg.value.top_n_refine = configPayload.top_n_refine ?? null
+      availableSymbols.value = syms
+      symbolList.value = [...syms]
+    }
+
     async function loadCfg() {
       try {
         const c = await fetchJson('/config.json')
-        const tf = c.timeframes?.[0] || {}
-        cfg.value.search_mode = c.search_mode || 'combo'
-        cfg.value.timeframe = tf.timeframe || ''
-        cfg.value.data_days = tf.days || null
-        cfg.value.wf_train_days = c.wf_train_days ?? null
-        cfg.value.wf_test_days = c.wf_test_days ?? null
-        cfg.value.wf_step_days = c.wf_step_days ?? null
-        cfg.value.capital_mode = c.capital_mode || 'shared'
-        cfg.value.init_cash = c.init_cash_usdt ?? null
-        const pct = c.order_size_pct ?? null
-        cfg.value.order_size_pct = pct > 0 && pct <= 1 ? pct * 100 : pct
-        cfg.value.max_positions = c.max_concurrent_positions ?? null
-        const syms = Array.isArray(c.trade_symbols) ? c.trade_symbols : []
-        cfg.value.trade_symbols_raw = syms.join(',')
-        cfg.value.combo_sizes = Array.isArray(c.combo_sizes) ? c.combo_sizes.map(Number) : [2, 3, 4]
-        cfg.value.combo_seed = c.combo_seed ?? null
-        cfg.value.slippage_bps = c.slippage_bps ?? null
-        cfg.value.spread_bps = c.spread_bps ?? null
-        cfg.value.funding_rate = c.funding_rate_daily ?? null
-        cfg.value.seg_start = c.combo_segment_start ?? null
-        cfg.value.seg_size = c.combo_segment_size ?? null
-        cfg.value.top_n_refine = c.top_n_refine ?? null
-        if (syms.length) {
-          availableSymbols.value = syms
-          symbolList.value = [...syms]
-        }
+        applyConfigToForm(c)
         showToast(t('config_toast_loaded', 'Config loaded'), 'success')
       } catch (e) {
         showToast(t('config_toast_load_failed', 'Failed to load config') + ': ' + e, 'error')
       } finally {
         loading.value = false
+      }
+    }
+
+    async function loadPresets() {
+      presetLoading.value = true
+      try {
+        const data = await fetchJson('/config/presets.json')
+        presets.value = Array.isArray(data.presets) ? data.presets : []
+      } catch (e) {
+        showToast(t('config_campaign_load_failed', 'Failed to load rerun presets') + ': ' + e, 'error')
+      } finally {
+        presetLoading.value = false
       }
     }
 
@@ -381,6 +442,19 @@ export const ConfigTab = {
       }
     }
 
+    async function applyPreset(presetId) {
+      presetApplying.value = String(presetId || '')
+      try {
+        const response = await postJson('/config/apply-preset', { preset_id: presetId })
+        applyConfigToForm(response.config || {})
+        showToast(response.message || t('config_campaign_applied', 'Preset applied and saved'), 'success')
+      } catch (e) {
+        showToast(t('config_campaign_apply_failed', 'Failed to apply preset') + ': ' + e, 'error')
+      } finally {
+        presetApplying.value = ''
+      }
+    }
+
     async function loadTopSymbols() {
       try {
         const data = await fetchJson('/symbols/top?limit=10')
@@ -398,6 +472,17 @@ export const ConfigTab = {
       if (!raw) return '--'
       const d = Date.parse(raw)
       return Number.isNaN(d) ? String(raw) : new Date(d).toLocaleString()
+    }
+
+    function formatPresetTimeframes(timeframes) {
+      if (!Array.isArray(timeframes) || !timeframes.length) return '--'
+      return timeframes
+        .map(item => `${item?.timeframe || '--'} / ${item?.days || '--'}d`)
+        .join(', ')
+    }
+
+    function formatPresetSymbols(symbols) {
+      return Array.isArray(symbols) && symbols.length ? symbols.join(', ') : '--'
     }
 
     async function refreshTest() {
@@ -441,6 +526,7 @@ export const ConfigTab = {
 
     onMounted(() => {
       loadCfg()
+      loadPresets()
       refreshTest()
       testTimer = setInterval(refreshTest, 5000)
     })
@@ -455,6 +541,9 @@ export const ConfigTab = {
       saving,
       advOpen,
       devOpen,
+      presets,
+      presetLoading,
+      presetApplying,
       testStatus,
       testLog,
       availableSymbols,
@@ -467,8 +556,12 @@ export const ConfigTab = {
       canSave,
       fmtTime,
       loadCfg,
+      loadPresets,
       saveCfg,
+      applyPreset,
       loadTopSymbols,
+      formatPresetTimeframes,
+      formatPresetSymbols,
       doTestStart,
       doTestStop,
       doTestClearLog,

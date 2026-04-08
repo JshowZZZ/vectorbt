@@ -38,16 +38,18 @@ def _write_runtime_config(
     if workers is not None:
         config["max_workers"] = int(workers)
 
-    run_id = None
+    run_id = _new_run_id()
     if mode is not None:
-        run_id = _new_run_id()
         workspace = _build_run_workspace(cwd, run_id)
         workspace.ensure_directories()
         runtime_config_path = workspace.runtime_config_path
     else:
+        # Baseline mode: each internal pass allocates its own run_id via
+        # run_autowfo_baseline; we only need a config file here.
         baseline_runtime_dir = artifacts_dir / "baseline_runtime"
         baseline_runtime_dir.mkdir(parents=True, exist_ok=True)
-        runtime_config_path = baseline_runtime_dir / f"sweep_config_{_new_run_id()}.json"
+        runtime_config_path = baseline_runtime_dir / f"sweep_config_{run_id}.json"
+        run_id = None  # baseline manages its own run_ids internally
     runtime_config_path.write_text(
         json.dumps(config, ensure_ascii=False, indent=2),
         encoding="utf-8",

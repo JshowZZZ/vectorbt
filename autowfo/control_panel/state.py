@@ -242,6 +242,41 @@ def _latest_trusted_run_root():
     return None
 
 
+def _resolve_trusted_artifact_path(filename: str):
+    name = Path(str(filename or "")).name
+    if not name or name in {".", ".."}:
+        return None
+    paths = _paths()
+    artifacts = paths.artifacts if paths is not None else Path("artifacts")
+
+    direct = artifacts / name
+    if direct.exists() and direct.is_file():
+        return direct
+
+    payload = _read_shared_views_manifest()
+    if not isinstance(payload, dict):
+        return None
+
+    candidate_roots = []
+    latest_run_root = _latest_trusted_run_root()
+    if latest_run_root is not None:
+        candidate_roots.append(latest_run_root)
+
+    trusted_runs = payload.get("trusted_runs")
+    if isinstance(trusted_runs, list):
+        for run_id in reversed(trusted_runs):
+            run_root = artifacts / "runs" / str(run_id)
+            if run_root.exists() and run_root not in candidate_roots:
+                candidate_roots.append(run_root)
+
+    for run_root in candidate_roots:
+        for rel in ("reports", "results", "metadata", ""):
+            candidate = run_root / rel / name if rel else run_root / name
+            if candidate.exists() and candidate.is_file():
+                return candidate
+    return None
+
+
 def _shared_views_source_status():
     manifest_path = _shared_views_manifest_path()
     payload = _read_shared_views_manifest()
@@ -708,6 +743,7 @@ __all__ = [
     "_shared_views_manifest_path",
     "_read_shared_views_manifest",
     "_latest_trusted_run_root",
+    "_resolve_trusted_artifact_path",
     "_shared_views_source_status",
     "_start_run",
     "_start_tests",

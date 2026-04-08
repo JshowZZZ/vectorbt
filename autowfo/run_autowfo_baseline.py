@@ -40,12 +40,32 @@ def _clean_temp_outputs(repo_root: Path) -> Dict[str, bool]:
     return removed
 
 
-def _run_sweep(repo_root: Path, mode: str, runtime_config_path: Path) -> None:
+def _new_run_id() -> str:
+    return dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
+
+def _run_sweep(repo_root: Path, mode: str, runtime_config_path: Path, run_id: str | None = None) -> None:
     env = os.environ.copy()
     env["VBT_SWEEP_MODE"] = mode
     env["VBT_RUNTIME_CONFIG_PATH"] = str(runtime_config_path)
+    if run_id:
+        env["VBT_RUN_ID"] = run_id
     cmd = [sys.executable, "-m", "autowfo.run_btc_regime_sweep"]
     subprocess.run(cmd, cwd=str(repo_root), env=env, check=True)
+
+
+def _seed_combo_into_refine_workspace(
+    artifacts_dir: Path, combo_run_id: str, refine_run_id: str,
+) -> None:
+    """Copy combo pass's combo_summary into the refine workspace so refine can
+    discover candidates via its existing_combo_df read path."""
+    combo_results = artifacts_dir / "runs" / combo_run_id / "results"
+    refine_results = artifacts_dir / "runs" / refine_run_id / "results"
+    refine_results.mkdir(parents=True, exist_ok=True)
+    src = combo_results / "param_sweep_combo_summary.csv"
+    if src.exists():
+        dst = refine_results / "param_sweep_combo_summary.csv"
+        dst.write_bytes(src.read_bytes())
 
 
 def _run_pass(
@@ -54,15 +74,12 @@ def _run_pass(
     pass_dir: Path,
     mode: str,
     runtime_config_path: Path,
+    seed_from_run_id: str | None = None,
 ) -> Tuple[str, Dict[str, object]]:
-    before = autowfo_baseline._list_artifact_files(artifacts_dir)
-    _run_sweep(repo_root, mode, runtime_config_path)
-    after = autowfo_baseline._list_artifact_files(artifacts_dir)
-    run_id = autowfo_baseline._extract_new_run_id(before, after)
-    if run_id is None:
-        run_id = autowfo_baseline._resolve_run_id_from_latest(artifacts_dir)
-    if run_id is None:
-        raise RuntimeError(f"Unable to detect run_id after {mode} sweep")
+    run_id = _new_run_id()
+    if seed_from_run_id:
+        _seed_combo_into_refine_workspace(artifacts_dir, seed_from_run_id, run_id)
+    _run_sweep(repo_root, mode, runtime_config_path, run_id=run_id)
 
     copied = autowfo_baseline._copy_run_outputs(artifacts_dir, pass_dir, run_id)
     top10_df = autowfo_baseline._read_top10_for_run(pass_dir, run_id)
@@ -113,10 +130,27 @@ def main() -> None:
     manifest["passes"].append({"mode": "combo", "run_id": combo_run_id, "snapshot": combo_snapshot})
     autowfo_baseline._write_json(run_root / "manifest.json", manifest)
 
+    # Early-exit: if combo pass produced no results, skip refine pass entirely.
+    combo_top10 = autowfo_baseline._read_top10_for_run(combo_dir, combo_run_id)
+    if combo_top10.empty:
+        warning = "combo pass produced zero top10 rows; skipping refine pass"
+        manifest["warnings"].append(warning)
+        manifest["ended_utc"] = _utc_now_iso()
+        manifest["skipped_refine"] = True
+        autowfo_baseline._write_json(run_root / "manifest.json", manifest)
+        print(f"[baseline][warning] {warning}")
+        print(f"[baseline] run_label={run_label}")
+        print(f"[baseline] combo_run_id={combo_run_id}")
+        print(f"[baseline] output_dir={run_root}")
+        return
+
     # Ensure refine run gets a distinct run_id when script resolution is per-second.
     time.sleep(1.2)
 
-    refine_run_id, refine_snapshot = _run_pass(repo_root, artifacts_dir, refine_dir, "refine", config_path)
+    refine_run_id, refine_snapshot = _run_pass(
+        repo_root, artifacts_dir, refine_dir, "refine", config_path,
+        seed_from_run_id=combo_run_id,
+    )
     manifest["passes"].append({"mode": "refine", "run_id": refine_run_id, "snapshot": refine_snapshot})
 
     if int(refine_snapshot.get("run_total", 0)) == 0:

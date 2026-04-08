@@ -92,34 +92,54 @@ def _copy_if_exists(src: Path, dst: Path) -> bool:
 def _copy_run_outputs(artifacts_dir: Path, target_dir: Path, run_id: str) -> Dict[str, List[str]]:
     copied = {"static": [], "run_specific": [], "reports": []}
 
-    static_names = [
+    # Phase 44+: sweep outputs live under artifacts/runs/{run_id}/{results,reports,metadata,status}/
+    run_root = artifacts_dir / "runs" / run_id
+    results_dir = run_root / "results"
+    reports_dir = run_root / "reports"
+    metadata_dir = run_root / "metadata"
+    status_dir = run_root / "status"
+
+    # Static files from results/
+    results_names = [
         "param_sweep_combo_summary.csv",
         "param_sweep_symbol_summary.csv",
         "leaderboard.csv",
         "run_registry.json",
         "results.db",
-        "run_status.json",
-        "run_status.html",
-        "run_metadata.json",
     ]
-    for name in static_names:
-        if _copy_if_exists(artifacts_dir / name, target_dir / name):
+    for name in results_names:
+        if _copy_if_exists(results_dir / name, target_dir / name):
             copied["static"].append(name)
 
+    # Status files
+    for name in ["run_status.json", "run_status.html"]:
+        if _copy_if_exists(status_dir / name, target_dir / name):
+            copied["static"].append(name)
+
+    # Metadata files
+    if _copy_if_exists(metadata_dir / "run_metadata.json", target_dir / "run_metadata.json"):
+        copied["static"].append("run_metadata.json")
+
+    # Run-specific files from results/
     run_specific_names = [
         f"param_sweep_combo_summary_{run_id}.csv",
         f"param_sweep_symbol_summary_{run_id}.csv",
         f"param_sweep_top10_{run_id}.csv",
-        f"run_metadata_{run_id}.json",
     ]
     for name in run_specific_names:
-        if _copy_if_exists(artifacts_dir / name, target_dir / name):
+        if _copy_if_exists(results_dir / name, target_dir / name):
             copied["run_specific"].append(name)
 
-    for path in artifacts_dir.glob(f"btc_regime_*_{run_id}.html"):
+    # Run-specific metadata
+    meta_run_name = f"run_metadata_{run_id}.json"
+    if _copy_if_exists(metadata_dir / meta_run_name, target_dir / meta_run_name):
+        copied["run_specific"].append(meta_run_name)
+
+    # Reports from reports/
+    for path in reports_dir.glob(f"btc_regime_*_{run_id}.html"):
         if _copy_if_exists(path, target_dir / path.name):
             copied["reports"].append(path.name)
-    for path in artifacts_dir.glob("btc_regime_*.html"):
+    for path in reports_dir.glob("btc_regime_*.html"):
         if RUN_REPORT_SUFFIX_RE.search(path.name):
             continue
         if _copy_if_exists(path, target_dir / path.name):
@@ -229,7 +249,10 @@ def _read_top10_for_run(target_dir: Path, run_id: str) -> pd.DataFrame:
     top_path = target_dir / f"param_sweep_top10_{run_id}.csv"
     if not top_path.exists():
         return pd.DataFrame()
-    return pd.read_csv(top_path, low_memory=False)
+    try:
+        return pd.read_csv(top_path, low_memory=False)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
 
 
 def _write_json(path: Path, payload: Dict[str, object]) -> None:
@@ -764,9 +787,15 @@ def _render_ranking_mode_comparison_html(report_payload: Dict[str, object]) -> s
 def _read_combo_summary_for_run(target_dir: Path, run_id: str) -> pd.DataFrame:
     run_specific = target_dir / f"param_sweep_combo_summary_{run_id}.csv"
     if run_specific.exists():
-        return pd.read_csv(run_specific, low_memory=False)
+        try:
+            return pd.read_csv(run_specific, low_memory=False)
+        except pd.errors.EmptyDataError:
+            return pd.DataFrame()
     fallback = target_dir / "param_sweep_combo_summary.csv"
     if fallback.exists():
-        return pd.read_csv(fallback, low_memory=False)
+        try:
+            return pd.read_csv(fallback, low_memory=False)
+        except pd.errors.EmptyDataError:
+            return pd.DataFrame()
     return pd.DataFrame()
 

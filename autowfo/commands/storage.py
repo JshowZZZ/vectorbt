@@ -61,6 +61,30 @@ def add_storage_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: A
     purge_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
     purge_parser.set_defaults(handler=cli_impl._cmd_storage_purge_legacy)
 
+    rescore_parser = storage_subparsers.add_parser(
+        "rescore",
+        help="Recalculate composite scores and top10 for all trusted runs without re-running search",
+    )
+    rescore_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    rescore_parser.add_argument("--cwd", default=".", help="Working directory")
+    rescore_parser.add_argument("--ranking-config", default="", help="Path to ranking config JSON override")
+    rescore_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    rescore_parser.set_defaults(handler=cli_impl._cmd_storage_rescore)
+
+    compare_parser = storage_subparsers.add_parser(
+        "compare-ranking",
+        help="Compare a candidate ranking config against trusted runs without re-running search",
+    )
+    compare_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    compare_parser.add_argument("--cwd", default=".", help="Working directory")
+    compare_parser.add_argument("--candidate-config", required=True, help="Path to candidate ranking config JSON override")
+    compare_parser.add_argument("--baseline-config", default="", help="Optional baseline ranking config JSON override")
+    compare_parser.add_argument("--top-n", type=int, default=10, help="Number of ranked rows to compare per run")
+    compare_parser.add_argument("--output-json", default="", help="Optional JSON output path")
+    compare_parser.add_argument("--output-html", default="", help="Optional HTML output path")
+    compare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    compare_parser.set_defaults(handler=cli_impl._cmd_storage_compare_ranking)
+
 
 def _resolve_artifacts_dir(args: argparse.Namespace, cli_impl: Any) -> Path:
     cwd = Path(args.cwd).resolve()
@@ -122,6 +146,52 @@ def cmd_storage_purge_legacy(args: argparse.Namespace, cli_impl: Any) -> int:
         dry_run=bool(args.dry_run),
         delete=bool(args.delete),
         quarantine_dir=(cli_impl._resolve_path(Path(args.cwd).resolve(), quarantine_dir) if quarantine_dir else None),
+    )
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_rescore(args: argparse.Namespace, cli_impl: Any) -> int:
+    import json as _json
+
+    from autowfo.storage_ops import rescore_trusted_runs
+
+    ranking_config = None
+    config_path = str(getattr(args, "ranking_config", "") or "").strip()
+    if config_path:
+        resolved = cli_impl._resolve_path(Path(args.cwd).resolve(), config_path)
+        ranking_config = _json.loads(resolved.read_text(encoding="utf-8-sig"))
+
+    payload = rescore_trusted_runs(_resolve_artifacts_dir(args, cli_impl), ranking_config=ranking_config)
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_compare_ranking(args: argparse.Namespace, cli_impl: Any) -> int:
+    import json as _json
+
+    from autowfo.storage_ops import compare_ranking_configs
+
+    cwd = Path(args.cwd).resolve()
+
+    candidate_config_path = cli_impl._resolve_path(cwd, str(args.candidate_config))
+    candidate_config = _json.loads(candidate_config_path.read_text(encoding="utf-8-sig"))
+
+    baseline_config = None
+    baseline_config_raw = str(getattr(args, "baseline_config", "") or "").strip()
+    if baseline_config_raw:
+        baseline_path = cli_impl._resolve_path(cwd, baseline_config_raw)
+        baseline_config = _json.loads(baseline_path.read_text(encoding="utf-8-sig"))
+
+    output_json = str(getattr(args, "output_json", "") or "").strip()
+    output_html = str(getattr(args, "output_html", "") or "").strip()
+    payload = compare_ranking_configs(
+        _resolve_artifacts_dir(args, cli_impl),
+        candidate_config=candidate_config,
+        baseline_config=baseline_config,
+        top_n=int(getattr(args, "top_n", 10) or 10),
+        output_json=(cli_impl._resolve_path(cwd, output_json) if output_json else None),
+        output_html=(cli_impl._resolve_path(cwd, output_html) if output_html else None),
     )
     _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
     return 0 if payload.get("ok") else 1

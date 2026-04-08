@@ -105,10 +105,12 @@ def _coverage_pairs_len(payload: Dict[str, Any], key: str) -> int:
 
 
 def _find_top10_path(artifacts_dir: Path, run_id: str) -> Optional[Path]:
-    root_candidate = artifacts_dir / f"param_sweep_top10_{run_id}.csv"
-    if root_candidate.exists():
-        return root_candidate
+    # Phase 44+: prefer run-scoped workspace paths first.
+    workspace_candidate = artifacts_dir / "runs" / run_id / "results" / f"param_sweep_top10_{run_id}.csv"
+    if workspace_candidate.exists():
+        return workspace_candidate
 
+    # Baseline pass directories (combo/refine copies).
     patterns = [
         f"runs/*/refine/param_sweep_top10_{run_id}.csv",
         f"runs/*/combo/param_sweep_top10_{run_id}.csv",
@@ -118,6 +120,11 @@ def _find_top10_path(artifacts_dir: Path, run_id: str) -> Optional[Path]:
         matches = sorted(artifacts_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
         if matches:
             return matches[0]
+
+    # Legacy fallback: root artifacts directory (pre-Phase 44).
+    root_candidate = artifacts_dir / f"param_sweep_top10_{run_id}.csv"
+    if root_candidate.exists():
+        return root_candidate
     return None
 
 

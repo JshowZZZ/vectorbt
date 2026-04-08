@@ -12,6 +12,8 @@ import pandas as pd
 DEFAULT_RANKING_CONFIG = {
     "mode": "composite",
     "low_trade_threshold": 30.0,
+    "low_trade_mode": "absolute",
+    "top10_dedup_fields": ["indicator_list", "regime_name", "vol_mode"],
     "legacy": {
         "preferred": "oos_avg_total_return_pct",
         "fallback": "avg_total_return_pct",
@@ -77,6 +79,15 @@ def _resolve_ranking_config(config=None):
     if isinstance(regime_weights, dict):
         resolved["regime_weights"] = {str(k): float(v) for k, v in regime_weights.items()}
 
+    low_trade_mode = str(config.get("low_trade_mode", resolved["low_trade_mode"])).strip().lower()
+    if low_trade_mode not in {"absolute", "relative"}:
+        low_trade_mode = resolved["low_trade_mode"]
+    resolved["low_trade_mode"] = low_trade_mode
+
+    dedup_fields = config.get("top10_dedup_fields")
+    if isinstance(dedup_fields, list) and all(isinstance(f, str) for f in dedup_fields):
+        resolved["top10_dedup_fields"] = dedup_fields
+
     return resolved
 
 
@@ -113,10 +124,22 @@ def _build_composite_score(
     drawdown_pct = drawdown_pct.where(drawdown_pct.notna(), fallback_drawdown_pct)
     drawdown_penalty = (-drawdown_pct).clip(lower=0.0).fillna(0.0) / 100.0
 
+    low_trade_mode = ranking_config.get("low_trade_mode", "absolute")
     low_sample_penalty = _to_numeric_series(df, "oos_low_trade_penalty")
-    if (not low_sample_penalty.notna().any()) and threshold > 0:
+
+    if low_trade_mode == "relative":
+        daily_trades = _to_numeric_series(df, "oos_avg_daily_trades")
+        if not daily_trades.notna().any():
+            daily_trades = _to_numeric_series(df, "avg_daily_trades")
+        p75 = daily_trades.quantile(0.75) if daily_trades.notna().any() else 0.0
+        if p75 > 0:
+            low_sample_penalty = ((p75 - daily_trades) / p75).clip(lower=0.0)
+        else:
+            low_sample_penalty = pd.Series(0.0, index=df.index, dtype="float64")
+    elif (not low_sample_penalty.notna().any()) and threshold > 0:
         min_trades = _to_numeric_series(df, "oos_min_total_trades")
         low_sample_penalty = ((threshold - min_trades) / threshold).clip(lower=0.0)
+
     low_sample_penalty = low_sample_penalty.fillna(0.0)
 
     score = (
@@ -154,6 +177,9 @@ def _sort_by_score(
         if working_df[composite_col].notna().any():
             score_col = composite_col
 
+    if score_col not in working_df.columns:
+        working_df[score_col] = np.nan
+
     sort_cols = [score_col]
     sort_asc = [False]
     if tie_break_avg_hold and "avg_hold_hours" in working_df.columns:
@@ -178,6 +204,33 @@ def _top_by_score(
         ranking_config=ranking_config,
     )
     return sorted_df.head(top_n), score_col
+
+
+# ---------------------------------------------------------------------------
+#  AWF-225: Combo-deduplication for Top10 / Leaderboard
+# ---------------------------------------------------------------------------
+
+
+def _dedup_by_combo_group(
+    df: pd.DataFrame,
+    ranking_config: Optional[Dict[str, Any]] = None,
+) -> pd.DataFrame:
+    """Keep only the best-scoring row per unique combo group.
+
+    Deduplicates *df* by ``ranking_config["top10_dedup_fields"]``
+    (default: ``["indicator_list", "regime_name", "vol_mode"]``).
+    The DataFrame must already be sorted by score descending so that
+    ``drop_duplicates(keep='first')`` retains the best representative.
+
+    Fields not present in *df* are silently skipped.  If no dedup fields
+    are present the original DataFrame is returned unchanged.
+    """
+    resolved = _resolve_ranking_config(ranking_config)
+    dedup_fields = resolved.get("top10_dedup_fields", [])
+    active_fields = [f for f in dedup_fields if f in df.columns]
+    if not active_fields:
+        return df
+    return df.drop_duplicates(subset=active_fields, keep="first")
 
 
 # ---------------------------------------------------------------------------

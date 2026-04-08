@@ -409,6 +409,7 @@ def _coverage_enqueue_pair(payload):
         "name": str(payload.get("name") or f"cov-{_coverage_slug_text(timeframe)}-{_coverage_slug_text(symbol)}"),
         "workflow": workflow,
         "config": str(cfg_path),
+        "allow_seen_key_reuse": True,
     }
     if mode is not None:
         enqueue_payload["mode"] = mode

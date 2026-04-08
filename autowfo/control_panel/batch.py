@@ -143,6 +143,15 @@ def _batch_resolve_config_path(raw):
 @_with_cp
 def _batch_unique_name(queue, base_name):
     existing = {str(job.get("name", "")) for job in queue.get("jobs", [])}
+    state = _read_json_file(_batch_state_path(), {"history": []})
+    history = state.get("history")
+    if isinstance(history, list):
+        for event in history:
+            if not isinstance(event, dict):
+                continue
+            name = str(event.get("job_name", "")).strip()
+            if name:
+                existing.add(name)
     if base_name not in existing:
         return base_name
     suffix = 2
@@ -151,6 +160,22 @@ def _batch_unique_name(queue, base_name):
         if candidate not in existing:
             return candidate
         suffix += 1
+
+@_with_cp
+def _batch_bool_flag(payload, key, default=False):
+    value = payload.get(key, default) if isinstance(payload, dict) else default
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"{key} must be boolean")
 
 @_with_cp
 def _batch_summarize_jobs(jobs):
@@ -340,6 +365,10 @@ def _batch_enqueue(payload):
         config_path = _batch_resolve_config_path(payload.get("config"))
     except Exception as exc:
         return False, str(exc), None
+    try:
+        allow_seen_key_reuse = _batch_bool_flag(payload, "allow_seen_key_reuse", default=False)
+    except ValueError as exc:
+        return False, str(exc), None
 
     queue = _load_batch_queue()
     try:
@@ -358,6 +387,7 @@ def _batch_enqueue(payload):
         "workflow": workflow,
         "mode": mode or "",
         "workers": workers,
+        "allow_seen_key_reuse": allow_seen_key_reuse,
         "config": str(config_path),
         "status": "queued",
         "created_utc": created_utc,
@@ -432,6 +462,7 @@ def _batch_start():
                     "config": job["config"],
                     "mode": job["mode"] or None,
                     "workers": job["workers"],
+                    "allow_seen_key_reuse": bool(job.get("allow_seen_key_reuse")),
                 }
             )
         _write_batch_queue(queue)

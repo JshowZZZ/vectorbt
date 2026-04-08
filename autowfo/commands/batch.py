@@ -39,6 +39,23 @@ def add_batch_parser(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
 
 
 def cmd_batch(args: argparse.Namespace, cli_impl: Any) -> int:
+    def _rebuild_shared_views_if_needed(completed_jobs: int) -> None:
+        if completed_jobs <= 0:
+            return
+        rebuild_shared_views = getattr(cli_impl, "_rebuild_shared_views", None)
+        if rebuild_shared_views is None:
+            from autowfo.storage_ops import rebuild_shared_views
+        artifacts_dir = cli_impl._resolve_path(cwd, "artifacts")
+        try:
+            payload = rebuild_shared_views(artifacts_dir)
+        except Exception as exc:
+            print(f"[batch] shared-view rebuild failed: {exc}")
+            return
+        print(
+            f"[batch] shared views refreshed trusted_runs={payload.get('trusted_runs', 0)} "
+            f"leaderboard_rows={payload.get('leaderboard_rows', 0)} artifacts={artifacts_dir}"
+        )
+
     cwd = Path(args.cwd).resolve()
     plan_path = Path(args.plan).resolve()
     if not plan_path.exists():
@@ -59,6 +76,7 @@ def cmd_batch(args: argparse.Namespace, cli_impl: Any) -> int:
 
     parallel_jobs = getattr(args, "parallel_jobs", 1) or 1
     total = len(jobs)
+    history_start = len(state.get("history", []))
 
     if parallel_jobs > 1:
         print(
@@ -72,6 +90,8 @@ def cmd_batch(args: argparse.Namespace, cli_impl: Any) -> int:
             parallel_jobs=parallel_jobs,
             continue_on_error=args.continue_on_error,
         )
+        completed_jobs = sum(1 for item in state["history"][history_start:] if item.get("status") == "done")
+        _rebuild_shared_views_if_needed(completed_jobs)
         if failed and not args.continue_on_error:
             raise RuntimeError(f"batch had {len(failed)} failure(s)")
         print(
@@ -94,8 +114,12 @@ def cmd_batch(args: argparse.Namespace, cli_impl: Any) -> int:
         if result["status"] == "failed":
             if args.continue_on_error:
                 continue
+            completed_jobs = sum(1 for item in state["history"][history_start:] if item.get("status") == "done")
+            _rebuild_shared_views_if_needed(completed_jobs)
             raise RuntimeError(f"batch job failed: {result.get('error', 'unknown')}")
 
+    completed_jobs = sum(1 for item in state["history"][history_start:] if item.get("status") == "done")
+    _rebuild_shared_views_if_needed(completed_jobs)
     print(f"[batch] finished jobs={total} seen_keys={len(state['seen_keys'])} state={state_path}")
     return 0
 

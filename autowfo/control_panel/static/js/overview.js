@@ -333,10 +333,10 @@ export const OverviewTab = {
                  : 'border-slate-200/80 bg-slate-50/80 text-slate-600 dark:border-slate-800/80 dark:bg-slate-900/50 dark:text-slate-300'">
             <span class="font-semibold">Ops 提示：</span>
             <span v-if="storageSummary.needsMigration">
-              發現可正規化的 legacy payload。建議先跑 `python -m autowfo storage migrate --dry-run --cwd .`，確認後再正式 migrate。
+              發現可正規化的 legacy payload。建議先跑 <code>python -m autowfo storage migrate --dry-run --cwd .</code>，確認後再正式 migrate。
             </span>
             <span v-else>
-              目前 schema version 狀態一致。若 analytics 需要重建，可執行 `python -m autowfo storage rebuild-analytics --cwd .`。
+              目前 schema version 狀態一致。若 analytics 需要重建，可執行 <code>python -m autowfo storage rebuild-analytics --cwd .</code>。
             </span>
           </div>
         </section>

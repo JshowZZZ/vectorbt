@@ -20,6 +20,7 @@ from autowfo.commands import gate as cmd_gate
 from autowfo.commands import plan as cmd_plan
 from autowfo.commands import run as cmd_run
 from autowfo.commands import storage as cmd_storage
+from autowfo.storage_ops import rebuild_shared_views as _rebuild_shared_views
 
 _ORIG_CORE_RUN_BATCH_JOB_SINGLE = _core._run_batch_job_single
 _ORIG_CORE_RUN_BATCH_JOBS_PARALLEL = _core._run_batch_jobs_parallel
@@ -267,6 +268,14 @@ def _cmd_storage_purge_legacy(args: argparse.Namespace) -> int:
     return cmd_storage.cmd_storage_purge_legacy(args, _self())
 
 
+def _cmd_storage_rescore(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_rescore(args, _self())
+
+
+def _cmd_storage_compare_ranking(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_compare_ranking(args, _self())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     parser.add_argument("--version", action="version", version=f"autowfo {AUTOWFO_VERSION}")
@@ -286,4 +295,3 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.handler(args))
-

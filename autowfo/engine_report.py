@@ -551,12 +551,36 @@ def _build_leaderboard_report_html(lb_recent, lb_best, label_map, df_to_html_fn,
     }
 
 
+def _mark_leaderboard_is_latest(lb_df):
+    """Set ``is_latest`` flag: only the newest run per (plot_symbol, timeframe) is True."""
+    if lb_df.empty:
+        return lb_df
+    lb_df = lb_df.copy()
+    lb_df["is_latest"] = False
+    group_cols = []
+    if "plot_symbol" in lb_df.columns:
+        group_cols.append("plot_symbol")
+    if "timeframe" in lb_df.columns:
+        group_cols.append("timeframe")
+    if not group_cols:
+        lb_df["is_latest"] = True
+        return lb_df
+    ts_col = "timestamp_utc" if "timestamp_utc" in lb_df.columns else None
+    if ts_col:
+        latest_idx = lb_df.sort_values(ts_col, ascending=False).groupby(group_cols, sort=False).head(1).index
+    else:
+        latest_idx = lb_df.groupby(group_cols, sort=False).tail(1).index
+    lb_df.loc[latest_idx, "is_latest"] = True
+    return lb_df
+
+
 def _append_leaderboard_row(leaderboard_path, leaderboard_row):
     if os.path.exists(leaderboard_path):
         lb_df = pd.read_csv(leaderboard_path, low_memory=False)
         lb_df = pd.concat([lb_df, pd.DataFrame([leaderboard_row])], ignore_index=True)
     else:
         lb_df = pd.DataFrame([leaderboard_row])
+    lb_df = _mark_leaderboard_is_latest(lb_df)
     lb_df.to_csv(leaderboard_path, index=False)
     return lb_df
 
