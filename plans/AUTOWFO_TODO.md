@@ -21,8 +21,8 @@
   Completed pilot runs `20260408_144415` and `20260408_151900`, wrote `plans/AUTOWFO_SEARCH_V2_PILOT_DECISION_20260408.md`, and concluded `NARROW-GO` for focused follow-up but `NO-GO` for full Search V2 funding under the realized pilot protocol.
 - `done` `AWF-242` Pilot evidence hardening: symbol-level OOS cohort output and overlap-window audit.
   Added `param_sweep_symbol_oos_summary.csv`, persisted `timeframe_diagnostics` into run metadata, and verified via rerun `20260408_163100` that the shared-window shrink was caused by late-start BTC crosses rather than missing protocol wiring.
-- `todo` `AWF-243` Focused follow-up on boundary candidate family versus symbol clustering.
-  Narrow the next research pass to the `mfi + cmf + obv_roc` candidate family and compare that track against symbol clustering / subgroup discovery before reviving universal Search V2.
+- `done` `AWF-243` Focused follow-up on boundary candidate family versus symbol clustering.
+  Re-ran the `60/30/30` sensitivity pass with symbol-level OOS artifacts (`20260409_000100`) and then ran cluster-limited subgroup pilots (`20260409_001500`, `20260409_001700`) for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` on the `mfi/cmf/obv_roc` family. Result: the original `mfi + cmf + obv_roc` boundary candidate becomes internally consistent inside the subgroup, but an even narrower `mfi + obv_roc` family outperforms it, so the next branch should be subgroup-focused discovery rather than universal Search V2 revival.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -45,6 +45,11 @@
   - Added symbol-level OOS cohort artifact: `param_sweep_symbol_oos_summary.csv`.
   - Added run metadata `timeframe_diagnostics` with requested window, realized shared window, and per-symbol data ranges.
   - Verified on rerun `20260408_163100`: requested `180d` clipped to about `125d` shared overlap because `ADA/BTC`, `DOGE/BTC`, `DOT/BTC`, `LINK/BTC`, `LTC/BTC`, and `AVAX/BTC` start later than the oldest symbols in the cohort.
+- 2026-04-09: `AWF-243` completed.
+  - Re-ran the 10-symbol WFO sensitivity pilot with hardened symbol-level OOS outputs (`20260409_000100`) and confirmed the boundary family still does not support a universal-signal interpretation.
+  - Ran cluster-limited subgroup pilots for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` using only `mfi`, `cmf`, and `obv_roc` (`20260409_001500` main, `20260409_001700` sensitivity).
+  - Within this subgroup, `mfi + cmf + obv_roc` becomes consistently positive, but `mfi + obv_roc` is stronger and more stable than the original three-indicator family.
+  - Conclusion: proceed, if at all, via subgroup-focused discovery; do not reopen universal Search V2 based on the current BTC-cross evidence.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
