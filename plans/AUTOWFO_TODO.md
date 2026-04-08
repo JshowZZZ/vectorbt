@@ -23,6 +23,10 @@
   Added `param_sweep_symbol_oos_summary.csv`, persisted `timeframe_diagnostics` into run metadata, and verified via rerun `20260408_163100` that the shared-window shrink was caused by late-start BTC crosses rather than missing protocol wiring.
 - `done` `AWF-243` Focused follow-up on boundary candidate family versus symbol clustering.
   Re-ran the `60/30/30` sensitivity pass with symbol-level OOS artifacts (`20260409_000100`) and then ran cluster-limited subgroup pilots (`20260409_001500`, `20260409_001700`) for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` on the `mfi/cmf/obv_roc` family. Result: the original `mfi + cmf + obv_roc` boundary candidate becomes internally consistent inside the subgroup, but an even narrower `mfi + obv_roc` family outperforms it, so the next branch should be subgroup-focused discovery rather than universal Search V2 revival.
+- `done` `AWF-244` Subgroup-focused discovery on the stable BTC-cross cluster.
+  Ran the full 7-indicator pilot protocol on the `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` subgroup (`20260409_003200`, `20260409_003500`). Result: a narrow cluster-first discovery track is justified, but the strongest 2h combos still have low trade counts, so the next stress test should increase trade density before any larger expansion.
+- `done` `AWF-245` Higher-trade-density subgroup stress test.
+  Re-ran the same stable-cluster pilot on `1h` (`20260409_004200`, `20260409_004600`). Result: `1h` restored full `180d` overlap and increased trade density, but it did not produce any all-symbol-nonnegative stable combos across both WFO settings, so the evidence still favors the `2h` subgroup lane rather than a general "more bars will fix it" story.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -50,6 +54,16 @@
   - Ran cluster-limited subgroup pilots for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` using only `mfi`, `cmf`, and `obv_roc` (`20260409_001500` main, `20260409_001700` sensitivity).
   - Within this subgroup, `mfi + cmf + obv_roc` becomes consistently positive, but `mfi + obv_roc` is stronger and more stable than the original three-indicator family.
   - Conclusion: proceed, if at all, via subgroup-focused discovery; do not reopen universal Search V2 based on the current BTC-cross evidence.
+- 2026-04-09: `AWF-244` completed.
+  - Ran the full 7-indicator subgroup discovery protocol on `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` (`20260409_003200` main, `20260409_003500` sensitivity).
+  - Several combos remained positive across both WFO settings, and a subset stayed non-negative for all three symbols in both runs.
+  - The strongest all-symbol-nonnegative families were `cmf + obv_roc + macd_hist` / `trend_high` / `max_hold=4` and `mfi + obv_roc + atr_ratio` / `trend_high` / `max_hold=4`.
+  - Even so, subgroup `2h` trade counts remain low, so the next step is a `1h` stress test rather than immediate cluster expansion.
+- 2026-04-09: `AWF-245` completed.
+  - Re-ran the stable-cluster subgroup protocol on `1h` with the same `45/30/30` and `60/30/30` WFO pair (`20260409_004200`, `20260409_004600`).
+  - `1h` restored full shared overlap (`181d`) for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC`, eliminating the late-start overlap shrink seen on `2h`.
+  - Despite that, `1h` did not produce any all-symbol-nonnegative stable combos across both WFO settings, while `2h` still had multiple such candidates.
+  - Conclusion: the current subgroup evidence is lane-specific; keep the focus on `2h` subgroup refinement rather than assuming that more bars or fuller overlap automatically improve robustness.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
