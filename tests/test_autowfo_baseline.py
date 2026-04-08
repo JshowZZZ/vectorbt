@@ -75,24 +75,37 @@ def test_copy_run_outputs_copies_current_run_and_latest_report_only(tmp_path):
     artifacts.mkdir(parents=True, exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
 
-    # static
-    (artifacts / "param_sweep_combo_summary.csv").write_text("x\n1\n", encoding="utf-8")
-    (artifacts / "param_sweep_symbol_summary.csv").write_text("x\n1\n", encoding="utf-8")
-    (artifacts / "leaderboard.csv").write_text("x\n1\n", encoding="utf-8")
-    (artifacts / "results.db").write_text("db", encoding="utf-8")
-    (artifacts / "run_status.json").write_text("{}", encoding="utf-8")
-    (artifacts / "run_status.html").write_text("<html></html>", encoding="utf-8")
-
     run_id = "20260207_120001"
-    # run-specific
-    (artifacts / f"param_sweep_combo_summary_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
-    (artifacts / f"param_sweep_symbol_summary_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
-    (artifacts / f"param_sweep_top10_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
+    # Phase 44+ layout: files live under artifacts/runs/{run_id}/{results,reports,metadata,status}/
+    results_dir = artifacts / "runs" / run_id / "results"
+    reports_dir = artifacts / "runs" / run_id / "reports"
+    metadata_dir = artifacts / "runs" / run_id / "metadata"
+    status_dir = artifacts / "runs" / run_id / "status"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    status_dir.mkdir(parents=True, exist_ok=True)
+
+    # static results
+    (results_dir / "param_sweep_combo_summary.csv").write_text("x\n1\n", encoding="utf-8")
+    (results_dir / "param_sweep_symbol_summary.csv").write_text("x\n1\n", encoding="utf-8")
+    (results_dir / "leaderboard.csv").write_text("x\n1\n", encoding="utf-8")
+    (results_dir / "results.db").write_text("db", encoding="utf-8")
+    # status
+    (status_dir / "run_status.json").write_text("{}", encoding="utf-8")
+    (status_dir / "run_status.html").write_text("<html></html>", encoding="utf-8")
+    # metadata
+    (metadata_dir / "run_metadata.json").write_text("{}", encoding="utf-8")
+
+    # run-specific results
+    (results_dir / f"param_sweep_combo_summary_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
+    (results_dir / f"param_sweep_symbol_summary_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
+    (results_dir / f"param_sweep_top10_{run_id}.csv").write_text("x\n1\n", encoding="utf-8")
 
     # reports
-    (artifacts / f"btc_regime_ETH-BTC_{run_id}.html").write_text("run", encoding="utf-8")
-    (artifacts / "btc_regime_ETH-BTC_20260101_000001.html").write_text("old", encoding="utf-8")
-    (artifacts / "btc_regime_ETH-BTC.html").write_text("latest", encoding="utf-8")
+    (reports_dir / f"btc_regime_ETH-BTC_{run_id}.html").write_text("run", encoding="utf-8")
+    (reports_dir / "btc_regime_ETH-BTC_20260101_000001.html").write_text("old", encoding="utf-8")
+    (reports_dir / "btc_regime_ETH-BTC.html").write_text("latest", encoding="utf-8")
 
     copied = b._copy_run_outputs(artifacts, target, run_id)
     reports = sorted(copied["reports"])

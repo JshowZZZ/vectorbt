@@ -114,6 +114,7 @@ def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
     )
 
     calls = []
+    rebuild_calls = []
 
     def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
         calls.append(
@@ -126,7 +127,12 @@ def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
             }
         )
 
+    def _fake_rebuild_shared_views(artifacts_dir):
+        rebuild_calls.append(str(artifacts_dir))
+        return {"trusted_runs": 2, "leaderboard_rows": 2}
+
     monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+    monkeypatch.setattr(cli, "_rebuild_shared_views", _fake_rebuild_shared_views)
 
     code = cli.main(
         [
@@ -146,6 +152,7 @@ def test_cli_batch_runs_jobs_and_writes_state(tmp_path, monkeypatch):
     assert code == 0
     assert [call["workflow"] for call in calls] == ["run", "baseline"]
     assert all(call["workers"] == 7 for call in calls)
+    assert rebuild_calls == [str(tmp_path / "artifacts")]
 
     state_path = tmp_path / "artifacts" / "batch_state.json"
     state_payload = json.loads(state_path.read_text(encoding="utf-8"))
@@ -241,13 +248,19 @@ def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
     )
 
     calls = []
+    rebuild_calls = []
 
     def _fake_run_workflow(cwd, config_path, workflow, mode, workers):
         calls.append((str(config_path), workflow))
         if config_path.name == "bad.json":
             raise RuntimeError("boom")
 
+    def _fake_rebuild_shared_views(artifacts_dir):
+        rebuild_calls.append(str(artifacts_dir))
+        return {"trusted_runs": 1, "leaderboard_rows": 1}
+
     monkeypatch.setattr(cli, "_run_workflow", _fake_run_workflow)
+    monkeypatch.setattr(cli, "_rebuild_shared_views", _fake_rebuild_shared_views)
 
     code = cli.main(
         [
@@ -268,6 +281,7 @@ def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
         (str(bad_cfg), "run"),
         (str(good_cfg), "baseline"),
     ]
+    assert rebuild_calls == [str(tmp_path / "artifacts")]
 
     state_payload = json.loads((tmp_path / "artifacts" / "batch_state.json").read_text(encoding="utf-8"))
     assert len(state_payload["seen_keys"]) == 1
@@ -1058,6 +1072,45 @@ def test_run_batch_job_single_skip_seen(tmp_path, monkeypatch):
     )
     assert result["status"] == "skipped"
     assert len(called) == 0
+
+
+def test_run_batch_job_single_allow_seen_key_reuse_runs_anyway(tmp_path, monkeypatch):
+    import threading
+
+    cfg = tmp_path / "rerun.json"
+    cfg.write_text(json.dumps({}), encoding="utf-8")
+    state_path = tmp_path / "state.json"
+
+    job = {
+        "name": "rerun",
+        "workflow": "run",
+        "mode": "combo",
+        "workers": None,
+        "config_path": cfg,
+        "cwd": tmp_path,
+        "allow_seen_key_reuse": True,
+    }
+    job_key = cli._compute_job_key(job)
+    state = {"seen_keys": {job_key: {"status": "done"}}, "history": []}
+
+    called = []
+
+    def _fake(cwd, config_path, workflow, mode, workers):
+        called.append((cwd, config_path, workflow, mode, workers))
+
+    monkeypatch.setattr(cli, "_run_workflow", _fake)
+
+    result = cli._run_batch_job_single(
+        idx=1,
+        total=1,
+        job=job,
+        state=state,
+        state_path=state_path,
+        lock=threading.Lock(),
+    )
+    assert result["status"] == "done"
+    assert len(called) == 1
+    assert state["seen_keys"][job_key]["status"] == "done"
 
 
 def test_run_batch_job_single_failed(tmp_path, monkeypatch):
@@ -2248,4 +2301,52 @@ def test_cli_storage_purge_legacy_dry_run_preserves_files(tmp_path):
 
     assert code == 0
     assert legacy_path.exists()
+
+
+def test_cli_storage_compare_ranking_parses_config_and_resolves_outputs(tmp_path, monkeypatch):
+    candidate_cfg = tmp_path / "candidate.json"
+    candidate_cfg.write_text(json.dumps({"mode": "composite"}), encoding="utf-8")
+    baseline_cfg = tmp_path / "baseline.json"
+    baseline_cfg.write_text(json.dumps({"mode": "legacy"}), encoding="utf-8")
+
+    captured = {}
+
+    def _fake_compare(artifacts_dir, *, candidate_config, baseline_config=None, top_n=10, output_json=None, output_html=None):
+        captured["artifacts_dir"] = artifacts_dir
+        captured["candidate_config"] = candidate_config
+        captured["baseline_config"] = baseline_config
+        captured["top_n"] = top_n
+        captured["output_json"] = output_json
+        captured["output_html"] = output_html
+        return {"ok": True}
+
+    import autowfo.storage_ops as storage_ops
+
+    monkeypatch.setattr(storage_ops, "compare_ranking_configs", _fake_compare)
+
+    code = cli.main(
+        [
+            "storage",
+            "compare-ranking",
+            "--candidate-config",
+            str(candidate_cfg),
+            "--baseline-config",
+            str(baseline_cfg),
+            "--top-n",
+            "7",
+            "--output-json",
+            "reports/cmp.json",
+            "--output-html",
+            "reports/cmp.html",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    assert captured["candidate_config"] == {"mode": "composite"}
+    assert captured["baseline_config"] == {"mode": "legacy"}
+    assert captured["top_n"] == 7
+    assert captured["output_json"] == tmp_path / "reports" / "cmp.json"
+    assert captured["output_html"] == tmp_path / "reports" / "cmp.html"
 

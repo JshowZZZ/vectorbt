@@ -85,6 +85,23 @@ def test_top_by_score_uses_fallback_and_honors_top_n():
     assert top_df["name"].tolist() == ["b", "c"]
 
 
+def test_sort_by_score_gracefully_handles_missing_score_columns():
+    df = pd.DataFrame(
+        {
+            "name": ["a", "b"],
+            "avg_hold_hours": [4.0, 2.0],
+        }
+    )
+    sorted_df, score_col = r._sort_by_score(
+        df,
+        tie_break_avg_hold=True,
+        ranking_config={"mode": "legacy"},
+    )
+    assert score_col == "avg_total_return_pct"
+    assert "avg_total_return_pct" in sorted_df.columns
+    assert sorted_df["name"].tolist() == ["b", "a"]
+
+
 def test_resolve_ranking_config_merges_partial_weights():
     cfg = r._resolve_ranking_config(
         {
@@ -197,4 +214,165 @@ def test_regime_summary_basic():
 def test_regime_summary_empty_without_regime_column():
     df = pd.DataFrame({"oos_avg_total_return_pct": [1.0]})
     assert r._regime_summary(df) == []
+
+
+# ---------------------------------------------------------------------------
+#  AWF-225: Combo deduplication tests
+# ---------------------------------------------------------------------------
+
+
+def test_dedup_by_combo_group_keeps_best_per_combo():
+    """Same indicator_list + regime should keep only the highest-score row."""
+    df = pd.DataFrame({
+        "indicator_list": ["A,B", "A,B", "C,D", "C,D", "A,B"],
+        "regime_name": ["trend", "trend", "trend", "trend", "revert"],
+        "vol_mode": ["high", "high", "high", "high", "high"],
+        "composite_score": [0.5, 0.8, 0.3, 0.9, 0.4],
+        "name": ["a1", "a2", "c1", "c2", "a3"],
+    })
+    # Sort descending by score first (as _sort_by_score would)
+    df = df.sort_values("composite_score", ascending=False)
+    result = r._dedup_by_combo_group(df)
+    assert len(result) == 3
+    names = result["name"].tolist()
+    assert "c2" in names  # best C,D/trend
+    assert "a2" in names  # best A,B/trend
+    assert "a3" in names  # best A,B/revert (different regime)
+
+
+def test_dedup_by_combo_group_no_fields_present():
+    """If none of the dedup fields exist, return unchanged."""
+    df = pd.DataFrame({"score": [1.0, 2.0], "name": ["a", "b"]})
+    result = r._dedup_by_combo_group(df)
+    assert len(result) == 2
+
+
+def test_dedup_by_combo_group_custom_fields():
+    """Operator can override dedup fields via ranking_config."""
+    df = pd.DataFrame({
+        "indicator_list": ["A,B", "A,B", "C,D"],
+        "composite_score": [0.5, 0.8, 0.3],
+    })
+    df = df.sort_values("composite_score", ascending=False)
+    # Dedup only by indicator_list (ignoring regime/vol_mode)
+    cfg = {"top10_dedup_fields": ["indicator_list"]}
+    result = r._dedup_by_combo_group(df, ranking_config=cfg)
+    assert len(result) == 2
+
+
+def test_dedup_preserves_order():
+    """After dedup, rows should remain in score-descending order."""
+    df = pd.DataFrame({
+        "indicator_list": ["X", "Y", "X", "Z"],
+        "regime_name": ["t", "t", "t", "t"],
+        "vol_mode": ["h", "h", "h", "h"],
+        "composite_score": [0.9, 0.7, 0.5, 0.3],
+    })
+    df = df.sort_values("composite_score", ascending=False)
+    result = r._dedup_by_combo_group(df)
+    scores = result["composite_score"].tolist()
+    assert scores == sorted(scores, reverse=True)
+    assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+#  AWF-226: Relative low-trade penalty tests
+# ---------------------------------------------------------------------------
+
+
+def test_relative_low_trade_penalty_differentiates():
+    """In relative mode, combos above P75 get zero penalty."""
+    df = pd.DataFrame({
+        "oos_avg_total_return_pct": [10.0, 10.0, 10.0, 10.0],
+        "oos_avg_daily_trades": [1.0, 2.0, 5.0, 8.0],
+        "oos_positive_segment_ratio": [0.6, 0.6, 0.6, 0.6],
+        "oos_return_std": [1.0, 1.0, 1.0, 1.0],
+        "oos_sharpe_like": [0.5, 0.5, 0.5, 0.5],
+        "oos_avg_max_drawdown_pct": [-5.0, -5.0, -5.0, -5.0],
+    })
+    cfg_abs = {"mode": "composite", "low_trade_mode": "absolute", "low_trade_threshold": 30.0}
+    cfg_rel = {"mode": "composite", "low_trade_mode": "relative", "low_trade_threshold": 30.0}
+
+    resolved_abs = r._resolve_ranking_config(cfg_abs)
+    resolved_rel = r._resolve_ranking_config(cfg_rel)
+
+    scores_abs = r._build_composite_score(df, resolved_abs)
+    scores_rel = r._build_composite_score(df, resolved_rel)
+
+    # Absolute mode: all combos have low trades → all penalized equally
+    assert scores_abs.nunique() == 1  # all same score
+
+    # Relative mode: combo with 8 trades (P75) gets zero penalty,
+    # combo with 1 trade gets higher penalty → scores differ
+    assert scores_rel.nunique() > 1
+    # Higher daily trades → higher score
+    assert scores_rel.iloc[3] > scores_rel.iloc[0]
+
+
+def test_relative_penalty_all_zero_trades():
+    """When all combos have zero trades, relative penalty is 0 for all."""
+    df = pd.DataFrame({
+        "oos_avg_total_return_pct": [5.0, 10.0],
+        "oos_avg_daily_trades": [0.0, 0.0],
+        "oos_positive_segment_ratio": [0.5, 0.8],
+        "oos_return_std": [1.0, 1.0],
+        "oos_sharpe_like": [0.3, 0.6],
+        "oos_avg_max_drawdown_pct": [-3.0, -3.0],
+    })
+    cfg = {"mode": "composite", "low_trade_mode": "relative"}
+    resolved = r._resolve_ranking_config(cfg)
+    scores = r._build_composite_score(df, resolved)
+    # Scores should differ only by return/stability/risk, not by penalty
+    assert scores.iloc[1] > scores.iloc[0]
+
+
+def test_relative_penalty_uses_avg_daily_trades_fallback():
+    """When oos_avg_daily_trades missing, falls back to avg_daily_trades."""
+    df = pd.DataFrame({
+        "oos_avg_total_return_pct": [10.0, 10.0],
+        "avg_daily_trades": [2.0, 8.0],
+        "oos_positive_segment_ratio": [0.6, 0.6],
+        "oos_return_std": [1.0, 1.0],
+        "oos_sharpe_like": [0.5, 0.5],
+        "oos_avg_max_drawdown_pct": [-5.0, -5.0],
+    })
+    cfg = {"mode": "composite", "low_trade_mode": "relative"}
+    resolved = r._resolve_ranking_config(cfg)
+    scores = r._build_composite_score(df, resolved)
+    assert scores.iloc[1] > scores.iloc[0]
+
+
+def test_absolute_mode_unchanged_behavior():
+    """Absolute mode behavior is identical to pre-Phase-45."""
+    df = pd.DataFrame({
+        "oos_avg_total_return_pct": [10.0, 10.0],
+        "oos_positive_segment_ratio": [0.6, 0.6],
+        "oos_return_std": [1.0, 1.0],
+        "oos_sharpe_like": [0.5, 0.5],
+        "oos_avg_max_drawdown_pct": [-5.0, -5.0],
+        "oos_low_trade_penalty": [0.3, 0.7],
+    })
+    cfg_default = {"mode": "composite"}
+    cfg_explicit = {"mode": "composite", "low_trade_mode": "absolute"}
+    resolved_default = r._resolve_ranking_config(cfg_default)
+    resolved_explicit = r._resolve_ranking_config(cfg_explicit)
+    scores_default = r._build_composite_score(df, resolved_default)
+    scores_explicit = r._build_composite_score(df, resolved_explicit)
+    pd.testing.assert_series_equal(scores_default, scores_explicit)
+
+
+def test_resolve_ranking_config_new_keys():
+    """New config keys resolve with defaults and overrides."""
+    cfg = r._resolve_ranking_config(None)
+    assert cfg["low_trade_mode"] == "absolute"
+    assert cfg["top10_dedup_fields"] == ["indicator_list", "regime_name", "vol_mode"]
+
+    cfg2 = r._resolve_ranking_config({"low_trade_mode": "relative"})
+    assert cfg2["low_trade_mode"] == "relative"
+
+    cfg3 = r._resolve_ranking_config({"low_trade_mode": "invalid"})
+    assert cfg3["low_trade_mode"] == "absolute"
+
+    cfg4 = r._resolve_ranking_config({"top10_dedup_fields": ["indicator_list"]})
+    assert cfg4["top10_dedup_fields"] == ["indicator_list"]
 

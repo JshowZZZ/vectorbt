@@ -14,10 +14,12 @@ from autowfo.storage_contract import (
     SIGNAL_SCHEDULE_STATE_SCHEMA_VERSION,
 )
 from autowfo.storage_ops import (
+    compare_ranking_configs,
     migrate_storage,
     purge_legacy_outputs,
     rebuild_analytics,
     rebuild_shared_views,
+    rescore_trusted_runs,
     validate_storage,
 )
 
@@ -426,3 +428,215 @@ def test_purge_legacy_outputs_respects_shared_view_manifest_and_quarantines(tmp_
     assert (quarantine_dir / legacy_top10.name).exists()
     assert (quarantine_dir / legacy_report.name).exists()
     assert (quarantine_dir / legacy_cross_run.name).exists()
+
+
+def test_rescore_trusted_runs_matches_finalize_timeframe_and_filter_selection(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    run_id = "20260328_010000"
+    workspace = build_run_workspace(tmp_path, run_id)
+    workspace.ensure_directories()
+
+    runtime_cfg = {
+        "timeframes": [{"timeframe": "2h", "days": 30}],
+        "min_avg_daily_trades_target": 5.0,
+        "min_oos_trades_target": 1,
+        "ranking": {"mode": "legacy"},
+        "capital_mode": "fixed",
+        "init_cash_usdt": 1000.0,
+        "wf_train_days": 60,
+        "wf_test_days": 30,
+        "wf_step_days": 30,
+        "wf_mode": "anchored",
+    }
+    workspace.runtime_config_path.write_text(json.dumps(runtime_cfg), encoding="utf-8")
+    metadata = {
+        "run_id": run_id,
+        "timestamp_utc": "2026-03-28T01:00:00Z",
+        "search_mode": "combo",
+        "config_sha256": "cfg-rescore",
+        "data_fingerprint": "fp-rescore",
+        "trade_symbols": ["BNB/BTC"],
+        "timeframes": [{"timeframe": "2h", "days": 30}],
+        "ranking": {"mode": "legacy"},
+    }
+    workspace.run_metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    workspace.run_metadata_run_path.write_text(json.dumps(metadata), encoding="utf-8")
+    pd.DataFrame(
+        [
+            {
+                "timeframe": "1h",
+                "data_days": 30,
+                "indicator_list": "wrong_timeframe",
+                "regime_name": "trend",
+                "vol_mode": "high",
+                "avg_total_return_pct": 50.0,
+                "oos_avg_total_return_pct": 50.0,
+                "oos_avg_avg_trade_pct": 0.2,
+                "oos_sharpe_like": 3.0,
+                "oos_avg_max_drawdown_pct": -5.0,
+                "oos_min_total_trades": 20.0,
+                "avg_daily_trades": 20.0,
+                "avg_hold_hours": 1.0,
+            },
+            {
+                "timeframe": "2h",
+                "data_days": 30,
+                "indicator_list": "target_pass",
+                "regime_name": "trend",
+                "vol_mode": "high",
+                "avg_total_return_pct": 10.0,
+                "oos_avg_total_return_pct": 10.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_sharpe_like": 1.0,
+                "oos_avg_max_drawdown_pct": -8.0,
+                "oos_min_total_trades": 10.0,
+                "avg_daily_trades": 8.0,
+                "avg_hold_hours": 2.0,
+            },
+            {
+                "timeframe": "2h",
+                "data_days": 30,
+                "indicator_list": "target_filtered_out",
+                "regime_name": "trend",
+                "vol_mode": "high",
+                "avg_total_return_pct": 20.0,
+                "oos_avg_total_return_pct": 20.0,
+                "oos_avg_avg_trade_pct": 0.2,
+                "oos_sharpe_like": 2.0,
+                "oos_avg_max_drawdown_pct": -7.0,
+                "oos_min_total_trades": 0.0,
+                "avg_daily_trades": 1.0,
+                "avg_hold_hours": 2.0,
+            },
+        ]
+    ).to_csv(workspace.combo_summary_path, index=False)
+    pd.DataFrame([{"timeframe": "2h", "symbol": "BNB/BTC", "total_return_pct": 1.0}]).to_csv(
+        workspace.symbol_summary_path, index=False
+    )
+    pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "timestamp_utc": "2026-03-28T01:00:00Z",
+                "plot_symbol": "BNB/BTC",
+                "timeframe": "2h",
+                "data_days": 30,
+                "report_file": "btc_regime_BNB-BTC.html",
+                "avg_total_return_pct": 1.0,
+                "oos_avg_total_return_pct": 1.0,
+            }
+        ]
+    ).to_csv(workspace.leaderboard_path, index=False)
+    workspace.top10_path.write_text("indicator_list\nlegacy\n", encoding="utf-8")
+    (workspace.reports_dir / "btc_regime_BNB-BTC.html").write_text("<html>report</html>", encoding="utf-8")
+
+    payload = rescore_trusted_runs(artifacts, ranking_config={"mode": "legacy"})
+
+    assert payload["ok"] is True
+    assert payload["rescored_runs"] == 1
+    assert payload["details"][0]["candidate_rows"] == 2
+    assert payload["details"][0]["filtered_rows"] == 1
+
+    rescored_top10 = pd.read_csv(workspace.top10_path)
+    assert rescored_top10["indicator_list"].tolist() == ["target_pass"]
+
+    rescored_lb = pd.read_csv(workspace.leaderboard_path)
+    assert rescored_lb.loc[0, "timeframe"] == "2h"
+    assert rescored_lb.loc[0, "indicator_list"] == "target_pass"
+    assert rescored_lb.loc[0, "plot_symbol"] == "BNB/BTC"
+    assert rescored_lb.loc[0, "report_file"] == "btc_regime_BNB-BTC.html"
+    assert rescored_lb.loc[0, "min_avg_daily_trades_filter"] == 5.0
+
+
+def test_compare_ranking_configs_writes_reports_and_summaries(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    run_id = "20260328_020000"
+    workspace = build_run_workspace(tmp_path, run_id)
+    workspace.ensure_directories()
+
+    runtime_cfg = {
+        "timeframes": [{"timeframe": "1h", "days": 60}],
+        "min_avg_daily_trades_target": 1.0,
+        "min_oos_trades_target": 1,
+        "ranking": {"mode": "legacy"},
+    }
+    workspace.runtime_config_path.write_text(json.dumps(runtime_cfg), encoding="utf-8")
+    metadata = {
+        "run_id": run_id,
+        "timestamp_utc": "2026-03-28T02:00:00Z",
+        "search_mode": "combo",
+        "config_sha256": "cfg-compare",
+        "data_fingerprint": "fp-compare",
+        "trade_symbols": ["ETH/BTC"],
+        "timeframes": [{"timeframe": "1h", "days": 60}],
+        "ranking": {"mode": "legacy"},
+    }
+    workspace.run_metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    workspace.run_metadata_run_path.write_text(json.dumps(metadata), encoding="utf-8")
+    pd.DataFrame(
+        [
+            {
+                "timeframe": "1h",
+                "data_days": 60,
+                "indicator_list": "legacy_pick",
+                "regime_name": "trend",
+                "vol_mode": "high",
+                "avg_daily_trades": 8.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_avg_total_return_pct": 20.0,
+                "oos_sharpe_like": 0.1,
+                "oos_avg_max_drawdown_pct": -25.0,
+                "oos_min_total_trades": 5.0,
+                "avg_hold_hours": 5.0,
+            },
+            {
+                "timeframe": "1h",
+                "data_days": 60,
+                "indicator_list": "composite_pick",
+                "regime_name": "trend",
+                "vol_mode": "high",
+                "avg_daily_trades": 8.0,
+                "oos_avg_avg_trade_pct": 0.1,
+                "oos_avg_total_return_pct": 12.0,
+                "oos_sharpe_like": 2.0,
+                "oos_avg_max_drawdown_pct": -8.0,
+                "oos_min_total_trades": 50.0,
+                "avg_hold_hours": 2.0,
+            },
+        ]
+    ).to_csv(workspace.combo_summary_path, index=False)
+    pd.DataFrame([{"timeframe": "1h", "symbol": "ETH/BTC", "total_return_pct": 1.0}]).to_csv(
+        workspace.symbol_summary_path, index=False
+    )
+    pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "timestamp_utc": "2026-03-28T02:00:00Z",
+                "plot_symbol": "ETH/BTC",
+                "timeframe": "1h",
+                "data_days": 60,
+                "report_file": "btc_regime_ETH-BTC.html",
+            }
+        ]
+    ).to_csv(workspace.leaderboard_path, index=False)
+    workspace.top10_path.write_text("indicator_list\nlegacy_pick\n", encoding="utf-8")
+    (workspace.reports_dir / "btc_regime_ETH-BTC.html").write_text("<html>report</html>", encoding="utf-8")
+
+    json_out = artifacts / "reports" / "cmp.json"
+    html_out = artifacts / "reports" / "cmp.html"
+    payload = compare_ranking_configs(
+        artifacts,
+        candidate_config={"mode": "composite"},
+        top_n=1,
+        output_json=json_out,
+        output_html=html_out,
+    )
+
+    assert payload["ok"] is True
+    assert payload["summary"]["compared_runs"] == 1
+    assert payload["summary"]["metrics"]["avg_oos_sharpe_like"]["improved_runs"] == 1
+    assert payload["runs"][0]["baseline"]["top_rows"][0]["indicator_list"] == "legacy_pick"
+    assert payload["runs"][0]["candidate"]["top_rows"][0]["indicator_list"] == "composite_pick"
+    assert json_out.exists()
+    assert html_out.exists()

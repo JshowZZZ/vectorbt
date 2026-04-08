@@ -236,6 +236,42 @@ def test_get_results_payload_reports_trusted_derived_source_status(tmp_path, mon
     assert payload["source_status"]["latest_run_id"] == "r2"
 
 
+def test_results_advanced_endpoint_returns_analysis_json(tmp_path, monkeypatch):
+    db_path = tmp_path / "results.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE combo_summary ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "created_utc TEXT DEFAULT CURRENT_TIMESTAMP, "
+            "timeframe TEXT, "
+            "oos_avg_total_return_pct TEXT, "
+            "oos_avg_max_drawdown_pct TEXT, "
+            "oos_avg_daily_trades TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO combo_summary (timeframe, oos_avg_total_return_pct, oos_avg_max_drawdown_pct, oos_avg_daily_trades) VALUES (?, ?, ?, ?)",
+            [
+                ("4h", "0.6", "1.2", "0.5"),
+                ("4h", "1.1", "0.8", "0.9"),
+                ("1d", "2.4", "3.3", "0.2"),
+            ],
+        )
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=tmp_path, db_path=db_path, reset_state=True)
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/results/advanced.json?timeframe=4h&n_trials=250&seed=7&sample_size=2")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["timeframe"] == "4h"
+    assert payload["analysis"]["source_rows"] == 2
+    assert payload["analysis"]["params"] == {"n_trials": 250, "sample_size": 2, "seed": 7}
+    assert payload["analysis"]["return_distribution"]["count"] == 2
+
+
 def test_get_results_payload_prefers_trusted_run_top10_file(tmp_path, monkeypatch):
     db_path = tmp_path / "results.db"
     with sqlite3.connect(db_path) as conn:
@@ -361,6 +397,129 @@ def test_config_endpoint_rejects_invalid_walk_forward_guardrail(tmp_path, monkey
     assert "wf_step_days" in payload["message"]
 
 
+def test_config_endpoint_preserves_hidden_fields_on_save(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    existing_cfg = json.loads(json.dumps(cp.DEFAULT_CONFIG))
+    existing_cfg.update(
+        {
+            "max_workers": 7,
+            "checkpoint_every_n": 333,
+            "progress_every_n": 77,
+            "ranking": {
+                "mode": "composite",
+                "low_trade_threshold": 55.0,
+                "weights": {
+                    "return": 1.5,
+                    "stability": 0.9,
+                    "risk_adjust": 0.3,
+                    "drawdown_penalty": 1.2,
+                    "low_sample_penalty": 0.8,
+                },
+            },
+            "timeframes": [{"timeframe": "4h", "days": 240}],
+            "trade_symbols": ["ETH/BTC", "BNB/BTC"],
+        }
+    )
+    cp.CONFIG_JSON.write_text(json.dumps(existing_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    request_payload = {
+        "timeframes": [{"timeframe": "1h", "days": 60}],
+        "trade_symbols": ["SOL/BTC"],
+        "wf_train_days": 45,
+        "wf_test_days": 15,
+        "wf_step_days": 15,
+    }
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config",
+            body=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+
+    saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
+    assert saved_cfg["timeframes"] == [{"timeframe": "1h", "days": 60}]
+    assert saved_cfg["trade_symbols"] == ["SOL/BTC"]
+    assert saved_cfg["wf_train_days"] == 45
+    assert saved_cfg["wf_test_days"] == 15
+    assert saved_cfg["wf_step_days"] == 15
+    assert saved_cfg["ranking"] == existing_cfg["ranking"]
+    assert saved_cfg["max_workers"] == 7
+    assert saved_cfg["checkpoint_every_n"] == 333
+    assert saved_cfg["progress_every_n"] == 77
+
+
+def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/config/presets.json")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    preset_ids = {item["preset_id"] for item in payload["presets"]}
+    assert {
+        "wave0-smoke-1h-60d",
+        "wave2-core-2h-120d",
+        "wave2-xrp-4h-180d",
+        "wave2-sol-usdt-2h-120d",
+    }.issubset(preset_ids)
+
+
+def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    existing_cfg = json.loads(json.dumps(cp.DEFAULT_CONFIG))
+    existing_cfg.update(
+        {
+            "max_workers": 5,
+            "checkpoint_every_n": 250,
+            "progress_every_n": 40,
+            "ranking": {
+                "mode": "composite",
+                "low_trade_threshold": 42.0,
+                "weights": {
+                    "return": 1.2,
+                    "stability": 1.1,
+                    "risk_adjust": 0.4,
+                    "drawdown_penalty": 0.9,
+                    "low_sample_penalty": 1.3,
+                },
+            },
+        }
+    )
+    cp.CONFIG_JSON.write_text(json.dumps(existing_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset",
+            body=json.dumps({"preset_id": "wave2-core-2h-120d"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["preset"]["preset_id"] == "wave2-core-2h-120d"
+
+    saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
+    assert saved_cfg["timeframes"] == [{"timeframe": "2h", "days": 120}]
+    assert saved_cfg["trade_symbols"] == ["BNB/BTC", "SOL/BTC"]
+    assert saved_cfg["search_mode"] == "combo"
+    assert saved_cfg["ranking"] == existing_cfg["ranking"]
+    assert saved_cfg["max_workers"] == 5
+    assert saved_cfg["checkpoint_every_n"] == 250
+    assert saved_cfg["progress_every_n"] == 40
+
+
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
     static_dir = tmp_path / "scripts" / "control_panel" / "static"
     js_dir = static_dir / "js"
@@ -400,6 +559,52 @@ def test_favicon_endpoint_serves_static_svg(tmp_path, monkeypatch):
     assert response.status == 200
     assert response.getheader("Content-Type") == "image/svg+xml"
     assert "<svg" in body
+
+
+def test_artifacts_route_serves_trusted_run_report(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    trusted_run = artifacts / "runs" / "r1"
+    reports_dir = trusted_run / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report_path = reports_dir / "btc_regime_XRP-BTC_20260314_115559.html"
+    report_path.write_text("<html>trusted report</html>", encoding="utf-8")
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r1"], "latest_run_id": "r1", "latest_run_root": str(trusted_run)}),
+        encoding="utf-8",
+    )
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=artifacts, reset_state=True)
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", f"/artifacts/{report_path.name}")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8")
+
+    assert response.status == 200
+    assert "trusted report" in body
+    assert response.getheader("Content-Type").startswith("text/html")
+
+
+def test_status_route_serves_latest_trusted_run_status_html(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    trusted_run = artifacts / "runs" / "r1"
+    status_dir = trusted_run / "status"
+    status_dir.mkdir(parents=True, exist_ok=True)
+    (status_dir / "run_status.html").write_text("<html>trusted status</html>", encoding="utf-8")
+    (artifacts / "shared_views_manifest.json").write_text(
+        json.dumps({"trusted_runs": ["r1"], "latest_run_id": "r1", "latest_run_root": str(trusted_run)}),
+        encoding="utf-8",
+    )
+
+    cp.configure_runtime(root=tmp_path, artifacts_dir=artifacts, reset_state=True)
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/status")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8")
+
+    assert response.status == 200
+    assert "trusted status" in body
 
 
 def test_normalize_top_n_bounds_and_defaults():
@@ -761,6 +966,43 @@ def test_batch_queue_enqueue_and_remove(tmp_path, monkeypatch):
     assert status["summary"]["total"] == 0
 
 
+def test_batch_enqueue_avoids_historical_name_collision(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "batch_state.json").write_text(
+        json.dumps(
+            {
+                "history": [
+                    {
+                        "ts": "2026-03-01T00:00:00Z",
+                        "status": "done",
+                        "job_name": "job-a",
+                        "run_label": "run-old",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text("{}", encoding="utf-8")
+
+    ok, _msg, job = cp._batch_enqueue(
+        {
+            "name": "job-a",
+            "workflow": "baseline",
+            "config": str(cfg_path),
+        }
+    )
+    assert ok
+    assert job["name"] == "job-a-2"
+    assert job["status"] == "queued"
+
+    status = cp._batch_status_payload()
+    assert status["summary"]["queued"] == 1
+    assert status["jobs"][0]["name"] == "job-a-2"
+    assert status["jobs"][0]["status"] == "queued"
+
+
 def test_batch_start_and_state_sync(tmp_path, monkeypatch):
     artifacts = _setup_batch_env(tmp_path, monkeypatch)
     cfg_path = tmp_path / "cfg.json"
@@ -773,6 +1015,7 @@ def test_batch_start_and_state_sync(tmp_path, monkeypatch):
             "mode": "combo",
             "config": str(cfg_path),
             "workers": 2,
+            "allow_seen_key_reuse": True,
         }
     )
     assert ok
@@ -791,9 +1034,12 @@ def test_batch_start_and_state_sync(tmp_path, monkeypatch):
     assert popen_calls
     assert "--plan" in popen_calls[0]["cmd"]
     assert str(artifacts / "control_panel_batch_plan.json") in popen_calls[0]["cmd"]
+    plan_payload = json.loads((artifacts / "control_panel_batch_plan.json").read_text(encoding="utf-8"))
+    assert plan_payload["jobs"][0]["allow_seen_key_reuse"] is True
 
     queue = cp._load_batch_queue()
     assert queue["jobs"][0]["status"] == "submitted"
+    assert queue["jobs"][0]["allow_seen_key_reuse"] is True
 
     state_path = artifacts / "batch_state.json"
     state_path.write_text(
@@ -970,6 +1216,7 @@ def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatc
     assert ok
     assert details is not None
     assert details["job"]["status"] == "queued"
+    assert details["job"]["allow_seen_key_reuse"] is True
 
     cfg_path = Path(details["config_path"])
     assert cfg_path.exists()
@@ -980,6 +1227,7 @@ def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatc
     queue_payload = cp._load_batch_queue()
     assert len(queue_payload["jobs"]) == 1
     assert queue_payload["jobs"][0]["status"] == "queued"
+    assert queue_payload["jobs"][0]["allow_seen_key_reuse"] is True
 
     ok, msg, details = cp._coverage_enqueue_pair(
         {
@@ -991,6 +1239,54 @@ def test_coverage_enqueue_pair_creates_config_and_queue_job(tmp_path, monkeypatc
     assert not ok
     assert "already queued" in msg
     assert details is None
+
+
+def test_coverage_enqueue_pair_avoids_historical_batch_name_collision(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    (artifacts / "sweep_config.json").write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "combo_sizes": [2],
+                "timeframes": [{"timeframe": "1h", "days": 100}],
+                "trade_symbols": ["ETH/USDT"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts / "run_registry.json").write_text(json.dumps({"runs": [], "coverage": {}}), encoding="utf-8")
+    (artifacts / "batch_state.json").write_text(
+        json.dumps(
+            {
+                "history": [
+                    {
+                        "ts": "2026-03-01T00:00:00Z",
+                        "status": "done",
+                        "job_name": "cov-1h-BNB-USDT",
+                        "run_label": "run-old",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ok, _msg, details = cp._coverage_enqueue_pair(
+        {
+            "timeframe": "1h",
+            "symbol": "BNB/USDT",
+            "workflow": "baseline",
+        }
+    )
+    assert ok
+    assert details is not None
+    assert details["job"]["name"] == "cov-1h-BNB-USDT-2"
+    assert details["job"]["status"] == "queued"
+
+    status = cp._batch_status_payload()
+    assert status["summary"]["queued"] == 1
+    assert status["jobs"][0]["name"] == "cov-1h-BNB-USDT-2"
+    assert status["jobs"][0]["status"] == "queued"
 
 
 def test_cross_run_payload_and_report_generation(tmp_path, monkeypatch):
