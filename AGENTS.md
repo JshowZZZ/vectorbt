@@ -5,20 +5,24 @@
 - Prioritize minimal, behavior-preserving changes unless the task explicitly requests otherwise.
 
 ## Repository Map
-- `.github/` - GitHub workflows and repository metadata.
-- `apps/` - app-like examples.
-- `docs/` - MkDocs source content and generation scripts.
-- `examples/` - notebooks and demo assets.
-- `plans/` - long-term scope, milestones, and execution backlog for AUTOWFO.
-- `scripts/` - utility scripts.
-- `tests/` - pytest suite.
-- `vectorbt/` - main package.
-  - `base/`, `generic/`, `utils/` - shared core abstractions and helpers.
-  - `data/` - data loaders/providers.
-  - `indicators/`, `signals/`, `labels/` - signal/indicator/label functionality.
-  - `portfolio/`, `records/`, `returns/` - simulation and analytics.
-  - `messaging/` - notification helpers.
-  - `templates/` - JSON templates.
+- `vectorbt/`   — Upstream library source. Avoid changes unless necessary.
+  - `base/`, `generic/`, `utils/` — shared core abstractions and helpers.
+  - `data/` — data loaders/providers.
+  - `indicators/`, `signals/`, `labels/` — signal/indicator/label functionality.
+  - `portfolio/`, `records/`, `returns/` — simulation and analytics.
+  - `messaging/` — notification helpers.
+  - `templates/` — JSON templates.
+- `autowfo/`     — AUTOWFO engine code (primary development target).
+- `tests/`       — pytest suite. Naming: `test_<module>.py`.
+- `plans/`       — Specs, roadmaps, runbooks, TODO. All `.md` files.
+  - `plans/protocols/` — Frozen YAML/JSON protocol definitions.
+  - `plans/reports/`   — Per-task completion reports (`AWF-xxx-report.md`).
+- `scripts/`     — One-off utility scripts and automation helpers.
+- `artifacts/`   — ALL runtime outputs (gitignored). Treat as ephemeral.
+- `docs/`        — MkDocs source. Do not modify unless docs-related.
+- `examples/`    — Notebooks and demo assets. Do not modify unless relevant.
+- `apps/`        — App-like examples.
+- `.github/`     — GitHub workflows and repository metadata.
 
 ## Environment and Setup
 - Editable install: `pip install -e .`
@@ -75,3 +79,5 @@
 - `/.idea/`
 - `/.vscode/`
 - `/site/`
+- `/artifacts/`
+- `/tmp_*/`
