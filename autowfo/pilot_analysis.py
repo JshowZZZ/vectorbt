@@ -306,6 +306,85 @@ def load_run_analysis_inputs(path_or_run_id: str | Path, *, artifacts_dir: str |
     }
 
 
+def load_analysis_report(path: str | Path) -> Dict[str, Any]:
+    report_path = Path(path).resolve()
+    payload = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise ValueError("analysis report must decode to an object")
+    return payload
+
+
+def _resolve_base_config_path(config_path: str | Path | None, cwd: str | Path | None = None) -> Path | None:
+    if not config_path:
+        return None
+    path = Path(config_path)
+    if path.is_absolute():
+        return path if path.exists() else None
+    base_dir = Path(cwd or ".").resolve()
+    candidate = (base_dir / path).resolve()
+    return candidate if candidate.exists() else None
+
+
+def build_replay_config_from_analysis(
+    analysis_payload: Mapping[str, Any],
+    main_run: Mapping[str, Any],
+    *,
+    cwd: str | Path | None = None,
+) -> Dict[str, Any]:
+    protocol_summary = (
+        (analysis_payload.get("protocol_summary") or {}).get("canonical_gate_passed") or {}
+    )
+    field_values = protocol_summary.get("field_values") or {}
+    if not field_values:
+        raise ValueError("analysis report has no canonical gate-passed protocol summary")
+
+    indicator_lists = list(field_values.get("indicator_list") or [])
+    if len(indicator_lists) != 1:
+        raise ValueError("replay export requires exactly one canonical indicator_list")
+    indicator_subset = [token for token in str(indicator_lists[0]).split(",") if token]
+    if not indicator_subset:
+        raise ValueError("canonical indicator_list is empty")
+
+    base_config: Dict[str, Any] = {}
+    metadata = dict(main_run.get("metadata") or {})
+    base_config_path = _resolve_base_config_path(metadata.get("config_path"), cwd=cwd)
+    if base_config_path is not None:
+        payload = json.loads(base_config_path.read_text(encoding="utf-8-sig"))
+        if isinstance(payload, dict):
+            base_config = payload
+
+    export_config = dict(base_config)
+    export_config["search_mode"] = "combo"
+    export_config["combo_sizes"] = [len(indicator_subset)]
+    export_config["indicator_subset"] = indicator_subset
+    export_config["trade_symbols"] = list(metadata.get("trade_symbols") or export_config.get("trade_symbols") or [])
+    export_config["timeframes"] = list(metadata.get("timeframes") or export_config.get("timeframes") or [])
+    export_config["wf_train_days"] = int(metadata.get("wf_train_days", export_config.get("wf_train_days", 120)) or 120)
+    export_config["wf_test_days"] = int(metadata.get("wf_test_days", export_config.get("wf_test_days", 30)) or 30)
+    export_config["wf_step_days"] = int(metadata.get("wf_step_days", export_config.get("wf_step_days", 30)) or 30)
+    export_config["wf_valid_days"] = int(metadata.get("wf_valid_days", export_config.get("wf_valid_days", 0)) or 0)
+    export_config["risk_mode"] = str(export_config.get("risk_mode") or metadata.get("risk_mode") or "fixed_pct")
+    export_config["regime_name_filter"] = list(field_values.get("regime_name") or [])
+    export_config["max_holds"] = list(field_values.get("max_hold") or [])
+    export_config["top_n_refine"] = 0
+    export_config["pilot_fixed_indicator_params"] = bool(
+        export_config.get("pilot_fixed_indicator_params", True)
+    )
+    export_config["pilot_single_trend_mom"] = bool(
+        export_config.get("pilot_single_trend_mom", True)
+    )
+
+    risk_mode = str(export_config.get("risk_mode") or "fixed_pct").strip().lower()
+    if risk_mode == "atr_multiple":
+        export_config["tp_atr_multipliers"] = list(field_values.get("tp_stop") or [])
+        export_config["sl_atr_multipliers"] = list(field_values.get("sl_stop") or [])
+    else:
+        export_config["tp_stops"] = list(field_values.get("tp_stop") or [])
+        export_config["sl_stops"] = list(field_values.get("sl_stop") or [])
+
+    return export_config
+
+
 def compare_pilot_runs(
     main_run: Mapping[str, Any],
     sensitivity_run: Mapping[str, Any],

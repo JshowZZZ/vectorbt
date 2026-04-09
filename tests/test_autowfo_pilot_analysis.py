@@ -240,3 +240,58 @@ def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):
     assert len(got["combo_df"]) == 1
     assert len(got["symbol_oos_df"]) == 3
     assert got["metadata"]["timeframe_diagnostics"][0]["realized_shared_days"] == 125
+
+
+def test_build_replay_config_from_analysis_uses_canonical_protocol_ranges(tmp_path):
+    config_path = tmp_path / "artifacts" / "base_config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "risk_mode": "atr_multiple",
+                "pilot_fixed_indicator_params": True,
+                "pilot_single_trend_mom": True,
+                "capital_mode": "per_symbol",
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis_payload = {
+        "main_run": {"run_id": "main"},
+        "protocol_summary": {
+            "canonical_gate_passed": {
+                "row_count": 2,
+                "field_values": {
+                    "indicator_list": ["mfi,obv_roc,atr_ratio"],
+                    "regime_name": ["trend_high"],
+                    "tp_stop": [1.0, 1.25],
+                    "sl_stop": [0.75, 1.0],
+                    "max_hold": [4],
+                },
+            }
+        },
+    }
+    main_run = {
+        "metadata": {
+            "config_path": "artifacts/base_config.json",
+            "trade_symbols": ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"],
+            "timeframes": [{"timeframe": "2h", "days": 180}],
+            "wf_train_days": 45,
+            "wf_test_days": 30,
+            "wf_step_days": 30,
+            "wf_valid_days": 0,
+        }
+    }
+
+    replay_config = pilot_analysis.build_replay_config_from_analysis(
+        analysis_payload,
+        main_run,
+        cwd=tmp_path,
+    )
+
+    assert replay_config["combo_sizes"] == [3]
+    assert replay_config["indicator_subset"] == ["mfi", "obv_roc", "atr_ratio"]
+    assert replay_config["regime_name_filter"] == ["trend_high"]
+    assert replay_config["tp_atr_multipliers"] == [1.0, 1.25]
+    assert replay_config["sl_atr_multipliers"] == [0.75, 1.0]
+    assert replay_config["max_holds"] == [4]

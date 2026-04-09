@@ -199,6 +199,7 @@ def main():
     trade_symbols = runtime_settings["trade_symbols"]
     indicator_keys = runtime_settings["indicator_subset"]
     regime_preset = runtime_settings["regime_preset"]
+    regime_name_filter = runtime_settings["regime_name_filter"]
     pilot_fixed_indicator_params = runtime_settings["pilot_fixed_indicator_params"]
     pilot_single_trend_mom = runtime_settings["pilot_single_trend_mom"]
     wf_train_days = runtime_settings["wf_train_days"]
@@ -343,7 +344,10 @@ def main():
     regime_variants = engine_helpers._build_regime_variants(
         rsi_revert_pairs,
         preset=regime_preset,
+        regime_name_filter=regime_name_filter,
     )
+    if not regime_variants:
+        raise ValueError("regime_name_filter removed all regime variants")
 
     # scanning logic (multi-timeframe, incremental, two-space)
     regime_lookup = {regime["regime_name"]: regime for regime in regime_variants}

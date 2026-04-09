@@ -176,6 +176,7 @@ def test_resolve_runtime_settings_normalizes_fields():
         "trade_symbols": "ETH/BTC,BTC/USDT,SOL/BTC",
         "indicator_subset": "mfi,cmf,missing,mfi",
         "regime_preset": "pilot_trend_3",
+        "regime_name_filter": "trend_high,trend_high,trend_low",
         "pilot_fixed_indicator_params": "true",
         "pilot_single_trend_mom": "yes",
         "wf_train_days": 7,
@@ -220,6 +221,7 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["trade_symbols"] == ["ETH/BTC", "SOL/BTC"]
     assert got["indicator_subset"] == ["mfi", "cmf"]
     assert got["regime_preset"] == "pilot_trend_3"
+    assert got["regime_name_filter"] == ["trend_high", "trend_low"]
     assert got["pilot_fixed_indicator_params"] is True
     assert got["pilot_single_trend_mom"] is True
     assert got["wf_train_days"] == 7
@@ -271,6 +273,15 @@ def test_build_regime_variants_characterization():
 def test_build_regime_variants_pilot_trend_3():
     variants = e._build_regime_variants([(30, 70)], preset="pilot_trend_3")
     assert [v["regime_name"] for v in variants] == ["trend_high", "trend_low", "trend_any"]
+
+
+def test_build_regime_variants_applies_regime_name_filter():
+    variants = e._build_regime_variants(
+        [(30, 70)],
+        preset="pilot_trend_3",
+        regime_name_filter=["trend_high"],
+    )
+    assert [v["regime_name"] for v in variants] == ["trend_high"]
 
 
 def test_count_coarse_combos_small_case():

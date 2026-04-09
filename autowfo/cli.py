@@ -240,6 +240,10 @@ def _cmd_pilot_analyze(args: argparse.Namespace) -> int:
     return cmd_plan.cmd_pilot_analyze(args, _self())
 
 
+def _cmd_pilot_export_config(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_pilot_export_config(args, _self())
+
+
 def _cmd_gate_c(args: argparse.Namespace) -> int:
     return cmd_gate.cmd_gate_c(args, _self())
 

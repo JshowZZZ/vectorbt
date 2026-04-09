@@ -327,6 +327,126 @@ def test_cli_pilot_analyze_writes_machine_readable_report(tmp_path):
     assert payload["top_gate_passed"][0]["indicator_list"] == "mfi,obv_roc"
 
 
+def test_cli_pilot_export_config_writes_replay_config(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    run_root = artifacts_dir / "runs" / "20260410_010000"
+    (run_root / "results").mkdir(parents=True)
+    (run_root / "metadata").mkdir(parents=True)
+    base_config = artifacts_dir / "base_config.json"
+    base_config.write_text(
+        json.dumps(
+            {
+                "risk_mode": "atr_multiple",
+                "pilot_fixed_indicator_params": True,
+                "pilot_single_trend_mom": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "indicator_list": "mfi,obv_roc,atr_ratio",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "filter_name": "none",
+                "vol_lookback": 24,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.25,
+                "sl_stop": 0.75,
+                "max_hold": 4,
+                "oos_avg_total_return_pct": 0.1,
+                "oos_avg_total_trades": 0.5,
+                "oos_sharpe_like": 1.0,
+            }
+        ]
+    ).to_csv(run_root / "results" / "param_sweep_combo_summary.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "indicator_list": "mfi,obv_roc,atr_ratio",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "filter_name": "none",
+                "vol_lookback": 24,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.25,
+                "sl_stop": 0.75,
+                "max_hold": 4,
+                "symbol": "LTC/BTC",
+                "oos_avg_total_return_pct": 0.1,
+                "oos_avg_total_trades": 0.5,
+                "oos_positive_segment_ratio": 0.5,
+                "oos_segments": 2.0,
+            }
+        ]
+    ).to_csv(run_root / "results" / "param_sweep_symbol_oos_summary.csv", index=False)
+    (run_root / "metadata" / "run_metadata_20260410_010000.json").write_text(
+        json.dumps(
+            {
+                "config_path": "artifacts/base_config.json",
+                "trade_symbols": ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"],
+                "timeframes": [{"timeframe": "2h", "days": 180}],
+                "wf_train_days": 45,
+                "wf_test_days": 30,
+                "wf_step_days": 30,
+                "wf_valid_days": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis_path = artifacts_dir / "pilot_analysis.json"
+    analysis_path.write_text(
+        json.dumps(
+            {
+                "main_run": {"run_id": "20260410_010000"},
+                "protocol_summary": {
+                    "canonical_gate_passed": {
+                        "row_count": 1,
+                        "field_values": {
+                            "indicator_list": ["mfi,obv_roc,atr_ratio"],
+                            "regime_name": ["trend_high"],
+                            "tp_stop": [1.0, 1.25],
+                            "sl_stop": [0.75, 1.0],
+                            "max_hold": [4],
+                        },
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_config = artifacts_dir / "replay_config.json"
+    code = cli.main(
+        [
+            "pilot-export-config",
+            "--analysis-json",
+            str(analysis_path),
+            "--artifacts-dir",
+            "artifacts",
+            "--out-config",
+            str(out_config.relative_to(tmp_path)),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    payload = json.loads(out_config.read_text(encoding="utf-8"))
+    assert payload["indicator_subset"] == ["mfi", "obv_roc", "atr_ratio"]
+    assert payload["combo_sizes"] == [3]
+    assert payload["regime_name_filter"] == ["trend_high"]
+    assert payload["tp_atr_multipliers"] == [1.0, 1.25]
+    assert payload["sl_atr_multipliers"] == [0.75, 1.0]
+    assert payload["max_holds"] == [4]
+
+
 def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
     good_cfg = tmp_path / "good.json"
     bad_cfg = tmp_path / "bad.json"

@@ -47,8 +47,10 @@
   Mapped the outer TP/SL boundary on the frozen exact lane (`20260410_001200`, `20260410_001300`). Result: `90` comparable rows produced `30` gate-passed rows, all in `trend_high` with `max_hold=4`, confirming a broad exact-lane risk plateau rather than a narrow knife-edge.
 - `done` `AWF-255` Canonical lane protocol summary extraction.
   Extended the pilot-analysis contract so canonical gate-passed rows emit machine-readable protocol ranges. The exact-lane report now directly exposes the surviving field ranges for `indicator_list`, `regime_name`, `vol_mode`, `tp_stop`, `sl_stop`, and `max_hold`, so the lane can be replayed without manual JSON inspection.
-- `todo` `AWF-256` Exact-lane protocol freeze and replay/export path.
-  Turn the now-explicit canonical lane protocol into the smallest reusable replay/export path for the next stage, rather than continuing exploratory sweeps.
+- `done` `AWF-256` Exact-lane protocol freeze and replay/export path.
+  Added exact-lane replay/export support via `pilot-export-config`, plus exact `regime_name_filter` support in the legacy engine. Verified by exporting [pilot_analysis_awf254_exact_lane_plateau.json](e:/Project/vectorbt-master/artifacts/reports/pilot_analysis_awf254_exact_lane_plateau.json) into `artifacts/pilot_replay_exact_lane_2h_4sym.json` and replaying it as run `20260410_073700`, which reproduced the expected `30` exact-lane rows.
+- `todo` `AWF-257` Exact-lane promotion and operator preset path.
+  Promote the frozen exact lane into the smallest operator-facing replay/preset path, so the lane can be reused deliberately without going through manual artifact selection.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -147,6 +149,13 @@
 - 2026-04-10: `AWF-256` opened.
   - Next step: promote the explicit canonical lane into a reusable replay/export path for the next stage.
   - The goal is to stop doing exploratory sweeps for this lane and start treating it as a frozen protocol candidate.
+- 2026-04-10: `AWF-256` completed.
+  - Added exact `regime_name_filter` support and a new CLI/export path: `python -m autowfo pilot-export-config`.
+  - Exported `artifacts/reports/pilot_analysis_awf254_exact_lane_plateau.json` into `artifacts/pilot_replay_exact_lane_2h_4sym.json`.
+  - Replayed the exported config as run `20260410_073700`, which produced exactly `30` rows with `indicator_list=mfi,obv_roc,atr_ratio`, `regime_name=trend_high`, TP range `[1.0..2.25]`, SL range `[0.5..1.5]`, and `max_hold=4`.
+- 2026-04-10: `AWF-257` opened.
+  - Next step: turn the frozen exact lane into the smallest operator-facing replay/preset path.
+  - This is now a promotion/reuse problem, not a discovery problem.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).

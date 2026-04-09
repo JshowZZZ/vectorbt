@@ -194,6 +194,33 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     pilot_parser.add_argument("--cwd", default=".", help="Working directory")
     pilot_parser.set_defaults(handler=cli_impl._cmd_pilot_analyze)
 
+    pilot_export_parser = subparsers.add_parser(
+        "pilot-export-config",
+        help="Export a replayable config JSON from a pilot-analysis report",
+    )
+    pilot_export_parser.add_argument(
+        "--analysis-json",
+        required=True,
+        help="Path to pilot-analysis JSON report",
+    )
+    pilot_export_parser.add_argument(
+        "--main-run",
+        default="",
+        help="Optional main run id/path override (defaults to report main_run.run_id)",
+    )
+    pilot_export_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory used when main run id is provided",
+    )
+    pilot_export_parser.add_argument(
+        "--out-config",
+        default="artifacts/pilot_replay_config.json",
+        help="Output path for exported replay config JSON",
+    )
+    pilot_export_parser.add_argument("--cwd", default=".", help="Working directory")
+    pilot_export_parser.set_defaults(handler=cli_impl._cmd_pilot_export_config)
+
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
     cwd = Path(args.cwd).resolve()
@@ -526,6 +553,40 @@ def cmd_pilot_analyze(args: argparse.Namespace, cli_impl: Any) -> int:
             compared=summary.get("compared_combo_rows", 0),
             stable=summary.get("stable_positive_rows", 0),
             gate_passed=summary.get("gate_passed_rows", 0),
+        )
+    )
+    return 0
+
+
+def cmd_pilot_export_config(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import pilot_analysis
+
+    cwd = Path(args.cwd).resolve()
+    artifacts_dir = cli_impl._resolve_path(cwd, args.artifacts_dir)
+    analysis_json = cli_impl._resolve_path(cwd, args.analysis_json)
+    out_config = cli_impl._resolve_path(cwd, args.out_config)
+
+    analysis_payload = pilot_analysis.load_analysis_report(analysis_json)
+    main_run_id = str(args.main_run or "").strip() or str((analysis_payload.get("main_run") or {}).get("run_id") or "")
+    if not main_run_id:
+        raise ValueError("main run id is required when analysis report does not include it")
+    main_run = pilot_analysis.load_run_analysis_inputs(main_run_id, artifacts_dir=artifacts_dir)
+    replay_config = pilot_analysis.build_replay_config_from_analysis(
+        analysis_payload,
+        main_run,
+        cwd=cwd,
+    )
+
+    out_config.parent.mkdir(parents=True, exist_ok=True)
+    out_config.write_text(cli_impl.json.dumps(replay_config, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[pilot-export-config] analysis_json={analysis_json}")
+    print(f"[pilot-export-config] main_run={main_run.get('run_id')}")
+    print(f"[pilot-export-config] out_config={out_config}")
+    print(
+        "[pilot-export-config] combo_sizes={combo_sizes} indicators={indicator_subset} regimes={regimes}".format(
+            combo_sizes=replay_config.get("combo_sizes"),
+            indicator_subset=replay_config.get("indicator_subset"),
+            regimes=replay_config.get("regime_name_filter"),
         )
     )
     return 0

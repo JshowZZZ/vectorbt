@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     "trade_symbols": ["ETH/BTC", "BNB/BTC", "SOL/BTC"],
     "indicator_subset": None,
     "regime_preset": "full",
+    "regime_name_filter": None,
     "pilot_fixed_indicator_params": False,
     "pilot_single_trend_mom": False,
     "capital_mode": "shared",
@@ -439,6 +440,21 @@ def _normalize_regime_preset(value):
     return preset
 
 
+def _normalize_regime_name_filter(value):
+    values = value
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [item.strip() for item in values.split(",") if item.strip()]
+    normalized = []
+    for item in values:
+        name = str(item or "").strip()
+        if not name or name in normalized:
+            continue
+        normalized.append(name)
+    return normalized
+
+
 def _normalize_risk_mode(value):
     risk_mode = str(value or "fixed_pct").strip().lower()
     if risk_mode not in {"fixed_pct", "atr_multiple"}:
@@ -535,6 +551,7 @@ def _resolve_runtime_settings(
         available_indicator_keys or [],
     )
     regime_preset = _normalize_regime_preset(default_config.get("regime_preset", "full"))
+    regime_name_filter = _normalize_regime_name_filter(default_config.get("regime_name_filter"))
     pilot_fixed_indicator_params = _safe_bool(
         default_config.get("pilot_fixed_indicator_params", False),
         False,
@@ -593,6 +610,7 @@ def _resolve_runtime_settings(
         "trade_symbols": trade_symbols,
         "indicator_subset": indicator_subset,
         "regime_preset": regime_preset,
+        "regime_name_filter": regime_name_filter,
         "pilot_fixed_indicator_params": pilot_fixed_indicator_params,
         "pilot_single_trend_mom": pilot_single_trend_mom,
         "wf_train_days": wf_train_days,
@@ -628,57 +646,63 @@ def _build_ma_pairs(base_ma_pairs):
     )
 
 
-def _build_regime_variants(rsi_revert_pairs, preset="full"):
+def _build_regime_variants(rsi_revert_pairs, preset="full", regime_name_filter=None):
     trend_variants = [
         {"regime_name": "trend_high", "regime_type": "trend", "vol_mode": "high", "rsi_pair": None},
         {"regime_name": "trend_low", "regime_type": "trend", "vol_mode": "low", "rsi_pair": None},
         {"regime_name": "trend_any", "regime_type": "trend", "vol_mode": "any", "rsi_pair": None},
     ]
     if _normalize_regime_preset(preset) == "pilot_trend_3":
-        return trend_variants
-    regime_variants = list(trend_variants)
-    for rsi_pair in rsi_revert_pairs:
+        regime_variants = trend_variants
+    else:
+        regime_variants = list(trend_variants)
+        for rsi_pair in rsi_revert_pairs:
+            regime_variants.append(
+                {
+                    "regime_name": "rsi_revert_low",
+                    "regime_type": "rsi_revert",
+                    "vol_mode": "low",
+                    "rsi_pair": rsi_pair,
+                }
+            )
+        for rsi_pair in rsi_revert_pairs:
+            regime_variants.append(
+                {
+                    "regime_name": "rsi_revert_high",
+                    "regime_type": "rsi_revert",
+                    "vol_mode": "high",
+                    "rsi_pair": rsi_pair,
+                }
+            )
         regime_variants.append(
             {
-                "regime_name": "rsi_revert_low",
-                "regime_type": "rsi_revert",
+                "regime_name": "bb_revert_low",
+                "regime_type": "bb_revert",
                 "vol_mode": "low",
-                "rsi_pair": rsi_pair,
+                "rsi_pair": None,
             }
         )
-    for rsi_pair in rsi_revert_pairs:
         regime_variants.append(
             {
-                "regime_name": "rsi_revert_high",
-                "regime_type": "rsi_revert",
+                "regime_name": "bb_revert_high",
+                "regime_type": "bb_revert",
                 "vol_mode": "high",
-                "rsi_pair": rsi_pair,
+                "rsi_pair": None,
             }
         )
-    regime_variants.append(
-        {
-            "regime_name": "bb_revert_low",
-            "regime_type": "bb_revert",
-            "vol_mode": "low",
-            "rsi_pair": None,
-        }
-    )
-    regime_variants.append(
-        {
-            "regime_name": "bb_revert_high",
-            "regime_type": "bb_revert",
-            "vol_mode": "high",
-            "rsi_pair": None,
-        }
-    )
-    regime_variants.append(
-        {
-            "regime_name": "bb_breakout_high",
-            "regime_type": "bb_breakout",
-            "vol_mode": "high",
-            "rsi_pair": None,
-        }
-    )
+        regime_variants.append(
+            {
+                "regime_name": "bb_breakout_high",
+                "regime_type": "bb_breakout",
+                "vol_mode": "high",
+                "rsi_pair": None,
+            }
+        )
+    allowed_names = set(_normalize_regime_name_filter(regime_name_filter))
+    if allowed_names:
+        regime_variants = [
+            regime for regime in regime_variants if str(regime.get("regime_name") or "") in allowed_names
+        ]
     return regime_variants
 
 
