@@ -60,6 +60,34 @@ _RERUN_CAMPAIGN_PRESETS = (
             "trade_symbols": ["SOL/USDT"],
         },
     },
+    {
+        "preset_id": "exact-lane-2h-4sym",
+        "title": "Exact Lane 2h 4-Symbol",
+        "summary": "Replay the frozen exact lane discovered from the 2h BTC-cross cluster.",
+        "operator_note": "Use run/combo mode to replay the canonical lane without reopening indicator or symbol exploration.",
+        "recommended_workflow": "run",
+        "optional": False,
+        "patch": {
+            "search_mode": "combo",
+            "combo_sizes": [3],
+            "timeframes": [{"timeframe": "2h", "days": 180}],
+            "trade_symbols": ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"],
+            "indicator_subset": ["mfi", "obv_roc", "atr_ratio"],
+            "regime_preset": "pilot_trend_3",
+            "regime_name_filter": ["trend_high"],
+            "pilot_fixed_indicator_params": True,
+            "pilot_single_trend_mom": True,
+            "risk_mode": "atr_multiple",
+            "tp_atr_multipliers": [1.0, 1.25, 1.5, 1.75, 2.0, 2.25],
+            "sl_atr_multipliers": [0.5, 0.75, 1.0, 1.25, 1.5],
+            "max_holds": [4],
+            "capital_mode": "per_symbol",
+            "init_cash_usdt": 1000.0,
+            "order_size_pct": 0.5,
+            "max_concurrent_positions": 0,
+            "top_n_refine": 0,
+        },
+    },
 )
 
 
@@ -152,6 +180,8 @@ def _read_config():
 
 
 def _sanitize_config(payload, base_config=None):
+    from autowfo import engine_helpers
+
     cfg = _normalize_base_config(base_config)
     if not isinstance(payload, dict):
         return cfg
@@ -216,6 +246,64 @@ def _sanitize_config(payload, base_config=None):
         payload.get("max_concurrent_positions"), cfg["max_concurrent_positions"]
     )
 
+    indicator_subset = payload.get("indicator_subset", cfg.get("indicator_subset"))
+    if isinstance(indicator_subset, str):
+        indicator_subset = [s.strip() for s in indicator_subset.split(",") if s.strip()]
+    if isinstance(indicator_subset, (list, tuple)):
+        cfg["indicator_subset"] = [str(item).strip() for item in indicator_subset if str(item).strip()]
+
+    cfg["regime_preset"] = engine_helpers._normalize_regime_preset(
+        payload.get("regime_preset", cfg.get("regime_preset", "full"))
+    )
+    cfg["regime_name_filter"] = engine_helpers._normalize_regime_name_filter(
+        payload.get("regime_name_filter", cfg.get("regime_name_filter"))
+    )
+    cfg["pilot_fixed_indicator_params"] = bool(
+        payload.get("pilot_fixed_indicator_params", cfg.get("pilot_fixed_indicator_params", False))
+    )
+    cfg["pilot_single_trend_mom"] = bool(
+        payload.get("pilot_single_trend_mom", cfg.get("pilot_single_trend_mom", False))
+    )
+    cfg["risk_mode"] = engine_helpers._normalize_risk_mode(payload.get("risk_mode", cfg.get("risk_mode")))
+
+    def _normalize_float_list(values, fallback):
+        raw = values if values is not None else fallback
+        if isinstance(raw, str):
+            raw = [s.strip() for s in raw.split(",") if s.strip()]
+        parsed = []
+        if isinstance(raw, (list, tuple)):
+            for item in raw:
+                try:
+                    parsed.append(float(item))
+                except (TypeError, ValueError):
+                    continue
+        return parsed or list(fallback or [])
+
+    def _normalize_int_list(values, fallback):
+        raw = values if values is not None else fallback
+        if isinstance(raw, str):
+            raw = [s.strip() for s in raw.split(",") if s.strip()]
+        parsed = []
+        if isinstance(raw, (list, tuple)):
+            for item in raw:
+                try:
+                    parsed.append(int(item))
+                except (TypeError, ValueError):
+                    continue
+        return parsed or list(fallback or [])
+
+    cfg["tp_stops"] = _normalize_float_list(payload.get("tp_stops"), cfg.get("tp_stops", []))
+    cfg["sl_stops"] = _normalize_float_list(payload.get("sl_stops"), cfg.get("sl_stops", []))
+    cfg["tp_atr_multipliers"] = _normalize_float_list(
+        payload.get("tp_atr_multipliers"),
+        cfg.get("tp_atr_multipliers", []),
+    )
+    cfg["sl_atr_multipliers"] = _normalize_float_list(
+        payload.get("sl_atr_multipliers"),
+        cfg.get("sl_atr_multipliers", []),
+    )
+    cfg["max_holds"] = _normalize_int_list(payload.get("max_holds"), cfg.get("max_holds", []))
+
     trade_symbols = payload.get("trade_symbols", cfg["trade_symbols"])
     if isinstance(trade_symbols, str):
         trade_symbols = [s.strip() for s in trade_symbols.split(",") if s.strip()]
@@ -277,6 +365,8 @@ def _list_config_presets():
                 "optional": bool(item.get("optional")),
                 "timeframes": copy.deepcopy(patch.get("timeframes", [])),
                 "trade_symbols": copy.deepcopy(patch.get("trade_symbols", [])),
+                "indicator_subset": copy.deepcopy(patch.get("indicator_subset", [])),
+                "regime_name_filter": copy.deepcopy(patch.get("regime_name_filter", [])),
             }
         )
     return presets

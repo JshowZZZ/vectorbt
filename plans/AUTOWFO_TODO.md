@@ -49,8 +49,12 @@
   Extended the pilot-analysis contract so canonical gate-passed rows emit machine-readable protocol ranges. The exact-lane report now directly exposes the surviving field ranges for `indicator_list`, `regime_name`, `vol_mode`, `tp_stop`, `sl_stop`, and `max_hold`, so the lane can be replayed without manual JSON inspection.
 - `done` `AWF-256` Exact-lane protocol freeze and replay/export path.
   Added exact-lane replay/export support via `pilot-export-config`, plus exact `regime_name_filter` support in the legacy engine. Verified by exporting [pilot_analysis_awf254_exact_lane_plateau.json](e:/Project/vectorbt-master/artifacts/reports/pilot_analysis_awf254_exact_lane_plateau.json) into `artifacts/pilot_replay_exact_lane_2h_4sym.json` and replaying it as run `20260410_073700`, which reproduced the expected `30` exact-lane rows.
-- `todo` `AWF-257` Exact-lane promotion and operator preset path.
-  Promote the frozen exact lane into the smallest operator-facing replay/preset path, so the lane can be reused deliberately without going through manual artifact selection.
+- `done` `AWF-257` Exact-lane promotion and operator preset path.
+  Added an operator-facing control-panel preset `exact-lane-2h-4sym` and extended config sanitization so exact-lane hidden fields survive apply/save. The frozen exact lane can now be reused directly from the control panel without manual artifact selection.
+- `done` `AWF-258` Export/preset parity guard for the exact lane.
+  Added regression coverage that compares the canonical replay config derived from the exact-lane protocol summary against the operator preset `exact-lane-2h-4sym`. This now guards against silent drift between the CLI export/replay path and the control-panel preset path.
+- `todo` `AWF-259` Exact-lane preset consumption in operator workflow.
+  Wire the frozen exact lane into the smallest next-stage operator workflow that uses the preset deliberately, rather than only proving preset parity in tests.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -156,6 +160,19 @@
 - 2026-04-10: `AWF-257` opened.
   - Next step: turn the frozen exact lane into the smallest operator-facing replay/preset path.
   - This is now a promotion/reuse problem, not a discovery problem.
+- 2026-04-10: `AWF-257` completed.
+  - Added the control-panel preset `exact-lane-2h-4sym` with the exact cluster, canonical indicator family, exact regime filter, ATR risk plateau, and `max_hold=4`.
+  - Extended config sanitization so `indicator_subset`, `regime_name_filter`, ATR risk arrays, and pilot flags survive preset apply/save.
+  - Verified via targeted control-panel regression that the preset appears in `/config/presets.json` and applying it persists the exact-lane controls into `CONFIG_JSON`.
+- 2026-04-10: `AWF-258` opened.
+  - Next step: add a parity guard so the operator preset and the exported replay config do not silently drift apart.
+  - This should stay small and defensive; the lane itself is already frozen.
+- 2026-04-10: `AWF-258` completed.
+  - Added a parity regression that compares the replay config built from the canonical exact-lane protocol summary against the control-panel preset `exact-lane-2h-4sym`.
+  - This now protects the operator preset from drifting away from the CLI export/replay path as the canonical lane evolves.
+- 2026-04-10: `AWF-259` opened.
+  - Next step: use the frozen exact-lane preset in a deliberate operator workflow, not just in config/preset tests.
+  - The purpose is to validate reuse ergonomics, not to reopen discovery.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).

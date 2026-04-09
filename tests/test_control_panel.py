@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from autowfo import pilot_analysis
 from autowfo.control_panel import server as cp
 from autowfo.control_panel import state as cp_state
 
@@ -470,6 +471,7 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
         "wave2-core-2h-120d",
         "wave2-xrp-4h-180d",
         "wave2-sol-usdt-2h-120d",
+        "exact-lane-2h-4sym",
     }.issubset(preset_ids)
 
 
@@ -518,6 +520,117 @@ def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(
     assert saved_cfg["max_workers"] == 5
     assert saved_cfg["checkpoint_every_n"] == 250
     assert saved_cfg["progress_every_n"] == 40
+
+
+def test_config_apply_exact_lane_preset_persists_lane_controls(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    cp.CONFIG_JSON.write_text(json.dumps(cp.DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset",
+            body=json.dumps({"preset_id": "exact-lane-2h-4sym"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["preset"]["preset_id"] == "exact-lane-2h-4sym"
+
+    saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
+    assert saved_cfg["combo_sizes"] == [3]
+    assert saved_cfg["indicator_subset"] == ["mfi", "obv_roc", "atr_ratio"]
+    assert saved_cfg["regime_preset"] == "pilot_trend_3"
+    assert saved_cfg["regime_name_filter"] == ["trend_high"]
+    assert saved_cfg["risk_mode"] == "atr_multiple"
+    assert saved_cfg["tp_atr_multipliers"] == [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+    assert saved_cfg["sl_atr_multipliers"] == [0.5, 0.75, 1.0, 1.25, 1.5]
+    assert saved_cfg["max_holds"] == [4]
+    assert saved_cfg["trade_symbols"] == ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"]
+
+
+def test_exact_lane_preset_matches_replay_export_contract(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    artifacts_dir = tmp_path / "artifacts"
+    base_config = artifacts_dir / "base_config.json"
+    base_config.write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "combo_sizes": [3],
+                "timeframes": [{"timeframe": "2h", "days": 180}],
+                "trade_symbols": ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"],
+                "indicator_subset": ["mfi", "obv_roc", "atr_ratio"],
+                "regime_preset": "pilot_trend_3",
+                "pilot_fixed_indicator_params": True,
+                "pilot_single_trend_mom": True,
+                "risk_mode": "atr_multiple",
+                "capital_mode": "per_symbol",
+                "init_cash_usdt": 1000.0,
+                "order_size_pct": 0.5,
+                "max_concurrent_positions": 0,
+                "top_n_refine": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis_payload = {
+        "main_run": {"run_id": "run-main"},
+        "protocol_summary": {
+            "canonical_gate_passed": {
+                "row_count": 30,
+                "field_values": {
+                    "indicator_list": ["mfi,obv_roc,atr_ratio"],
+                    "regime_name": ["trend_high"],
+                    "tp_stop": [1.0, 1.25, 1.5, 1.75, 2.0, 2.25],
+                    "sl_stop": [0.5, 0.75, 1.0, 1.25, 1.5],
+                    "max_hold": [4],
+                },
+            }
+        },
+    }
+    main_run = {
+        "metadata": {
+            "config_path": "artifacts/base_config.json",
+            "trade_symbols": ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"],
+            "timeframes": [{"timeframe": "2h", "days": 180}],
+            "wf_train_days": 45,
+            "wf_test_days": 30,
+            "wf_step_days": 30,
+            "wf_valid_days": 0,
+        }
+    }
+    replay_config = pilot_analysis.build_replay_config_from_analysis(
+        analysis_payload,
+        main_run,
+        cwd=tmp_path,
+    )
+    preset_patch = cp._find_config_preset("exact-lane-2h-4sym")["patch"]
+
+    compare_keys = [
+        "combo_sizes",
+        "timeframes",
+        "trade_symbols",
+        "indicator_subset",
+        "regime_preset",
+        "regime_name_filter",
+        "pilot_fixed_indicator_params",
+        "pilot_single_trend_mom",
+        "risk_mode",
+        "tp_atr_multipliers",
+        "sl_atr_multipliers",
+        "max_holds",
+        "capital_mode",
+        "init_cash_usdt",
+        "order_size_pct",
+        "max_concurrent_positions",
+        "top_n_refine",
+    ]
+    for key in compare_keys:
+        assert replay_config[key] == preset_patch[key]
 
 
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
