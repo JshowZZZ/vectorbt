@@ -210,6 +210,13 @@ def test_compare_pilot_runs_marks_evidence_equivalent_superset_as_redundant():
     assert payload["redundant_gate_passed"][0]["is_canonical_family"] is False
     assert payload["redundant_gate_passed"][0]["canonical_indicator_list"] == "mfi,obv_roc,atr_ratio"
     assert payload["redundant_gate_passed"][0]["canonical_reason"] == "evidence_equivalent_superset"
+    protocol_summary = payload["protocol_summary"]["canonical_gate_passed"]
+    assert protocol_summary["row_count"] == 1
+    assert protocol_summary["field_values"]["indicator_list"] == ["mfi,obv_roc,atr_ratio"]
+    assert protocol_summary["field_values"]["tp_stop"] == [1.5]
+    redundant_summary = payload["protocol_summary"]["redundant_gate_passed"]
+    assert redundant_summary["row_count"] == 1
+    assert redundant_summary["field_values"]["indicator_list"] == ["mfi,obv_roc,atr_ratio,macd_hist"]
 
 
 def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):

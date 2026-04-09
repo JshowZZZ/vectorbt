@@ -41,8 +41,14 @@
   Extended the pilot-analysis contract so evidence-equivalent supersets are marked as redundant. Re-analyzing `AWF-250` showed the `2` gate-passed rows collapse to `1` canonical family plus `1` redundant superset, confirming the local lane should be represented by the canonical core `mfi + obv_roc + atr_ratio`, not by inflated combo counts.
 - `done` `AWF-252` Boundary replacement stress test on the canonical 4-symbol lane.
   Re-ran the same family-first neighborhood campaign with `BNB/BTC` replacing `AVAX/BTC` (`20260409_235950`, `20260409_235955`). Result: the lane fell to `6` stable-positive rows and `0` gate-passed rows, which confirms the current boundary is about specific cluster membership, not just raw cluster size.
-- `todo` `AWF-253` Exact-cluster lane freeze and next-stage search scope definition.
-  Freeze the currently supported lane as the exact 4-symbol cluster (`LTC/BTC`, `LINK/BTC`, `SOL/BTC`, `AVAX/BTC`) plus the canonical family `mfi + obv_roc + atr_ratio`, then define the smallest justified next-stage search around that exact cluster instead of continuing ad hoc boundary probes.
+- `done` `AWF-253` Exact-cluster lane freeze and next-stage search scope definition.
+  Froze the exact viable lane and ran the smallest justified risk-space micro-search on it (`20260410_000500`, `20260410_000700`). Result: `108` comparable rows produced `36` stable-positive rows and `9` gate-passed rows, confirming the canonical lane has a real local risk plateau rather than a single isolated risk point.
+- `done` `AWF-254` Exact-lane plateau boundary mapping.
+  Mapped the outer TP/SL boundary on the frozen exact lane (`20260410_001200`, `20260410_001300`). Result: `90` comparable rows produced `30` gate-passed rows, all in `trend_high` with `max_hold=4`, confirming a broad exact-lane risk plateau rather than a narrow knife-edge.
+- `done` `AWF-255` Canonical lane protocol summary extraction.
+  Extended the pilot-analysis contract so canonical gate-passed rows emit machine-readable protocol ranges. The exact-lane report now directly exposes the surviving field ranges for `indicator_list`, `regime_name`, `vol_mode`, `tp_stop`, `sl_stop`, and `max_hold`, so the lane can be replayed without manual JSON inspection.
+- `todo` `AWF-256` Exact-lane protocol freeze and replay/export path.
+  Turn the now-explicit canonical lane protocol into the smallest reusable replay/export path for the next stage, rather than continuing exploratory sweeps.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -124,6 +130,23 @@
 - 2026-04-09: `AWF-253` opened.
   - Next step: freeze the currently supported exact cluster and define the smallest justified next-stage search around that lane.
   - This should be planned as a scope-definition step, not as another uncontrolled expansion run.
+- 2026-04-10: `AWF-253` completed.
+  - Froze the exact viable lane (`LTC/BTC`, `LINK/BTC`, `SOL/BTC`, `AVAX/BTC` + `mfi + obv_roc + atr_ratio`) and ran a risk-space micro-search over `3` ATR TP values, `3` ATR SL values, and `4` `max_hold` values (`20260410_000500`, `20260410_000700`).
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf253_exact_lane_risk_micro.json`) reported `108` comparable rows, `36` stable-positive rows, and `9` gate-passed rows.
+  - All `9` gate-passed rows remained in `trend_high` with `max_hold=4`, and they formed a TP plateau from `1.25` to `1.75`; no canonical redundancy remained.
+- 2026-04-10: `AWF-254` opened.
+  - Next step: keep `trend_high` and `max_hold=4` fixed and map the exact TP/SL boundary around the canonical lane.
+  - Goal: determine whether stop-loss variation matters materially and where the profitable TP plateau actually ends.
+- 2026-04-10: `AWF-254` completed.
+  - Ran the plateau-boundary sweep on the exact lane with `max_hold=4`, ATR TP values `[1.0, 1.25, 1.5, 1.75, 2.0, 2.25]`, and ATR SL values `[0.5, 0.75, 1.0, 1.25, 1.5]` (`20260410_001200`, `20260410_001300`).
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf254_exact_lane_plateau.json`) reported `90` comparable rows, `30` stable-positive rows, and `30` gate-passed rows.
+  - All gate-passed rows stayed in `trend_high` with `max_hold=4`; the surviving TP range spans at least `1.0` to `2.25`, while tighter `sl_stop=0.5` remains viable but produces lower minimum returns than `sl_stop>=0.75`.
+- 2026-04-10: `AWF-255` completed.
+  - Added machine-readable protocol summaries to the pilot-analysis contract for canonical and redundant gate-passed rows.
+  - Re-reading `AWF-254` now yields an explicit canonical protocol summary: `indicator_list=mfi,obv_roc,atr_ratio`, `regime_name=trend_high`, `vol_mode=high`, `mom_lookback=6`, `trade_mom_lookback=3`, `max_hold=4`, `tp_stop in [1.0, 2.25]`, `sl_stop in [0.5, 1.5]`.
+- 2026-04-10: `AWF-256` opened.
+  - Next step: promote the explicit canonical lane into a reusable replay/export path for the next stage.
+  - The goal is to stop doing exploratory sweeps for this lane and start treating it as a frozen protocol candidate.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).

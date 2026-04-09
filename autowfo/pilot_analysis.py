@@ -192,6 +192,16 @@ def _canonical_redundancy_signature(row: Mapping[str, Any]) -> Tuple[Any, ...]:
     )
 
 
+def _sorted_unique_values(values: Iterable[Any]) -> list[Any]:
+    normalized = [_safe_json_value(value) for value in values]
+    seen = []
+    for value in normalized:
+        if value in seen:
+            continue
+        seen.append(value)
+    return sorted(seen, key=lambda value: (value is None, str(value)))
+
+
 def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
     canonical_rows: list[Dict[str, Any]] = []
     redundant_rows: list[Dict[str, Any]] = []
@@ -227,6 +237,29 @@ def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[lis
             continue
         canonical_rows.append(row)
     return canonical_rows, redundant_rows
+
+
+def _build_protocol_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    if not rows:
+        return {"row_count": 0, "field_values": {}}
+    fields = (
+        "indicator_list",
+        "regime_name",
+        "vol_mode",
+        "mom_lookback",
+        "trade_mom_lookback",
+        "tp_stop",
+        "sl_stop",
+        "max_hold",
+    )
+    field_values = {
+        field: _sorted_unique_values(row.get(field) for row in rows)
+        for field in fields
+    }
+    return {
+        "row_count": int(len(rows)),
+        "field_values": field_values,
+    }
 
 
 def _resolve_run_root(path_or_run_id: str | Path, artifacts_dir: str | Path | None = None) -> Path:
@@ -414,6 +447,10 @@ def compare_pilot_runs(
             "gate_passed_rows": int(len(gate_passed)),
             "canonical_gate_passed_rows": int(len(canonical_gate_passed)),
             "redundant_gate_passed_rows": int(len(redundant_gate_passed)),
+        },
+        "protocol_summary": {
+            "canonical_gate_passed": _build_protocol_summary(canonical_gate_passed),
+            "redundant_gate_passed": _build_protocol_summary(redundant_gate_passed),
         },
         "top_gate_passed": gate_passed[: max(0, int(top_n))],
         "canonical_gate_passed": canonical_gate_passed[: max(0, int(top_n))],
