@@ -75,7 +75,22 @@ def _default_refine_steps():
         "vroc_threshold": 0.2,
         "tp_stop": 0.001,
         "sl_stop": 0.002,
+        "tp_stop_atr_multiple": 0.25,
+        "sl_stop_atr_multiple": 0.25,
     }
+
+
+def _resolve_refine_risk_steps(refine_steps, risk_mode):
+    risk_mode_value = str(risk_mode or "fixed_pct").strip().lower()
+    if risk_mode_value == "atr_multiple":
+        return (
+            float(refine_steps.get("tp_stop_atr_multiple", refine_steps["tp_stop"])),
+            float(refine_steps.get("sl_stop_atr_multiple", refine_steps["sl_stop"])),
+        )
+    return (
+        float(refine_steps["tp_stop"]),
+        float(refine_steps["sl_stop"]),
+    )
 
 
 def _build_refine_targets(
@@ -97,10 +112,11 @@ def _build_refine_targets(
         indicator_combo = tuple([v for v in str(indicator_list).split(",") if v])
         if not indicator_combo:
             continue
+        tp_step, sl_step = _resolve_refine_risk_steps(refine_steps, row.get("risk_mode"))
         base_tp = safe_float_fn(row.get("tp_stop"), tp_stops[0])
         base_sl = safe_float_fn(row.get("sl_stop"), sl_stops[0])
-        tp_candidates = expand_float_fn(base_tp, refine_steps["tp_stop"], min_value=0.0001)
-        sl_candidates = expand_float_fn(base_sl, refine_steps["sl_stop"], min_value=0.0001)
+        tp_candidates = expand_float_fn(base_tp, tp_step, min_value=0.0001)
+        sl_candidates = expand_float_fn(base_sl, sl_step, min_value=0.0001)
         param_options = {
             key: refine_indicator_params_fn(key, row, refine_steps, indicator_defaults)
             for key in indicator_combo

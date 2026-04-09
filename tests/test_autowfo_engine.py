@@ -974,6 +974,47 @@ def test_build_refine_targets():
     assert len(fine_targets) == 1
 
 
+def test_resolve_refine_risk_steps_switches_for_atr_multiple():
+    refine_steps = _e_search._default_refine_steps()
+    assert _e_search._resolve_refine_risk_steps(refine_steps, "fixed_pct") == (0.001, 0.002)
+    assert _e_search._resolve_refine_risk_steps(refine_steps, "atr_multiple") == (0.25, 0.25)
+
+
+def test_build_refine_targets_uses_atr_specific_risk_steps():
+    top_candidates = pd.DataFrame(
+        [
+            {
+                "indicator_list": "mfi",
+                "risk_mode": "atr_multiple",
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "mfi_long": 60,
+                "mfi_short": 40,
+            }
+        ]
+    )
+    expand_calls = []
+
+    def _expand(base, step, min_value=None):
+        expand_calls.append((base, step, min_value))
+        return [base - step, base, base + step]
+
+    fine_total, fine_targets = _e_search._build_refine_targets(
+        top_candidates=top_candidates,
+        tp_stops=[1.5],
+        sl_stops=[1.0],
+        indicator_defaults={"mfi": {"mfi_long": 60, "mfi_short": 40}},
+        refine_steps=_e_search._default_refine_steps(),
+        expand_float_fn=_expand,
+        safe_float_fn=lambda v, d: d if v is None else float(v),
+        refine_indicator_params_fn=lambda key, row, steps, defaults: [defaults[key]],
+    )
+    assert fine_total == 9
+    assert len(fine_targets) == 1
+    assert expand_calls[0] == (1.5, 0.25, 0.0001)
+    assert expand_calls[1] == (1.0, 0.25, 0.0001)
+
+
 def test_build_combo_key_values_characterization():
     values = e._build_combo_key_values(
         timeframe="3m",

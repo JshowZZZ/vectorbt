@@ -29,6 +29,14 @@
   Re-ran the same stable-cluster pilot on `1h` (`20260409_004200`, `20260409_004600`). Result: `1h` restored full `180d` overlap and increased trade density, but it did not produce any all-symbol-nonnegative stable combos across both WFO settings, so the evidence still favors the `2h` subgroup lane rather than a general "more bars will fix it" story.
 - `done` `AWF-246` Pilot analysis contract and decision-gate hardening.
   Added `autowfo pilot-analyze` plus `autowfo.pilot_analysis` to formalize stable identity matching, symbol-support aggregation, gate evaluation, and machine-readable JSON output. Verified on existing subgroup runs: `2h` analysis (`pilot_analysis_awf244_2h.json`) reports `4` gate-passed candidates, while the `1h` stress test (`pilot_analysis_awf245_1h.json`) reports `0`.
+- `done` `AWF-247` ATR-aware subgroup refinement on the confirmed `2h` lane.
+  Added ATR-aware refine-step semantics, then ran narrow `2h` subgroup baseline/refine cycles (`20260409_151530`/`20260409_151643` and `20260409_152657`/`20260409_152756`). Result: refine produced `27` symbol-supported comparable candidates but `0` stable-positive and `0` gate-passed rows across the WFO pair, so current evidence does not justify deeper same-lane parameter refinement.
+- `done` `AWF-248` Limited cluster expansion on the `2h` subgroup winners.
+  Expanded the narrow `2h` lane from `LTC/BTC` + `LINK/BTC` + `SOL/BTC` to a 4-symbol cluster by adding `AVAX/BTC` (`20260409_154200`, `20260409_154400`). Result: the lane survived soft expansion with `13` stable-positive rows and `1` gate-passed candidate, led by `mfi + obv_roc + atr_ratio` / `trend_high` / `max_hold=4`.
+- `done` `AWF-249` Boundary expansion on the `2h` cluster lane.
+  Expanded the same narrow `2h` lane to 5 symbols by adding `BNB/BTC` (`20260409_155100`, `20260409_155300`). Result: the lane retained `7` stable-positive rows but fell to `0` gate-passed candidates, which marks the current practical boundary of the cluster-first interpretation.
+- `doing` `AWF-250` Family-first neighborhood campaign on the confirmed 4-symbol lane.
+  Freeze the current `2h` cluster boundary at `LTC/BTC` + `LINK/BTC` + `SOL/BTC` + `AVAX/BTC`, then run a narrow family-first campaign around the surviving `mfi + obv_roc + atr_ratio` winner to determine whether the edge is a stable local neighborhood or just a single surviving point.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -73,6 +81,22 @@
   - Verified on existing subgroup runs:
     - `2h`: `python -m autowfo pilot-analyze --main-run 20260409_003200 --sensitivity-run 20260409_003500 --out-json artifacts/reports/pilot_analysis_awf244_2h.json --min-combo-trades 0.5 --cwd .` -> `4` gate-passed candidates.
     - `1h`: `python -m autowfo pilot-analyze --main-run 20260409_004200 --sensitivity-run 20260409_004600 --out-json artifacts/reports/pilot_analysis_awf245_1h.json --min-combo-trades 0.5 --cwd .` -> `0` gate-passed candidates.
+- 2026-04-09: `AWF-247` completed.
+  - Added ATR-aware refine-step semantics so `risk_mode=atr_multiple` no longer reuses the tiny fixed-percentage refine deltas.
+  - Ran narrow `2h` subgroup baseline/refine cycles for the stable lane (`20260409_151530` / `20260409_151643` and `20260409_152657` / `20260409_152756`).
+  - Contract-based analysis on the refine pair (`artifacts/reports/pilot_analysis_awf247_refine_2h.json`) found `27` symbol-supported comparable rows but `0` stable-positive and `0` gate-passed candidates.
+  - Conclusion: current evidence does not justify deeper same-lane parameter refinement.
+- 2026-04-09: `AWF-248` completed.
+  - Ran a soft 4-symbol expansion of the `2h` lane by adding `AVAX/BTC` (`20260409_154200` main, `20260409_154400` sensitivity).
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf248_expand_2h_4sym.json`) reported `13` stable-positive rows and `1` gate-passed candidate.
+  - The surviving gate-passed family was `mfi + obv_roc + atr_ratio` / `trend_high` / `max_hold=4`.
+- 2026-04-09: `AWF-249` completed.
+  - Ran a 5-symbol boundary expansion of the same `2h` lane by adding `BNB/BTC` (`20260409_155100` main, `20260409_155300` sensitivity).
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf249_expand_2h_5sym.json`) reported `7` stable-positive rows but `0` gate-passed candidates.
+  - Conclusion: the current practical expansion boundary is the 4-symbol cluster, not the 5-symbol one.
+- 2026-04-09: `AWF-250` opened.
+  - Next step: keep the now-confirmed 4-symbol `2h` lane fixed and test whether the surviving `mfi + obv_roc + atr_ratio` winner is supported by a broader local family.
+  - The campaign will stay narrow: family-centered indicator subset, fixed `pilot_trend_3`, ATR-relative exits, and the same paired WFO protocol.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).

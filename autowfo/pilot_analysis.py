@@ -239,8 +239,15 @@ def compare_pilot_runs(
         main_sharpe = _safe_float(row.get("oos_sharpe_like_main"))
         sens_sharpe = _safe_float(row.get("oos_sharpe_like_sens"))
 
-        support_main = main_symbol_support.get(identity_key, _symbol_support_summary(pd.DataFrame()))
-        support_sens = sensitivity_symbol_support.get(identity_key, _symbol_support_summary(pd.DataFrame()))
+        support_main = main_symbol_support.get(identity_key)
+        support_sens = sensitivity_symbol_support.get(identity_key)
+        has_symbol_support_main = support_main is not None
+        has_symbol_support_sens = support_sens is not None
+        has_symbol_support_both = has_symbol_support_main and has_symbol_support_sens
+        if support_main is None:
+            support_main = _symbol_support_summary(pd.DataFrame())
+        if support_sens is None:
+            support_sens = _symbol_support_summary(pd.DataFrame())
 
         both_positive = (main_return is not None and main_return > 0) and (sens_return is not None and sens_return > 0)
         min_return = None if main_return is None or sens_return is None else min(main_return, sens_return)
@@ -248,9 +255,11 @@ def compare_pilot_runs(
         min_sharpe = None if main_sharpe is None or sens_sharpe is None else min(main_sharpe, sens_sharpe)
 
         passes_symbol_support = (
-            support_main.get("all_symbols_nonnegative", False) and support_sens.get("all_symbols_nonnegative", False)
+            has_symbol_support_both
+            and support_main.get("all_symbols_nonnegative", False)
+            and support_sens.get("all_symbols_nonnegative", False)
             if require_all_symbols_nonnegative
-            else True
+            else has_symbol_support_both
         )
         passes_return_gate = min_return is not None and min_return > float(min_combo_return)
         passes_trade_gate = min_trades is not None and min_trades >= float(min_combo_trades)
@@ -263,6 +272,9 @@ def compare_pilot_runs(
                 "min_return": _safe_json_value(min_return),
                 "min_trades": _safe_json_value(min_trades),
                 "min_sharpe": _safe_json_value(min_sharpe),
+                "has_symbol_support_main": bool(has_symbol_support_main),
+                "has_symbol_support_sens": bool(has_symbol_support_sens),
+                "has_symbol_support_both": bool(has_symbol_support_both),
                 "symbol_support_main": support_main,
                 "symbol_support_sens": support_sens,
                 "passes_symbol_support_gate": bool(passes_symbol_support),
@@ -277,6 +289,7 @@ def compare_pilot_runs(
         compared_rows,
         key=lambda row: (
             1 if row.get("passes_overall_gate") else 0,
+            1 if row.get("has_symbol_support_both") else 0,
             1 if row.get("both_positive") else 0,
             float(row.get("min_return") or float("-inf")),
             float(row.get("min_sharpe") or float("-inf")),
@@ -285,7 +298,9 @@ def compare_pilot_runs(
         reverse=True,
     )
 
-    stable_positive = [row for row in compared_rows_sorted if row.get("both_positive")]
+    stable_positive = [
+        row for row in compared_rows_sorted if row.get("both_positive") and row.get("has_symbol_support_both")
+    ]
     gate_passed = [row for row in compared_rows_sorted if row.get("passes_overall_gate")]
 
     return {
@@ -312,6 +327,7 @@ def compare_pilot_runs(
             "main_combo_rows": int(len(main_combo)),
             "sensitivity_combo_rows": int(len(sensitivity_combo)),
             "compared_combo_rows": int(len(compared_rows)),
+            "symbol_supported_rows": int(sum(1 for row in compared_rows if row.get("has_symbol_support_both"))),
             "stable_positive_rows": int(len(stable_positive)),
             "gate_passed_rows": int(len(gate_passed)),
         },

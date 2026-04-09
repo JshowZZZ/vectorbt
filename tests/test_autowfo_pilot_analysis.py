@@ -127,6 +127,31 @@ def test_compare_pilot_runs_blocks_gate_when_one_symbol_turns_negative():
     assert row["symbol_support_sens"]["nonnegative_count"] == 2
 
 
+def test_compare_pilot_runs_excludes_rows_without_symbol_support_from_stable_positive():
+    main_run = {
+        "run_id": "main",
+        "run_root": "artifacts/runs/main",
+        "combo_df": _combo_frame(return_pct=0.12, trades=1.0, sharpe=1.5),
+        "symbol_oos_df": pd.DataFrame(),
+        "metadata": {},
+    }
+    sens_run = {
+        "run_id": "sens",
+        "run_root": "artifacts/runs/sens",
+        "combo_df": _combo_frame(return_pct=0.08, trades=0.75, sharpe=1.1),
+        "symbol_oos_df": pd.DataFrame(),
+        "metadata": {},
+    }
+
+    payload = pilot_analysis.compare_pilot_runs(main_run, sens_run, top_n=5)
+
+    assert payload["summary"]["compared_combo_rows"] == 1
+    assert payload["summary"]["symbol_supported_rows"] == 0
+    assert payload["summary"]["stable_positive_rows"] == 0
+    assert payload["summary"]["gate_passed_rows"] == 0
+    assert payload["top_stable_positive"] == []
+
+
 def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):
     run_root = tmp_path / "artifacts" / "runs" / "20260409_010000"
     (run_root / "results").mkdir(parents=True)
