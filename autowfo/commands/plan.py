@@ -147,6 +147,53 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     repro_parser.add_argument("--cwd", default=".", help="Working directory")
     repro_parser.set_defaults(handler=cli_impl._cmd_repro)
 
+    pilot_parser = subparsers.add_parser(
+        "pilot-analyze",
+        help="Compare two pilot/subgroup runs and emit a machine-readable stable-candidate report",
+    )
+    pilot_parser.add_argument("--main-run", required=True, help="Main run id or path to run directory")
+    pilot_parser.add_argument("--sensitivity-run", required=True, help="Sensitivity run id or path to run directory")
+    pilot_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory used when run ids are provided",
+    )
+    pilot_parser.add_argument(
+        "--out-json",
+        default="artifacts/pilot_analysis_report.json",
+        help="Output path for machine-readable pilot analysis JSON report",
+    )
+    pilot_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=20,
+        help="Number of top stable/gate-passed rows to include",
+    )
+    pilot_parser.add_argument(
+        "--min-combo-return",
+        type=float,
+        default=0.0,
+        help="Minimum worst-run combo return required to pass the overall gate",
+    )
+    pilot_parser.add_argument(
+        "--min-combo-trades",
+        type=float,
+        default=0.0,
+        help="Minimum worst-run combo average OOS trade count required to pass the overall gate",
+    )
+    pilot_parser.add_argument(
+        "--identity-fields",
+        default="",
+        help="Comma-separated identity fields (default uses the pilot-analysis identity schema)",
+    )
+    pilot_parser.add_argument(
+        "--allow-negative-symbols",
+        action="store_true",
+        help="Disable the default all-symbols-nonnegative gate",
+    )
+    pilot_parser.add_argument("--cwd", default=".", help="Working directory")
+    pilot_parser.set_defaults(handler=cli_impl._cmd_pilot_analyze)
+
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
     cwd = Path(args.cwd).resolve()
@@ -441,6 +488,44 @@ def cmd_repro(args: argparse.Namespace, cli_impl: Any) -> int:
             metric_match=payload.get("metric_match"),
             overlap=payload.get("overlap_rows", 0),
             top_n=payload.get("top_n", 0),
+        )
+    )
+    return 0
+
+
+def cmd_pilot_analyze(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import pilot_analysis
+
+    cwd = Path(args.cwd).resolve()
+    artifacts_dir = cli_impl._resolve_path(cwd, args.artifacts_dir)
+    out_json = cli_impl._resolve_path(cwd, args.out_json)
+
+    identity_fields = (
+        cli_impl._split_csv_fields(args.identity_fields) or list(pilot_analysis.DEFAULT_IDENTITY_FIELDS)
+    )
+    main_run = pilot_analysis.load_run_analysis_inputs(args.main_run, artifacts_dir=artifacts_dir)
+    sensitivity_run = pilot_analysis.load_run_analysis_inputs(args.sensitivity_run, artifacts_dir=artifacts_dir)
+    payload = pilot_analysis.compare_pilot_runs(
+        main_run=main_run,
+        sensitivity_run=sensitivity_run,
+        identity_fields=identity_fields,
+        require_all_symbols_nonnegative=not bool(args.allow_negative_symbols),
+        min_combo_return=float(args.min_combo_return),
+        min_combo_trades=float(args.min_combo_trades),
+        top_n=int(args.top_n),
+    )
+
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(cli_impl.json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary = payload.get("summary", {})
+    print(f"[pilot-analyze] main_run={main_run.get('run_id')}")
+    print(f"[pilot-analyze] sensitivity_run={sensitivity_run.get('run_id')}")
+    print(f"[pilot-analyze] out_json={out_json}")
+    print(
+        "[pilot-analyze] compared={compared} stable_positive={stable} gate_passed={gate_passed}".format(
+            compared=summary.get("compared_combo_rows", 0),
+            stable=summary.get("stable_positive_rows", 0),
+            gate_passed=summary.get("gate_passed_rows", 0),
         )
     )
     return 0

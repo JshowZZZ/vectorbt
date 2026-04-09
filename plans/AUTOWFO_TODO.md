@@ -27,6 +27,8 @@
   Ran the full 7-indicator pilot protocol on the `LTC/BTC`, `LINK/BTC`, and `SOL/BTC` subgroup (`20260409_003200`, `20260409_003500`). Result: a narrow cluster-first discovery track is justified, but the strongest 2h combos still have low trade counts, so the next stress test should increase trade density before any larger expansion.
 - `done` `AWF-245` Higher-trade-density subgroup stress test.
   Re-ran the same stable-cluster pilot on `1h` (`20260409_004200`, `20260409_004600`). Result: `1h` restored full `180d` overlap and increased trade density, but it did not produce any all-symbol-nonnegative stable combos across both WFO settings, so the evidence still favors the `2h` subgroup lane rather than a general "more bars will fix it" story.
+- `done` `AWF-246` Pilot analysis contract and decision-gate hardening.
+  Added `autowfo pilot-analyze` plus `autowfo.pilot_analysis` to formalize stable identity matching, symbol-support aggregation, gate evaluation, and machine-readable JSON output. Verified on existing subgroup runs: `2h` analysis (`pilot_analysis_awf244_2h.json`) reports `4` gate-passed candidates, while the `1h` stress test (`pilot_analysis_awf245_1h.json`) reports `0`.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -64,6 +66,13 @@
   - `1h` restored full shared overlap (`181d`) for `LTC/BTC`, `LINK/BTC`, and `SOL/BTC`, eliminating the late-start overlap shrink seen on `2h`.
   - Despite that, `1h` did not produce any all-symbol-nonnegative stable combos across both WFO settings, while `2h` still had multiple such candidates.
   - Conclusion: the current subgroup evidence is lane-specific; keep the focus on `2h` subgroup refinement rather than assuming that more bars or fuller overlap automatically improve robustness.
+- 2026-04-09: `AWF-246` completed.
+  - Added `autowfo.pilot_analysis` and CLI entrypoint `python -m autowfo pilot-analyze` to replace ad hoc subgroup/pilot comparison scripts with a stable contract.
+  - The new contract matches stable candidates by a fixed identity schema, aggregates symbol-level OOS support for each candidate, applies explicit return/trade/symbol-support gates, and writes machine-readable JSON.
+  - Targeted regression is green: `python -m pytest tests/test_autowfo_pilot_analysis.py tests/test_autowfo_cli.py -q` (`62 passed`).
+  - Verified on existing subgroup runs:
+    - `2h`: `python -m autowfo pilot-analyze --main-run 20260409_003200 --sensitivity-run 20260409_003500 --out-json artifacts/reports/pilot_analysis_awf244_2h.json --min-combo-trades 0.5 --cwd .` -> `4` gate-passed candidates.
+    - `1h`: `python -m autowfo pilot-analyze --main-run 20260409_004200 --sensitivity-run 20260409_004600 --out-json artifacts/reports/pilot_analysis_awf245_1h.json --min-combo-trades 0.5 --cwd .` -> `0` gate-passed candidates.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from autowfo import cli
@@ -226,6 +227,104 @@ def test_cli_batch_preflight_missing_config_fails(tmp_path):
                 "0",
             ]
         )
+
+
+def test_cli_pilot_analyze_writes_machine_readable_report(tmp_path):
+    def _combo_frame(return_pct, trades):
+        return pd.DataFrame(
+            [
+                {
+                    "timeframe": "2h",
+                    "data_days": 180,
+                    "indicator_list": "mfi,obv_roc",
+                    "regime_name": "trend_high",
+                    "vol_mode": "high",
+                    "filter_name": "none",
+                    "vol_lookback": 20,
+                    "mom_lookback": 14,
+                    "trade_mom_lookback": 14,
+                    "tp_stop": 1.5,
+                    "sl_stop": 1.0,
+                    "max_hold": 4,
+                    "oos_avg_total_return_pct": return_pct,
+                    "oos_avg_total_trades": trades,
+                    "oos_sharpe_like": 1.0,
+                }
+            ]
+        )
+
+    def _symbol_frame(values):
+        return pd.DataFrame(
+            [
+                {
+                    "timeframe": "2h",
+                    "data_days": 180,
+                    "indicator_list": "mfi,obv_roc",
+                    "regime_name": "trend_high",
+                    "vol_mode": "high",
+                    "filter_name": "none",
+                    "vol_lookback": 20,
+                    "mom_lookback": 14,
+                    "trade_mom_lookback": 14,
+                    "tp_stop": 1.5,
+                    "sl_stop": 1.0,
+                    "max_hold": 4,
+                    "symbol": symbol,
+                    "oos_avg_total_return_pct": ret,
+                    "oos_avg_total_trades": trades,
+                    "oos_positive_segment_ratio": 0.5 if ret > 0 else 0.0,
+                    "oos_segments": 2.0,
+                }
+                for symbol, ret, trades in values
+            ]
+        )
+
+    artifacts = tmp_path / "artifacts" / "runs"
+    main_root = artifacts / "run-main"
+    sens_root = artifacts / "run-sens"
+    for root in [main_root, sens_root]:
+        (root / "results").mkdir(parents=True)
+        (root / "metadata").mkdir(parents=True)
+    _combo_frame(0.12, 1.0).to_csv(main_root / "results" / "param_sweep_combo_summary.csv", index=False)
+    _combo_frame(0.08, 0.5).to_csv(sens_root / "results" / "param_sweep_combo_summary.csv", index=False)
+    _symbol_frame(
+        [("LTC/BTC", 0.2, 1.0), ("LINK/BTC", 0.1, 1.0), ("SOL/BTC", 0.05, 1.0)]
+    ).to_csv(main_root / "results" / "param_sweep_symbol_oos_summary.csv", index=False)
+    _symbol_frame(
+        [("LTC/BTC", 0.1, 0.5), ("LINK/BTC", 0.04, 0.5), ("SOL/BTC", 0.01, 0.5)]
+    ).to_csv(sens_root / "results" / "param_sweep_symbol_oos_summary.csv", index=False)
+    (main_root / "metadata" / "run_metadata_run-main.json").write_text(
+        json.dumps({"timeframe_diagnostics": [{"realized_shared_days": 125}]}),
+        encoding="utf-8",
+    )
+    (sens_root / "metadata" / "run_metadata_run-sens.json").write_text(
+        json.dumps({"timeframe_diagnostics": [{"realized_shared_days": 125}]}),
+        encoding="utf-8",
+    )
+
+    out_json = tmp_path / "artifacts" / "pilot_report.json"
+    code = cli.main(
+        [
+            "pilot-analyze",
+            "--main-run",
+            "run-main",
+            "--sensitivity-run",
+            "run-sens",
+            "--artifacts-dir",
+            "artifacts",
+            "--out-json",
+            str(out_json.relative_to(tmp_path)),
+            "--min-combo-trades",
+            "0.5",
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["summary"]["compared_combo_rows"] == 1
+    assert payload["summary"]["gate_passed_rows"] == 1
+    assert payload["top_gate_passed"][0]["indicator_list"] == "mfi,obv_roc"
 
 
 def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
