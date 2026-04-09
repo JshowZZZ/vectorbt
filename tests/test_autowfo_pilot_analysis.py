@@ -5,13 +5,13 @@ import pandas as pd
 from autowfo import pilot_analysis
 
 
-def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0):
+def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0, indicator_list="mfi,obv_roc"):
     return pd.DataFrame(
         [
             {
                 "timeframe": "2h",
                 "data_days": 180,
-                "indicator_list": "mfi,obv_roc",
+                "indicator_list": indicator_list,
                 "regime_name": "trend_high",
                 "vol_mode": "high",
                 "filter_name": "none",
@@ -29,7 +29,7 @@ def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0):
     )
 
 
-def _symbol_frame(returns, trades=None):
+def _symbol_frame(returns, trades=None, indicator_list="mfi,obv_roc"):
     if trades is None:
         trades = [1.0] * len(returns)
     rows = []
@@ -38,7 +38,7 @@ def _symbol_frame(returns, trades=None):
             {
                 "timeframe": "2h",
                 "data_days": 180,
-                "indicator_list": "mfi,obv_roc",
+                "indicator_list": indicator_list,
                 "regime_name": "trend_high",
                 "vol_mode": "high",
                 "filter_name": "none",
@@ -150,6 +150,66 @@ def test_compare_pilot_runs_excludes_rows_without_symbol_support_from_stable_pos
     assert payload["summary"]["stable_positive_rows"] == 0
     assert payload["summary"]["gate_passed_rows"] == 0
     assert payload["top_stable_positive"] == []
+
+
+def test_compare_pilot_runs_marks_evidence_equivalent_superset_as_redundant():
+    main_combo = pd.concat(
+        [
+            _combo_frame(return_pct=0.12, trades=1.0, sharpe=1.5, indicator_list="mfi,obv_roc,atr_ratio"),
+            _combo_frame(return_pct=0.12, trades=1.0, sharpe=1.5, indicator_list="mfi,obv_roc,atr_ratio,macd_hist"),
+        ],
+        ignore_index=True,
+    )
+    sens_combo = pd.concat(
+        [
+            _combo_frame(return_pct=0.08, trades=0.75, sharpe=1.1, indicator_list="mfi,obv_roc,atr_ratio"),
+            _combo_frame(return_pct=0.08, trades=0.75, sharpe=1.1, indicator_list="mfi,obv_roc,atr_ratio,macd_hist"),
+        ],
+        ignore_index=True,
+    )
+    main_symbols = pd.concat(
+        [
+            _symbol_frame([0.2, 0.1, 0.05], indicator_list="mfi,obv_roc,atr_ratio"),
+            _symbol_frame([0.2, 0.1, 0.05], indicator_list="mfi,obv_roc,atr_ratio,macd_hist"),
+        ],
+        ignore_index=True,
+    )
+    sens_symbols = pd.concat(
+        [
+            _symbol_frame([0.1, 0.04, 0.01], trades=[1.0, 0.5, 0.5], indicator_list="mfi,obv_roc,atr_ratio"),
+            _symbol_frame([0.1, 0.04, 0.01], trades=[1.0, 0.5, 0.5], indicator_list="mfi,obv_roc,atr_ratio,macd_hist"),
+        ],
+        ignore_index=True,
+    )
+
+    payload = pilot_analysis.compare_pilot_runs(
+        {
+            "run_id": "main",
+            "run_root": "artifacts/runs/main",
+            "combo_df": main_combo,
+            "symbol_oos_df": main_symbols,
+            "metadata": {},
+        },
+        {
+            "run_id": "sens",
+            "run_root": "artifacts/runs/sens",
+            "combo_df": sens_combo,
+            "symbol_oos_df": sens_symbols,
+            "metadata": {},
+        },
+        min_combo_return=0.0,
+        min_combo_trades=0.5,
+        top_n=5,
+    )
+
+    assert payload["summary"]["gate_passed_rows"] == 2
+    assert payload["summary"]["canonical_gate_passed_rows"] == 1
+    assert payload["summary"]["redundant_gate_passed_rows"] == 1
+    assert payload["canonical_gate_passed"][0]["indicator_list"] == "mfi,obv_roc,atr_ratio"
+    assert payload["redundant_gate_passed"][0]["indicator_list"] == "mfi,obv_roc,atr_ratio,macd_hist"
+    assert payload["redundant_gate_passed"][0]["is_canonical_family"] is False
+    assert payload["redundant_gate_passed"][0]["canonical_indicator_list"] == "mfi,obv_roc,atr_ratio"
+    assert payload["redundant_gate_passed"][0]["canonical_reason"] == "evidence_equivalent_superset"
 
 
 def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):

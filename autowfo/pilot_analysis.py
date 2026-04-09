@@ -41,6 +41,12 @@ DEFAULT_SYMBOL_METRIC_FIELDS: Tuple[str, ...] = (
 )
 
 
+def _indicator_tokens(value: Any) -> Tuple[str, ...]:
+    if value is None:
+        return tuple()
+    return tuple(token for token in str(value).split(",") if token)
+
+
 def _safe_json_value(value: Any) -> Any:
     if value is None:
         return None
@@ -146,6 +152,81 @@ def _group_symbol_support(symbol_df: pd.DataFrame, identity_fields: Sequence[str
     for key, indices in grouped.items():
         result[key] = _symbol_support_summary(symbol_df.loc[indices])
     return result
+
+
+def _signature_float(value: Any, digits: int = 12) -> Any:
+    safe = _safe_float(value)
+    if safe is None:
+        return None
+    return round(float(safe), digits)
+
+
+def _canonical_redundancy_signature(row: Mapping[str, Any]) -> Tuple[Any, ...]:
+    support_main = row.get("symbol_support_main") or {}
+    support_sens = row.get("symbol_support_sens") or {}
+    return (
+        row.get("timeframe"),
+        row.get("data_days"),
+        row.get("regime_name"),
+        row.get("vol_mode"),
+        row.get("tp_stop"),
+        row.get("sl_stop"),
+        row.get("max_hold"),
+        _signature_float(row.get("min_return")),
+        _signature_float(row.get("min_trades")),
+        _signature_float(row.get("min_sharpe")),
+        support_main.get("symbol_count"),
+        support_main.get("nonnegative_count"),
+        support_main.get("positive_count"),
+        _signature_float((support_main.get("return_stats") or {}).get("min")),
+        _signature_float((support_main.get("return_stats") or {}).get("mean")),
+        _signature_float((support_main.get("trade_stats") or {}).get("min")),
+        _signature_float((support_main.get("trade_stats") or {}).get("mean")),
+        support_sens.get("symbol_count"),
+        support_sens.get("nonnegative_count"),
+        support_sens.get("positive_count"),
+        _signature_float((support_sens.get("return_stats") or {}).get("min")),
+        _signature_float((support_sens.get("return_stats") or {}).get("mean")),
+        _signature_float((support_sens.get("trade_stats") or {}).get("min")),
+        _signature_float((support_sens.get("trade_stats") or {}).get("mean")),
+    )
+
+
+def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
+    canonical_rows: list[Dict[str, Any]] = []
+    redundant_rows: list[Dict[str, Any]] = []
+    ordered_rows = sorted(
+        rows,
+        key=lambda row: (
+            len(_indicator_tokens(row.get("indicator_list"))),
+            str(row.get("indicator_list") or ""),
+        ),
+    )
+    for row in ordered_rows:
+        indicator_set = frozenset(_indicator_tokens(row.get("indicator_list")))
+        signature = _canonical_redundancy_signature(row)
+        row["is_canonical_family"] = True
+        row["redundant_of"] = None
+        row["canonical_indicator_list"] = row.get("indicator_list")
+        row["canonical_reason"] = "unique_gate_passed_family"
+        matched = None
+        for base_row in canonical_rows:
+            base_set = frozenset(_indicator_tokens(base_row.get("indicator_list")))
+            if not base_set.issubset(indicator_set):
+                continue
+            if _canonical_redundancy_signature(base_row) != signature:
+                continue
+            matched = base_row
+            break
+        if matched is not None:
+            row["is_canonical_family"] = False
+            row["redundant_of"] = _identity_key_from_row(pd.Series(matched), DEFAULT_IDENTITY_FIELDS)
+            row["canonical_indicator_list"] = matched.get("indicator_list")
+            row["canonical_reason"] = "evidence_equivalent_superset"
+            redundant_rows.append(row)
+            continue
+        canonical_rows.append(row)
+    return canonical_rows, redundant_rows
 
 
 def _resolve_run_root(path_or_run_id: str | Path, artifacts_dir: str | Path | None = None) -> Path:
@@ -302,6 +383,7 @@ def compare_pilot_runs(
         row for row in compared_rows_sorted if row.get("both_positive") and row.get("has_symbol_support_both")
     ]
     gate_passed = [row for row in compared_rows_sorted if row.get("passes_overall_gate")]
+    canonical_gate_passed, redundant_gate_passed = _annotate_canonical_gate_passed(gate_passed)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -330,7 +412,11 @@ def compare_pilot_runs(
             "symbol_supported_rows": int(sum(1 for row in compared_rows if row.get("has_symbol_support_both"))),
             "stable_positive_rows": int(len(stable_positive)),
             "gate_passed_rows": int(len(gate_passed)),
+            "canonical_gate_passed_rows": int(len(canonical_gate_passed)),
+            "redundant_gate_passed_rows": int(len(redundant_gate_passed)),
         },
         "top_gate_passed": gate_passed[: max(0, int(top_n))],
+        "canonical_gate_passed": canonical_gate_passed[: max(0, int(top_n))],
+        "redundant_gate_passed": redundant_gate_passed[: max(0, int(top_n))],
         "top_stable_positive": stable_positive[: max(0, int(top_n))],
     }

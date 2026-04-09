@@ -35,8 +35,14 @@
   Expanded the narrow `2h` lane from `LTC/BTC` + `LINK/BTC` + `SOL/BTC` to a 4-symbol cluster by adding `AVAX/BTC` (`20260409_154200`, `20260409_154400`). Result: the lane survived soft expansion with `13` stable-positive rows and `1` gate-passed candidate, led by `mfi + obv_roc + atr_ratio` / `trend_high` / `max_hold=4`.
 - `done` `AWF-249` Boundary expansion on the `2h` cluster lane.
   Expanded the same narrow `2h` lane to 5 symbols by adding `BNB/BTC` (`20260409_155100`, `20260409_155300`). Result: the lane retained `7` stable-positive rows but fell to `0` gate-passed candidates, which marks the current practical boundary of the cluster-first interpretation.
-- `doing` `AWF-250` Family-first neighborhood campaign on the confirmed 4-symbol lane.
-  Freeze the current `2h` cluster boundary at `LTC/BTC` + `LINK/BTC` + `SOL/BTC` + `AVAX/BTC`, then run a narrow family-first campaign around the surviving `mfi + obv_roc + atr_ratio` winner to determine whether the edge is a stable local neighborhood or just a single surviving point.
+- `done` `AWF-250` Family-first neighborhood campaign on the confirmed 4-symbol lane.
+  Ran a narrow family-first campaign on the fixed `2h` 4-symbol cluster (`20260409_235800`, `20260409_235900`). Result: the lane is not a single surviving point. The neighborhood produced `16` stable-positive rows and `2` gate-passed rows under the paired WFO contract, which confirms a real but still narrow local family around the winner.
+- `done` `AWF-251` Canonical-family extraction for family-first analysis.
+  Extended the pilot-analysis contract so evidence-equivalent supersets are marked as redundant. Re-analyzing `AWF-250` showed the `2` gate-passed rows collapse to `1` canonical family plus `1` redundant superset, confirming the local lane should be represented by the canonical core `mfi + obv_roc + atr_ratio`, not by inflated combo counts.
+- `done` `AWF-252` Boundary replacement stress test on the canonical 4-symbol lane.
+  Re-ran the same family-first neighborhood campaign with `BNB/BTC` replacing `AVAX/BTC` (`20260409_235950`, `20260409_235955`). Result: the lane fell to `6` stable-positive rows and `0` gate-passed rows, which confirms the current boundary is about specific cluster membership, not just raw cluster size.
+- `todo` `AWF-253` Exact-cluster lane freeze and next-stage search scope definition.
+  Freeze the currently supported lane as the exact 4-symbol cluster (`LTC/BTC`, `LINK/BTC`, `SOL/BTC`, `AVAX/BTC`) plus the canonical family `mfi + obv_roc + atr_ratio`, then define the smallest justified next-stage search around that exact cluster instead of continuing ad hoc boundary probes.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -97,6 +103,27 @@
 - 2026-04-09: `AWF-250` opened.
   - Next step: keep the now-confirmed 4-symbol `2h` lane fixed and test whether the surviving `mfi + obv_roc + atr_ratio` winner is supported by a broader local family.
   - The campaign will stay narrow: family-centered indicator subset, fixed `pilot_trend_3`, ATR-relative exits, and the same paired WFO protocol.
+- 2026-04-09: `AWF-251` opened.
+  - Early AWF-250 results indicate the top two gate-passed rows may be a core combo plus an evidence-equivalent superset.
+  - Next step: formalize canonical-family extraction so later expansion stages count real neighborhoods instead of redundant supersets.
+- 2026-04-09: `AWF-250` completed.
+  - Ran the family-first neighborhood campaign on the fixed `2h` 4-symbol lane (`20260409_235800`, `20260409_235900`) using the 5-indicator winner neighborhood with size `2..4`, `pilot_trend_3`, `ATR` exits, and `max_hold=4`.
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf250_family_2h_4sym.json`) reported `75` comparable rows, `16` stable-positive rows, and `2` gate-passed rows.
+  - Conclusion: the surviving `2h` 4-symbol lane is supported by a small local family, not just a single isolated combo.
+- 2026-04-09: `AWF-251` completed.
+  - Added canonical-family extraction to the pilot-analysis contract so evidence-equivalent supersets are marked as redundant.
+  - Re-analyzing `AWF-250` showed the `2` gate-passed rows reduce to `1` canonical family and `1` redundant superset.
+  - The current canonical family is `mfi + obv_roc + atr_ratio` / `trend_high` / `max_hold=4`; `mfi + obv_roc + atr_ratio + macd_hist` is currently an evidence-equivalent superset, not a separate winner.
+- 2026-04-09: `AWF-252` opened.
+  - Next step: run a boundary replacement stress test by swapping `AVAX/BTC` for `BNB/BTC` while keeping the family-neighborhood protocol fixed.
+  - Goal: determine whether the current boundary is primarily about cluster size, or about specific symbol membership.
+- 2026-04-09: `AWF-252` completed.
+  - Ran the same family-neighborhood protocol with `BNB/BTC` replacing `AVAX/BTC` (`20260409_235950`, `20260409_235955`).
+  - Contract-based analysis (`artifacts/reports/pilot_analysis_awf252_family_2h_4sym_bnbswap.json`) reported `6` stable-positive rows but `0` gate-passed candidates.
+  - Conclusion: the current viable lane is specific to the exact 4-symbol cluster; replacing `AVAX/BTC` with `BNB/BTC` is enough to break the canonical-family lane.
+- 2026-04-09: `AWF-253` opened.
+  - Next step: freeze the currently supported exact cluster and define the smallest justified next-stage search around that lane.
+  - This should be planned as a scope-definition step, not as another uncontrolled expansion run.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
