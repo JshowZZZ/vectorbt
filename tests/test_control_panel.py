@@ -473,6 +473,9 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
         "wave2-sol-usdt-2h-120d",
         "exact-lane-2h-4sym",
     }.issubset(preset_ids)
+    exact_lane = next(item for item in payload["presets"] if item["preset_id"] == "exact-lane-2h-4sym")
+    assert exact_lane["supports_scope_test"] is True
+    assert [item["variant_id"] for item in exact_lane["scope_test_variants"]] == ["main", "sensitivity"]
 
 
 def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(tmp_path, monkeypatch):
@@ -631,6 +634,91 @@ def test_exact_lane_preset_matches_replay_export_contract(tmp_path, monkeypatch)
     ]
     for key in compare_keys:
         assert replay_config[key] == preset_patch[key]
+
+
+def test_config_apply_preset_and_enqueue_exact_lane_workflow(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    cp.CONFIG_JSON.write_text(json.dumps(cp.DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset-and-enqueue",
+            body=json.dumps({"preset_id": "exact-lane-2h-4sym"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    details = payload["details"]
+    assert details["preset"]["preset_id"] == "exact-lane-2h-4sym"
+    assert details["job"]["workflow"] == "run"
+    assert details["job"]["mode"] == "combo"
+    assert details["job"]["allow_seen_key_reuse"] is True
+
+    cfg_path = Path(details["config_path"])
+    assert cfg_path.exists()
+    cfg_payload = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg_payload["indicator_subset"] == ["mfi", "obv_roc", "atr_ratio"]
+    assert cfg_payload["regime_name_filter"] == ["trend_high"]
+    assert cfg_payload["tp_atr_multipliers"] == [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+    assert cfg_payload["sl_atr_multipliers"] == [0.5, 0.75, 1.0, 1.25, 1.5]
+
+    queue_payload = cp._load_batch_queue()
+    assert len(queue_payload["jobs"]) == 1
+    assert queue_payload["jobs"][0]["config"] == str(cfg_path)
+    assert queue_payload["jobs"][0]["workflow"] == "run"
+    assert queue_payload["jobs"][0]["mode"] == "combo"
+
+
+def test_config_apply_preset_scope_test_enqueues_exact_lane_pair(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    cp.CONFIG_JSON.write_text(json.dumps(cp.DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset-scope-test",
+            body=json.dumps({"preset_id": "exact-lane-2h-4sym"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    details = payload["details"]
+    assert details["preset"]["preset_id"] == "exact-lane-2h-4sym"
+    assert [item["variant_id"] for item in details["variants"]] == ["main", "sensitivity"]
+    assert len(details["jobs"]) == 2
+
+    variant_by_id = {item["variant_id"]: item for item in details["variants"]}
+    assert variant_by_id["main"]["wf_train_days"] == 45
+    assert variant_by_id["main"]["wf_test_days"] == 30
+    assert variant_by_id["main"]["wf_step_days"] == 30
+    assert variant_by_id["sensitivity"]["wf_train_days"] == 60
+    assert variant_by_id["sensitivity"]["wf_test_days"] == 30
+    assert variant_by_id["sensitivity"]["wf_step_days"] == 30
+
+    for variant_id, expected_train in (("main", 45), ("sensitivity", 60)):
+        cfg_path = Path(variant_by_id[variant_id]["config_path"])
+        assert cfg_path.exists()
+        cfg_payload = json.loads(cfg_path.read_text(encoding="utf-8"))
+        assert cfg_payload["wf_train_days"] == expected_train
+        assert cfg_payload["wf_test_days"] == 30
+        assert cfg_payload["wf_step_days"] == 30
+        assert cfg_payload["trade_symbols"] == ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"]
+        assert cfg_payload["indicator_subset"] == ["mfi", "obv_roc", "atr_ratio"]
+        assert cfg_payload["regime_name_filter"] == ["trend_high"]
+
+    queue_payload = cp._load_batch_queue()
+    assert len(queue_payload["jobs"]) == 2
+    assert [job["name"] for job in queue_payload["jobs"]] == [
+        "scope-exact-lane-2h-4sym-main",
+        "scope-exact-lane-2h-4sym-sensitivity",
+    ]
 
 
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):

@@ -51,6 +51,16 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
+### Phase 50: Exact-Lane Scope Testing (AWF-259/260/261) [Active]
+- Promote the frozen exact lane from replay/preset readiness into an operator-driven scope-testing workflow.
+- AWF-259: allow a control-panel preset to be applied, written as a planned config, and enqueued in one step.
+- AWF-260: expose the paired main/sensitivity WFO scope-test entry (`45/30/30` and `60/30/30`) from the preset definition itself.
+- AWF-261: execute the paired scope-test workflow and judge whether the exact lane is stable enough for broader range testing.
+- Exit criteria:
+  - The exact lane can be enqueued from the control panel without manual JSON editing.
+  - The exact lane can be enqueued as a paired scope-test workflow using canonical WFO variants.
+  - One operator-generated scope-test pair has been analyzed via the pilot-analysis contract.
+
 ### Phase 49: Trusted Ranking Rollout (AWF-239/240) [Done]
 - Use the now-complete trusted coverage matrix as the evidence base for a ranking-only rollout decision.
 - Produce aggregate `compare-ranking` reports for:
@@ -550,6 +560,10 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-04-10: `AWF-261` opened to start the first true scope-test pass on the frozen exact lane. The operator workflow now knows how to materialize the canonical main/sensitivity WFO pair, so the next question is no longer "how do we enqueue it?" but "does the operator-generated pair reproduce the same stability story under live workflow conditions?"
+- 2026-04-10: `AWF-260` closed the phase-entry gap for exact-lane scope testing. The control panel now exposes `/config/apply-preset-scope-test`, which turns preset-defined WFO variants into paired planned configs and queued jobs; for `exact-lane-2h-4sym`, this means the canonical `45/30/30` main and `60/30/30` sensitivity pair can be launched without manual config editing.
+- 2026-04-10: Phase 50 opened. The frozen exact lane is now promoted past replay/preset parity and into operator-driven scope testing; current focus shifts from discovery reuse to controlled paired execution and analysis.
+- 2026-04-10: `AWF-259` closed the operator-consumption gap for exact-lane promotion. The control panel now exposes `/config/apply-preset-and-enqueue`, which applies a preset, writes a planned config under `artifacts/planned_configs/`, and queues the corresponding batch job in one step. Current interpretation: the exact lane is now a reusable operator workflow, not just a replay artifact or preset stub.
 - 2026-04-10: `AWF-259` opened as the first workflow-level follow-up after exact-lane promotion. The lane now exists in export, replay, and preset form, and the next small question is how it should be consumed in an operator workflow rather than only in isolated tests.
 - 2026-04-10: `AWF-258` closed the last obvious parity gap in exact-lane promotion. A regression test now compares the replay config derived from the canonical protocol summary against the control-panel preset `exact-lane-2h-4sym`, so CLI export/replay and operator preset use the same lane definition by default.
 - 2026-04-10: `AWF-258` opened as a defensive follow-up after lane promotion. The exact lane now exists in both export/replay form and operator-preset form, so the next small hardening step is to add a parity guard that alerts us if those two representations drift apart.

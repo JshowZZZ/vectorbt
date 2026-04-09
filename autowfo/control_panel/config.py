@@ -67,6 +67,22 @@ _RERUN_CAMPAIGN_PRESETS = (
         "operator_note": "Use run/combo mode to replay the canonical lane without reopening indicator or symbol exploration.",
         "recommended_workflow": "run",
         "optional": False,
+        "scope_test_variants": (
+            {
+                "variant_id": "main",
+                "title": "Main 45/30/30",
+                "wf_train_days": 45,
+                "wf_test_days": 30,
+                "wf_step_days": 30,
+            },
+            {
+                "variant_id": "sensitivity",
+                "title": "Sensitivity 60/30/30",
+                "wf_train_days": 60,
+                "wf_test_days": 30,
+                "wf_step_days": 30,
+            },
+        ),
         "patch": {
             "search_mode": "combo",
             "combo_sizes": [3],
@@ -148,6 +164,22 @@ def _deep_merge_dict(base, override):
         else:
             merged[key] = copy.deepcopy(value)
     return merged
+
+
+def _config_slug_text(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return "unknown"
+    out_chars = []
+    for ch in text:
+        if ch.isalnum() or ch in {"-", "_"}:
+            out_chars.append(ch)
+        else:
+            out_chars.append("-")
+    slug = "".join(out_chars)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-") or "unknown"
 
 
 def _default_config_copy():
@@ -355,6 +387,7 @@ def _list_config_presets():
     presets = []
     for item in _RERUN_CAMPAIGN_PRESETS:
         patch = item.get("patch") if isinstance(item, dict) else {}
+        scope_test_variants = item.get("scope_test_variants") if isinstance(item, dict) else None
         presets.append(
             {
                 "preset_id": item["preset_id"],
@@ -363,6 +396,8 @@ def _list_config_presets():
                 "operator_note": item.get("operator_note", ""),
                 "recommended_workflow": item.get("recommended_workflow", ""),
                 "optional": bool(item.get("optional")),
+                "supports_scope_test": bool(scope_test_variants),
+                "scope_test_variants": copy.deepcopy(list(scope_test_variants or [])),
                 "timeframes": copy.deepcopy(patch.get("timeframes", [])),
                 "trade_symbols": copy.deepcopy(patch.get("trade_symbols", [])),
                 "indicator_subset": copy.deepcopy(patch.get("indicator_subset", [])),
@@ -393,6 +428,215 @@ def _apply_config_preset(preset_id):
     _validate_config_guardrails(cfg)
     cp.CONFIG_JSON.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     return cfg, preset
+
+
+def _preset_planned_configs_dir():
+    cp = _cp()
+    planned_dir = cp.ARTIFACTS / "planned_configs"
+    planned_dir.mkdir(parents=True, exist_ok=True)
+    return planned_dir
+
+
+def _write_preset_planned_config(cfg, prefix):
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    cfg_name = f"{_config_slug_text(prefix)}_{stamp}.json"
+    cfg_path = _preset_planned_configs_dir() / cfg_name
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    return cfg_path
+
+
+def _resolve_preset_enqueue_workflow(preset, workflow=None, mode=None):
+    workflow_raw = workflow if workflow not in (None, "") else preset.get("recommended_workflow", "baseline")
+    workflow_norm = str(workflow_raw or "baseline").strip().lower()
+    if workflow_norm not in {"run", "baseline"}:
+        workflow_norm = "baseline"
+
+    mode_norm = None if mode in (None, "") else str(mode).strip().lower()
+    if workflow_norm == "baseline":
+        mode_norm = None
+    elif mode_norm not in {"combo", "refine"}:
+        mode_norm = "combo"
+    return workflow_norm, mode_norm
+
+
+def _normalize_optional_workers(workers):
+    if workers in (None, ""):
+        return None
+    try:
+        workers_i = int(workers)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("workers must be integer") from exc
+    if workers_i <= 0:
+        raise ValueError("workers must be > 0")
+    return workers_i
+
+
+def _normalize_bool_flag(value, *, default=False):
+    if value in (None, ""):
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError("boolean flag expected")
+
+
+def _normalize_preset_scope_variants(preset):
+    raw_variants = preset.get("scope_test_variants")
+    variants = []
+    if not isinstance(raw_variants, (list, tuple)):
+        return variants
+    for item in raw_variants:
+        if not isinstance(item, dict):
+            continue
+        variant_id = _config_slug_text(item.get("variant_id") or item.get("title") or f"variant-{len(variants) + 1}")
+        try:
+            wf_train_days = max(1, int(item.get("wf_train_days")))
+            wf_test_days = max(1, int(item.get("wf_test_days")))
+            wf_step_days = max(1, int(item.get("wf_step_days")))
+        except (TypeError, ValueError):
+            continue
+        variants.append(
+            {
+                "variant_id": variant_id,
+                "title": str(item.get("title") or variant_id),
+                "wf_train_days": wf_train_days,
+                "wf_test_days": wf_test_days,
+                "wf_step_days": wf_step_days,
+            }
+        )
+    return variants
+
+
+def _apply_config_preset_and_enqueue(
+    preset_id,
+    *,
+    workflow=None,
+    mode=None,
+    workers=None,
+    name=None,
+    allow_seen_key_reuse=True,
+    auto_start=False,
+):
+    cp = _cp()
+    cfg, preset = _apply_config_preset(preset_id)
+    workflow_norm, mode_norm = _resolve_preset_enqueue_workflow(preset, workflow=workflow, mode=mode)
+    workers_i = _normalize_optional_workers(workers)
+    allow_seen_key_reuse = _normalize_bool_flag(allow_seen_key_reuse, default=True)
+    auto_start = _normalize_bool_flag(auto_start, default=False)
+
+    preset_slug = _config_slug_text(preset["preset_id"])
+    cfg_path = _write_preset_planned_config(cfg, f"preset_{preset_slug}")
+    enqueue_payload = {
+        "name": str(name or f"preset-{preset_slug}"),
+        "workflow": workflow_norm,
+        "config": str(cfg_path),
+        "allow_seen_key_reuse": allow_seen_key_reuse,
+    }
+    if mode_norm is not None:
+        enqueue_payload["mode"] = mode_norm
+    if workers_i is not None:
+        enqueue_payload["workers"] = workers_i
+
+    ok, msg, job = cp._batch_enqueue(enqueue_payload)
+    if not ok:
+        raise ValueError(msg)
+
+    started = False
+    start_msg = ""
+    if auto_start:
+        started, start_msg = cp._batch_start()
+
+    return {
+        "preset": {"preset_id": preset["preset_id"], "title": preset["title"]},
+        "config": cfg,
+        "config_path": str(cfg_path),
+        "job": job,
+        "batch_started": bool(started),
+        "batch_start_message": str(start_msg),
+    }
+
+
+def _apply_config_preset_scope_test(
+    preset_id,
+    *,
+    workflow=None,
+    mode=None,
+    workers=None,
+    name_prefix=None,
+    allow_seen_key_reuse=True,
+    auto_start=False,
+):
+    cp = _cp()
+    cfg, preset = _apply_config_preset(preset_id)
+    variants = _normalize_preset_scope_variants(preset)
+    if not variants:
+        raise ValueError(f"Preset does not define scope-test variants: {preset_id}")
+
+    workflow_norm, mode_norm = _resolve_preset_enqueue_workflow(preset, workflow=workflow, mode=mode)
+    workers_i = _normalize_optional_workers(workers)
+    allow_seen_key_reuse = _normalize_bool_flag(allow_seen_key_reuse, default=True)
+    auto_start = _normalize_bool_flag(auto_start, default=False)
+    preset_slug = _config_slug_text(preset["preset_id"])
+    queue_jobs = []
+    variant_details = []
+    for variant in variants:
+        cfg_variant = _sanitize_config(
+            _deep_merge_dict(
+                cfg,
+                {
+                    "wf_train_days": variant["wf_train_days"],
+                    "wf_test_days": variant["wf_test_days"],
+                    "wf_step_days": variant["wf_step_days"],
+                },
+            ),
+            base_config=cfg,
+        )
+        _validate_config_guardrails(cfg_variant)
+        cfg_path = _write_preset_planned_config(cfg_variant, f"scope_{preset_slug}_{variant['variant_id']}")
+        enqueue_payload = {
+            "name": str(name_prefix or f"scope-{preset_slug}") + f"-{variant['variant_id']}",
+            "workflow": workflow_norm,
+            "config": str(cfg_path),
+            "allow_seen_key_reuse": allow_seen_key_reuse,
+        }
+        if mode_norm is not None:
+            enqueue_payload["mode"] = mode_norm
+        if workers_i is not None:
+            enqueue_payload["workers"] = workers_i
+        ok, msg, job = cp._batch_enqueue(enqueue_payload)
+        if not ok:
+            raise ValueError(msg)
+        queue_jobs.append(job)
+        variant_details.append(
+            {
+                "variant_id": variant["variant_id"],
+                "title": variant["title"],
+                "config_path": str(cfg_path),
+                "wf_train_days": cfg_variant["wf_train_days"],
+                "wf_test_days": cfg_variant["wf_test_days"],
+                "wf_step_days": cfg_variant["wf_step_days"],
+            }
+        )
+
+    started = False
+    start_msg = ""
+    if auto_start:
+        started, start_msg = cp._batch_start()
+
+    return {
+        "preset": {"preset_id": preset["preset_id"], "title": preset["title"]},
+        "config": cfg,
+        "jobs": queue_jobs,
+        "variants": variant_details,
+        "batch_started": bool(started),
+        "batch_start_message": str(start_msg),
+    }
 
 
 def _fetch_top_symbols(limit=10):
@@ -524,6 +768,78 @@ def try_handle_post(handler, parsed):
                 status=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
         return True
+    if parsed.path == "/config/apply-preset-and-enqueue":
+        try:
+            payload = handler._read_json_payload()
+            result = _apply_config_preset_and_enqueue(
+                payload.get("preset_id"),
+                workflow=payload.get("workflow"),
+                mode=payload.get("mode"),
+                workers=payload.get("workers"),
+                name=payload.get("name"),
+                allow_seen_key_reuse=payload.get("allow_seen_key_reuse", True),
+                auto_start=payload.get("auto_start", False),
+            )
+            handler._send(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"Preset applied and enqueued: {result['preset']['title']}",
+                        "details": result,
+                    },
+                    ensure_ascii=False,
+                ),
+                "application/json; charset=utf-8",
+            )
+        except ValueError as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": str(exc)}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        except Exception as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": f"Failed to enqueue preset workflow: {exc}"}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return True
+    if parsed.path == "/config/apply-preset-scope-test":
+        try:
+            payload = handler._read_json_payload()
+            result = _apply_config_preset_scope_test(
+                payload.get("preset_id"),
+                workflow=payload.get("workflow"),
+                mode=payload.get("mode"),
+                workers=payload.get("workers"),
+                name_prefix=payload.get("name_prefix"),
+                allow_seen_key_reuse=payload.get("allow_seen_key_reuse", True),
+                auto_start=payload.get("auto_start", False),
+            )
+            handler._send(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"Scope-test jobs enqueued: {result['preset']['title']}",
+                        "details": result,
+                    },
+                    ensure_ascii=False,
+                ),
+                "application/json; charset=utf-8",
+            )
+        except ValueError as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": str(exc)}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        except Exception as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": f"Failed to enqueue scope-test workflow: {exc}"}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return True
     if parsed.path == "/clear-log":
         try:
             cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -572,6 +888,14 @@ __all__ = [
     "_list_config_presets",
     "_find_config_preset",
     "_apply_config_preset",
+    "_preset_planned_configs_dir",
+    "_write_preset_planned_config",
+    "_resolve_preset_enqueue_workflow",
+    "_normalize_optional_workers",
+    "_normalize_bool_flag",
+    "_normalize_preset_scope_variants",
+    "_apply_config_preset_and_enqueue",
+    "_apply_config_preset_scope_test",
     "_fetch_top_symbols",
     "try_handle_get",
     "try_handle_post",

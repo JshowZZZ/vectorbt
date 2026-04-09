@@ -7,9 +7,9 @@
 
 ## Active Phase
 
-- No active phase.
+- Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: none.
+- Active items: `AWF-261`.
 
 ## Backlog
 
@@ -53,8 +53,12 @@
   Added an operator-facing control-panel preset `exact-lane-2h-4sym` and extended config sanitization so exact-lane hidden fields survive apply/save. The frozen exact lane can now be reused directly from the control panel without manual artifact selection.
 - `done` `AWF-258` Export/preset parity guard for the exact lane.
   Added regression coverage that compares the canonical replay config derived from the exact-lane protocol summary against the operator preset `exact-lane-2h-4sym`. This now guards against silent drift between the CLI export/replay path and the control-panel preset path.
-- `todo` `AWF-259` Exact-lane preset consumption in operator workflow.
-  Wire the frozen exact lane into the smallest next-stage operator workflow that uses the preset deliberately, rather than only proving preset parity in tests.
+- `done` `AWF-259` Exact-lane preset consumption in operator workflow.
+  Added control-panel endpoints that turn a preset directly into a planned config plus queued batch job, so the frozen exact lane can be consumed deliberately from operator workflow rather than only via config parity tests.
+- `done` `AWF-260` Exact-lane scope-test phase entry path.
+  Added paired scope-test enqueue support for preset-defined WFO variants (`45/30/30` main and `60/30/30` sensitivity), so the exact lane now has a first-class entry into the next range/scope-testing phase without manual JSON editing.
+- `todo` `AWF-261` Execute and evaluate the exact-lane paired scope-test workflow.
+  Run the operator-generated exact-lane scope-test pair, analyze the paired results with the pilot-analysis contract, and decide whether the lane is stable enough to justify broader range testing.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -173,6 +177,16 @@
 - 2026-04-10: `AWF-259` opened.
   - Next step: use the frozen exact-lane preset in a deliberate operator workflow, not just in config/preset tests.
   - The purpose is to validate reuse ergonomics, not to reopen discovery.
+- 2026-04-10: `AWF-259` completed.
+  - Added `/config/apply-preset-and-enqueue`, which applies a preset, writes a planned config, and queues the corresponding batch job in one step.
+  - Verified on the exact lane that the queued job preserves the canonical indicator subset, regime filter, ATR plateau, and deliberate rerun semantics (`allow_seen_key_reuse=True`).
+- 2026-04-10: Phase 50 opened.
+  - Focus: move the frozen exact lane from replay/preset readiness into explicit scope testing with operator-safe entry points and paired WFO execution.
+- 2026-04-10: `AWF-260` completed.
+  - Added `/config/apply-preset-scope-test`, which turns preset-defined WFO variants into paired planned configs and queued jobs.
+  - The exact lane now exposes the canonical `45/30/30` main and `60/30/30` sensitivity pair as a first-class control-panel workflow.
+- 2026-04-10: `AWF-261` opened.
+  - Next step: execute the exact-lane scope-test pair from the new operator workflow and re-evaluate the lane with the pilot-analysis contract before attempting wider range testing.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
