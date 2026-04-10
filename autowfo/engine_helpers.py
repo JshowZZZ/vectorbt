@@ -58,6 +58,32 @@ DEFAULT_CONFIG = {
 }
 
 
+def _normalize_timeframe_configs(timeframes, fallback=None):
+    fallback_items = copy.deepcopy(fallback or DEFAULT_CONFIG["timeframes"])
+    values = timeframes if isinstance(timeframes, list) else fallback_items
+    normalized = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        timeframe = str(item.get("timeframe", "")).strip()
+        try:
+            days = int(item.get("days", 0) or 0)
+        except (TypeError, ValueError):
+            days = 0
+        if not timeframe or days <= 0:
+            continue
+        entry = {"timeframe": timeframe, "days": days}
+        for key in ("start", "end"):
+            raw = item.get(key)
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if text:
+                entry[key] = text
+        normalized.append(entry)
+    return normalized or fallback_items
+
+
 def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
     combo_key_fields = [
         "timeframe",
@@ -532,7 +558,7 @@ def _resolve_runtime_settings(
     resolve_ranking_config_fn,
 ):
     search_mode = _normalize_search_mode(default_config.get("search_mode", "combo"))
-    timeframe_configs = default_config["timeframes"]
+    timeframe_configs = _normalize_timeframe_configs(default_config.get("timeframes"))
     combo_sizes = default_config["combo_sizes"]
     combo_seed = int(default_config.get("combo_seed", 42))
     max_workers = max(int(default_config.get("max_workers", 1) or 1), 1)

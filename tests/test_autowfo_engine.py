@@ -166,7 +166,7 @@ def test_build_sweep_schema_fields_contract():
 def test_resolve_runtime_settings_normalizes_fields():
     config = {
         "search_mode": "refine",
-        "timeframes": [{"timeframe": "1h", "days": 30}],
+        "timeframes": [{"timeframe": "1h", "days": 30, "end": "2026-04-10T10:00:00Z"}],
         "combo_sizes": [2],
         "combo_seed": 9,
         "max_workers": 0,
@@ -213,6 +213,7 @@ def test_resolve_runtime_settings_normalizes_fields():
     )
 
     assert got["search_mode"] == "refine"
+    assert got["timeframe_configs"] == [{"timeframe": "1h", "days": 30, "end": "2026-04-10T10:00:00Z"}]
     assert got["combo_seed"] == 9
     assert got["max_workers"] == 1
     assert got["combo_segment_start"] == 3
@@ -3392,6 +3393,7 @@ def test_prepare_timeframe_runtime_builds_payload():
     got = e._prepare_timeframe_runtime(
         timeframe="1h",
         data_days=5,
+        data_end="2026-04-10T10:00:00Z",
         base_symbol="BTC/USDT",
         trade_symbols=["ETH/BTC", "BNB/BTC"],
         exchange="binance",
@@ -3446,14 +3448,17 @@ def test_prepare_timeframe_runtime_builds_payload():
     )
 
     assert seen["prepare_kwargs"]["timeframe"] == "1h"
+    assert seen["prepare_kwargs"]["data_end"] == "2026-04-10T10:00:00Z"
     assert seen["wf_args"] == (6, 7, 2, 2, "rolling")
     assert seen["fingerprint_payload"]["timeframe"] == "1h"
+    assert seen["fingerprint_payload"]["data_end_requested"] == "2026-04-10T10:00:00Z"
     assert got["timeframe_range"] == "1h (5d): 2024-01-01 to 2024-01-01"
     assert got["timeframe_data_fingerprint"] == "fp-123"
     assert len(got["wf_windows"]) == 1
     assert len(got["wf_slices"]) == 1
     assert got["timeframe_diagnostics"]["realized_shared_days"] == 1
     assert got["timeframe_diagnostics"]["requested_data_days"] == 5
+    assert got["timeframe_diagnostics"]["data_end_requested"] == "2026-04-10T10:00:00Z"
     assert got["runtime_eval"]["wf_mode"] == "rolling"
     assert got["runtime_eval"]["config_sha256"] == "cfg123"
     assert got["runtime_eval"]["data_fingerprint"] == "fp-123"

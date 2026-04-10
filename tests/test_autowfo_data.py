@@ -89,6 +89,52 @@ def test_prepare_timeframe_context_characterization(tmp_path):
     assert ctx["init_cash_btc"] > 0
 
 
+def test_resolve_requested_window_uses_explicit_end():
+    window = d._resolve_requested_window(
+        10,
+        data_end="2026-04-10T10:00:00Z",
+    )
+
+    assert str(window["end_ts"]) == "2026-04-10 10:00:00"
+    assert str(window["start_ts"]) == "2026-03-31 10:00:00"
+    assert window["end"] == "2026-04-10T10:00:00"
+
+
+def test_coerce_utc_timestamp_accepts_relative_days():
+    stamp = d._coerce_utc_timestamp("10 days ago UTC")
+    assert isinstance(stamp, pd.Timestamp)
+
+
+def test_load_or_update_symbol_backfills_older_history(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / "binance_ETH-BTC_1h.csv"
+    cached_index = pd.date_range("2024-01-05", periods=4, freq="h")
+    d._write_cache(_make_ohlcv(cached_index, base=10.0), cache_path, "csv")
+
+    calls = []
+
+    def downloader(symbol, exchange, timeframe, start, end, show_progress):  # noqa: ARG001
+        calls.append((start, end, show_progress))
+        idx = pd.date_range("2024-01-01", periods=4, freq="h")
+        return _make_ohlcv(idx, base=1.0)
+
+    loaded = d._load_or_update_symbol(
+        symbol="ETH/BTC",
+        exchange="binance",
+        timeframe="1h",
+        start="2024-01-01T00:00:00",
+        end="2024-01-05T03:00:00",
+        cache_dir=str(cache_dir),
+        cache_format="csv",
+        download_symbol_ohlcv_fn=downloader,
+    )
+
+    assert calls == [("2024-01-01T00:00:00", "2024-01-04T23:00:00", False)]
+    assert loaded.index.min() == pd.Timestamp("2024-01-01 00:00:00")
+    assert loaded.index.max() == pd.Timestamp("2024-01-05 03:00:00")
+
+
 def test_cache_csv_roundtrip(tmp_path):
     index = pd.date_range("2024-01-01", periods=10, freq="h")
     df = _make_ohlcv(index, base=100.0)
@@ -128,6 +174,23 @@ def test_refresh_ohlcv_cache_builds_data_end_maps(tmp_path):
         {"timeframe": "1h", "symbol": "BTC/USDT", "data_end": expected_mark},
         {"timeframe": "1h", "symbol": "ETH/BTC", "data_end": expected_mark},
     ]
+
+
+def test_prepare_timeframe_context_respects_explicit_data_end(tmp_path):
+    index = pd.date_range("2024-01-01", periods=24 * 30, freq="h")
+    base_df = _make_ohlcv(index, base=100.0)
+    trade_df = _make_ohlcv(index, base=1.0)
+
+    def loader(symbol, *_args, **_kwargs):
+        return base_df if symbol == "BTC/USDT" else trade_df
+
+    kwargs = _common_ctx_kwargs(str(tmp_path / "cache"))
+    kwargs["data_days"] = 3
+    kwargs["data_end"] = "2024-01-20T12:00:00Z"
+    ctx = d._prepare_timeframe_context(**kwargs, load_or_update_symbol_fn=loader)
+
+    assert str(ctx["overlap_diagnostics"]["requested_window_end"]) == "2024-01-20 12:00:00"
+    assert ctx["trade_close"].index.max() == pd.Timestamp("2024-01-20 12:00:00")
 
 
 def test_refresh_ohlcv_cache_keeps_partial_results_on_symbol_error(tmp_path):

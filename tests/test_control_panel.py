@@ -424,7 +424,7 @@ def test_config_endpoint_preserves_hidden_fields_on_save(tmp_path, monkeypatch):
     cp.CONFIG_JSON.write_text(json.dumps(existing_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
     request_payload = {
-        "timeframes": [{"timeframe": "1h", "days": 60}],
+        "timeframes": [{"timeframe": "1h", "days": 60, "end": "2026-04-10T10:00:00Z"}],
         "trade_symbols": ["SOL/BTC"],
         "wf_train_days": 45,
         "wf_test_days": 15,
@@ -445,7 +445,7 @@ def test_config_endpoint_preserves_hidden_fields_on_save(tmp_path, monkeypatch):
     assert payload["ok"] is True
 
     saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
-    assert saved_cfg["timeframes"] == [{"timeframe": "1h", "days": 60}]
+    assert saved_cfg["timeframes"] == [{"timeframe": "1h", "days": 60, "end": "2026-04-10T10:00:00Z"}]
     assert saved_cfg["trade_symbols"] == ["SOL/BTC"]
     assert saved_cfg["wf_train_days"] == 45
     assert saved_cfg["wf_test_days"] == 15

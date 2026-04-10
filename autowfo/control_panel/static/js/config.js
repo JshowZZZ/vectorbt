@@ -155,6 +155,10 @@ export const ConfigTab = {
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('config_data_days', 'Data Days') }}</span>
                 <input v-model.number="cfg.data_days" type="number" min="1" placeholder="180" class="cfg-input" />
               </label>
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('config_data_end_utc', 'Data End UTC') }}</span>
+                <input v-model="cfg.data_end_utc" type="text" :placeholder="t('config_data_end_placeholder', 'Optional ISO timestamp, e.g. 2026-04-10T10:00:00Z')" class="cfg-input" />
+              </label>
               <div class="space-y-1 col-span-2">
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('config_combo_sizes', 'Combo Sizes') }}</span>
                 <div class="flex flex-wrap gap-2 mt-1">
@@ -341,6 +345,7 @@ export const ConfigTab = {
       search_mode: 'combo',
       timeframe: '4h',
       data_days: null,
+      data_end_utc: '',
       wf_train_days: null,
       wf_test_days: null,
       wf_step_days: null,
@@ -416,6 +421,7 @@ export const ConfigTab = {
       cfg.value.search_mode = configPayload.search_mode || 'combo'
       cfg.value.timeframe = tf.timeframe || ''
       cfg.value.data_days = tf.days || null
+      cfg.value.data_end_utc = tf.end || ''
       cfg.value.wf_train_days = configPayload.wf_train_days ?? null
       cfg.value.wf_test_days = configPayload.wf_test_days ?? null
       cfg.value.wf_step_days = configPayload.wf_step_days ?? null
@@ -473,7 +479,13 @@ export const ConfigTab = {
         const symbols = c.trade_symbols_raw.split(',').map(s => s.trim()).filter(Boolean)
         const payload = {
           search_mode: c.search_mode || 'combo',
-          timeframes: c.timeframe && c.data_days ? [{ timeframe: c.timeframe, days: c.data_days }] : [],
+          timeframes: c.timeframe && c.data_days
+            ? [{
+                timeframe: c.timeframe,
+                days: c.data_days,
+                ...(String(c.data_end_utc || '').trim() ? { end: String(c.data_end_utc).trim() } : {}),
+              }]
+            : [],
           wf_train_days: c.wf_train_days,
           wf_test_days: c.wf_test_days,
           wf_step_days: c.wf_step_days,

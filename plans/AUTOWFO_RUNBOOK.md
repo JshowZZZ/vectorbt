@@ -211,5 +211,6 @@
 - Keep protocol and metric contracts unchanged unless explicitly planned.
 - Prefer one-command execution via `python -m autowfo`.
 - Walk-forward mode is configured by `wf_mode` in sweep config (`anchored` default, `rolling` for true-WFO windowing experiments).
+- Timeframe configs may optionally pin a fixed window end via `timeframes[].end` (ISO UTC timestamp). Keep `timeframes[].days` as the adjustable size control when widening or narrowing the same study window over time.
 - Current true-WFO behavior (`wf_mode=rolling`): each window selects train-time execution policy (`filtered` vs `unfiltered`) and applies it to that window's OOS segment.
 - Treat each baseline run as evidence; use same-window paired comparison artifacts to evaluate ranking-rule changes.

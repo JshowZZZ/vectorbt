@@ -386,7 +386,15 @@ def _sanitize_config(payload, base_config=None):
             tf = str(item.get("timeframe", "")).strip()
             days = _safe_int(item.get("days"), None)
             if tf and days:
-                tf_list.append({"timeframe": tf, "days": days})
+                entry = {"timeframe": tf, "days": days}
+                for key in ("start", "end"):
+                    raw = item.get(key)
+                    if raw is None:
+                        continue
+                    text = str(raw).strip()
+                    if text:
+                        entry[key] = text
+                tf_list.append(entry)
     if tf_list:
         cfg["timeframes"] = tf_list
 

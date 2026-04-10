@@ -60,6 +60,8 @@ def _prepare_timeframe_runtime(
     max_concurrent_positions,
     config_sha256,
     bar_hours,
+    data_start=None,
+    data_end=None,
     prepare_timeframe_context_fn,
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
@@ -68,6 +70,8 @@ def _prepare_timeframe_runtime(
     ctx = prepare_timeframe_context_fn(
         timeframe=timeframe,
         data_days=data_days,
+        data_start=data_start,
+        data_end=data_end,
         base_symbol=base_symbol,
         trade_symbols=trade_symbols,
         exchange=exchange,
@@ -114,6 +118,8 @@ def _prepare_timeframe_runtime(
             "trade_symbols": trade_symbols_tf,
             "timeframe": timeframe,
             "data_days": data_days,
+            "data_start_requested": str(data_start or ""),
+            "data_end_requested": str(data_end or ""),
             "data_start": str(ctx["trade_close"].index[0]),
             "data_end": str(ctx["trade_close"].index[-1]),
         }
@@ -132,6 +138,8 @@ def _prepare_timeframe_runtime(
         "trade_symbols_tf": trade_symbols_tf,
         "timeframe": timeframe,
         "data_days": data_days,
+        "data_start": data_start,
+        "data_end": data_end,
         "exchange": exchange,
         "base_symbol": base_symbol,
         "capital_mode": capital_mode,
@@ -160,6 +168,8 @@ def _prepare_timeframe_runtime(
         {
             "timeframe": timeframe,
             "data_days": data_days,
+            "data_start_requested": str(data_start) if data_start not in (None, "") else None,
+            "data_end_requested": str(data_end) if data_end not in (None, "") else None,
             "data_range": ctx.get("data_range"),
             "data_fingerprint": timeframe_data_fingerprint,
         }

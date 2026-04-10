@@ -564,6 +564,8 @@ def _build_prepare_timeframe_runtime_kwargs(
     max_concurrent_positions,
     config_sha256,
     bar_hours,
+    data_start=None,
+    data_end=None,
     prepare_timeframe_context_fn,
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
@@ -572,6 +574,8 @@ def _build_prepare_timeframe_runtime_kwargs(
     return {
         "timeframe": timeframe,
         "data_days": data_days,
+        "data_start": data_start,
+        "data_end": data_end,
         "base_symbol": base_symbol,
         "trade_symbols": trade_symbols,
         "exchange": exchange,
@@ -920,11 +924,15 @@ def _build_prepare_timeframe_runtime_kwargs_from_context(
     data_days,
     bar_hours,
     prepare_timeframe_runtime_context,
+    data_start=None,
+    data_end=None,
 ):
     context = dict(prepare_timeframe_runtime_context)
     return _build_prepare_timeframe_runtime_kwargs(
         timeframe=timeframe,
         data_days=data_days,
+        data_start=data_start,
+        data_end=data_end,
         bar_hours=bar_hours,
         **context,
     )
@@ -1340,10 +1348,22 @@ def _build_timeframe_execution_callbacks(
     prepare_runtime_or_skip_fn=_prepare_timeframe_runtime_or_skip,
     build_ready_kwargs_from_context_fn=_build_timeframe_ready_search_kwargs_from_context,
 ):
-    def _prepare_runtime_attempt(*, timeframe, data_days, stage_prefix, bar_hours, done, total_combos):
+    def _prepare_runtime_attempt(
+        *,
+        timeframe,
+        data_days,
+        data_start=None,
+        data_end=None,
+        stage_prefix,
+        bar_hours,
+        done,
+        total_combos,
+    ):
         prepare_kwargs = build_prepare_kwargs_from_context_fn(
             timeframe=timeframe,
             data_days=data_days,
+            data_start=data_start,
+            data_end=data_end,
             bar_hours=bar_hours,
             prepare_timeframe_runtime_context=prepare_timeframe_runtime_context,
         )
@@ -1359,7 +1379,16 @@ def _build_timeframe_execution_callbacks(
             emit_progress_fn=emit_progress_fn,
         )
 
-    def _run_timeframe_body(*, timeframe, data_days, stage_prefix, bar_hours, timeframe_runtime):
+    def _run_timeframe_body(
+        *,
+        timeframe,
+        data_days,
+        data_start=None,
+        data_end=None,
+        stage_prefix,
+        bar_hours,
+        timeframe_runtime,
+    ):
         ready_search_kwargs = build_ready_kwargs_from_context_fn(
             timeframe=timeframe,
             data_days=data_days,
@@ -1401,11 +1430,15 @@ def _run_timeframe_search_loop(
     for tf_cfg in timeframe_configs:
         timeframe = tf_cfg["timeframe"]
         data_days = tf_cfg["days"]
+        data_start = tf_cfg.get("start")
+        data_end = tf_cfg.get("end")
         stage_prefix = f"{timeframe}"
         bar_hours = timeframe_to_hours_fn(timeframe)
         runtime_attempt = prepare_runtime_attempt_fn(
             timeframe=timeframe,
             data_days=data_days,
+            data_start=data_start,
+            data_end=data_end,
             stage_prefix=stage_prefix,
             bar_hours=bar_hours,
             done=get_done_fn(),
@@ -1433,6 +1466,8 @@ def _run_timeframe_search_loop(
         on_timeframe_ready_fn(
             timeframe=timeframe,
             data_days=data_days,
+            data_start=data_start,
+            data_end=data_end,
             stage_prefix=stage_prefix,
             bar_hours=bar_hours,
             timeframe_runtime=timeframe_runtime,

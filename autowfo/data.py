@@ -5,6 +5,7 @@ importable and testable.
 """
 
 import os
+import re
 from datetime import datetime, timezone
 
 import numpy as np
@@ -133,24 +134,56 @@ def _load_or_update_symbol(
     os.makedirs(cache_dir, exist_ok=True)
     cache_name = f"{exchange}_{symbol.replace('/', '-')}_{timeframe}.{cache_format}"
     cache_path = os.path.join(cache_dir, cache_name)
+    requested_start_ts = _coerce_utc_timestamp(start)
+    requested_end_ts = _coerce_utc_timestamp(
+        end,
+        default=pd.Timestamp.now(tz="UTC").tz_convert(None),
+    )
     if os.path.exists(cache_path):
         df = read_cache_fn(cache_path, cache_format)
         df = normalize_index_fn(df)
+        first_ts = df.index.min()
         last_ts = df.index.max()
         try:
             step = pd.Timedelta(timeframe)
         except ValueError:
             step = pd.Timedelta("1h")
+        if (
+            requested_start_ts is not None
+            and pd.notna(first_ts)
+            and requested_start_ts < first_ts
+        ):
+            try:
+                backfill_end = first_ts - step
+                if requested_start_ts <= backfill_end:
+                    old_df = download_symbol_ohlcv_fn(
+                        symbol,
+                        exchange,
+                        timeframe,
+                        start=_format_request_timestamp(requested_start_ts),
+                        end=_format_request_timestamp(backfill_end),
+                        show_progress=False,
+                    )
+                else:
+                    old_df = pd.DataFrame()
+            except Exception as exc:
+                print(f"[warn] backfill failed for {symbol}, using cached history: {exc}")
+                old_df = pd.DataFrame()
+            if not old_df.empty:
+                df = pd.concat([old_df, df], axis=0)
+                df = df[~df.index.duplicated(keep="last")].sort_index()
+                first_ts = df.index.min()
+                last_ts = df.index.max()
+                write_cache_fn(df, cache_path, cache_format)
         update_start = last_ts + step
-        now_ts = pd.Timestamp.now(tz="UTC").tz_convert(None)
-        if update_start < now_ts:
+        if update_start <= requested_end_ts:
             try:
                 new_df = download_symbol_ohlcv_fn(
                     symbol,
                     exchange,
                     timeframe,
-                    start=update_start.isoformat(),
-                    end=end,
+                    start=_format_request_timestamp(update_start),
+                    end=_format_request_timestamp(requested_end_ts),
                     show_progress=False,
                 )
             except Exception as exc:
@@ -161,7 +194,14 @@ def _load_or_update_symbol(
                 df = df[~df.index.duplicated(keep="last")].sort_index()
                 write_cache_fn(df, cache_path, cache_format)
     else:
-        df = download_symbol_ohlcv_fn(symbol, exchange, timeframe, start, end, show_progress=True)
+        df = download_symbol_ohlcv_fn(
+            symbol,
+            exchange,
+            timeframe,
+            _format_request_timestamp(requested_start_ts),
+            _format_request_timestamp(requested_end_ts),
+            show_progress=True,
+        )
         write_cache_fn(df, cache_path, cache_format)
     return df
 
@@ -176,6 +216,58 @@ def _format_data_end(ts):
     if stamp.tzinfo is not None:
         stamp = stamp.tz_convert("UTC").tz_localize(None)
     return stamp.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _coerce_utc_timestamp(value, default=None):
+    if value in (None, ""):
+        return default
+    if isinstance(value, pd.Timestamp):
+        stamp = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return default
+        if text.lower() == "now utc":
+            stamp = pd.Timestamp.now(tz="UTC")
+        elif re.match(r"^\d+\s+days?\s+ago\s+utc$", text.lower()):
+            days_n = int(text.split()[0])
+            stamp = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days_n)
+        else:
+            stamp = pd.Timestamp(text)
+    if stamp.tzinfo is not None:
+        return stamp.tz_convert("UTC").tz_localize(None)
+    return stamp
+
+
+def _format_request_timestamp(ts):
+    stamp = _coerce_utc_timestamp(ts)
+    if stamp is None:
+        return None
+    return stamp.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _resolve_requested_window(data_days, *, data_start=None, data_end=None):
+    end_ts = _coerce_utc_timestamp(
+        data_end,
+        default=pd.Timestamp.now(tz="UTC").tz_convert(None),
+    )
+    try:
+        days_n = int(data_days)
+    except (TypeError, ValueError):
+        days_n = 0
+    if days_n <= 0:
+        raise ValueError("data_days must be a positive integer")
+    start_ts = _coerce_utc_timestamp(data_start)
+    if start_ts is None:
+        start_ts = end_ts - pd.Timedelta(days=days_n)
+    if start_ts > end_ts:
+        raise ValueError("requested data window start must be <= end")
+    return {
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "start": _format_request_timestamp(start_ts),
+        "end": _format_request_timestamp(end_ts),
+    }
 
 
 def refresh_ohlcv_cache(
@@ -321,15 +413,29 @@ def _prepare_timeframe_context(
     chop_lookbacks,
     init_cash_usdt,
     capital_mode,
+    data_start=None,
+    data_end=None,
     load_or_update_symbol_fn=None,
 ):
     if load_or_update_symbol_fn is None:
         load_or_update_symbol_fn = _load_or_update_symbol
 
-    start = f"{data_days} days ago UTC"
-    end = "now UTC"
-    requested_window_start = None
-    requested_window_end = None
+    use_explicit_window = data_start not in (None, "") or data_end not in (None, "")
+    if use_explicit_window:
+        requested_window = _resolve_requested_window(
+            data_days,
+            data_start=data_start,
+            data_end=data_end,
+        )
+        start = requested_window["start"]
+        end = requested_window["end"]
+        requested_window_start = requested_window["start_ts"]
+        requested_window_end = requested_window["end_ts"]
+    else:
+        start = f"{data_days} days ago UTC"
+        end = "now UTC"
+        requested_window_start = None
+        requested_window_end = None
     all_symbols = [base_symbol] + trade_symbols
     symbol_data = {}
     for symbol in all_symbols:
@@ -340,20 +446,24 @@ def _prepare_timeframe_context(
         except Exception as exc:
             print(f"[warn] skip {symbol}: {exc}")
 
-    # Keep the effective window close to requested `data_days` even when cache files
-    # have grown older than the latest run configuration.
-    try:
-        latest_end = min(df.index.max() for df in symbol_data.values() if not df.empty)
-        if pd.notna(latest_end):
-            window_start = latest_end - pd.Timedelta(days=int(data_days))
-            requested_window_start = window_start
-            requested_window_end = latest_end
-            for symbol, df in list(symbol_data.items()):
-                clipped = df.loc[df.index >= window_start]
-                if not clipped.empty:
+    if use_explicit_window:
+        for symbol, df in list(symbol_data.items()):
+            clipped = df.loc[(df.index >= requested_window_start) & (df.index <= requested_window_end)]
+            symbol_data[symbol] = clipped
+    else:
+        # Keep the effective window close to requested `data_days` even when cache files
+        # have grown older than the latest run configuration.
+        try:
+            latest_end = min(df.index.max() for df in symbol_data.values() if not df.empty)
+            if pd.notna(latest_end):
+                window_start = latest_end - pd.Timedelta(days=int(data_days))
+                requested_window_start = window_start
+                requested_window_end = latest_end
+                for symbol, df in list(symbol_data.items()):
+                    clipped = df.loc[df.index >= window_start]
                     symbol_data[symbol] = clipped
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     if base_symbol not in symbol_data:
         raise RuntimeError(f"Base symbol not available: {base_symbol}")

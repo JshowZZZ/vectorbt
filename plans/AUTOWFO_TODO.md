@@ -9,9 +9,12 @@
 
 - Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: none. Exact-lane operator summary, action policy, and overlap re-validation policy are frozen; next paired rerun should wait for the defined trigger or an explicit protocol change.
+- Active items: none. Time-anchored research windows and cache backfill are now available; future reruns can widen windows by config as overlap grows.
 
 ## Backlog
+
+- `done` `AWF-273` Parameterize fixed data windows and historical cache backfill.
+  Extended timeframe config to accept optional anchored window bounds while preserving `days` as the adjustable size control; current operator path exposes optional `end` for fixed-window reruns. The data loader now backfills older OHLCV rows when the requested window starts before the existing cache, so widening a study window later can remain a config-only change instead of requiring manual cache deletion.
 
 - `done` `AWF-239` Cross-symbol pilot protocol review and scope freeze.
   Review `plans/AUTOWFO_SEARCH_V2_PROPOSAL.md`, confirm the revised priority order, and freeze the pilot protocol before implementation.
