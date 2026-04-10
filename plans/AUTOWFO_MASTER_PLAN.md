@@ -51,6 +51,25 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
+### Phase 52: Baseline Clue-Harvesting Campaign (AWF-277/278/279) [Active]
+- Complete one more evidence-first pass in the current single-layer combo-entry mode before introducing a new strategy mode.
+- Freeze an anchored breadth-first campaign:
+  - `2h / 180d`
+  - fixed 10-symbol BTC-cross major cohort
+  - fixed ATR-based exit
+  - singles + pairs across all `25` indicators
+  - bounded triples only after evidence-based promotion
+- Use this phase to extract three kinds of clues:
+  - indicator families
+  - symbol clusters
+  - trade-density failure modes
+- Outcome target:
+  - a decision-quality map of which indicators and symbol cohorts are worth carrying into either deeper current-mode refinement or a future hierarchical mode
+- Exit criteria:
+  - the breadth-first campaign protocol is frozen in writing
+  - the campaign has been executed under anchored conditions
+  - a decision memo identifies whether the next branch should stay in the current mode or open a new mode
+
 ### Phase 51: Anchored Lane Expansion (AWF-274/275/276) [Done]
 - Validate that the new anchored-window and historical-backfill path works on real exact-lane data, not only in tests.
 - Keep the research `end` fixed and widen only one axis at a time so broader indicator and symbol evidence stays comparable.

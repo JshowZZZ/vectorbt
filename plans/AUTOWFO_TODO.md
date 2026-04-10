@@ -7,11 +7,29 @@
 
 ## Active Phase
 
-- No active phase at the moment.
+- Phase 52: Baseline Clue-Harvesting Campaign.
 - Last closed phase: Phase 51: Anchored Lane Expansion.
-- Active items: none. Anchored full-window reruns closed the overlap question and showed that broader indicator/symbol widening is not yet justified under a fixed `180d` `2h` window.
+- Active items:
+  - `doing` `AWF-277` Freeze the breadth-first baseline campaign protocol.
+    Define the anchored `2h / 180d` experiment matrix for `25` indicators: singles + pairs on a fixed 10-symbol BTC-cross cohort, fixed ATR-based exits, and paired WFO. The output of this step is a config protocol and an analysis plan that explicitly targets family, cluster, and trade-density clues.
+  - `todo` `AWF-278` Execute the baseline clue-harvesting campaign.
+    Run the breadth-first anchored campaign in the current single-layer entry mode: first `25` indicators as singles and pairs across the fixed 10-symbol BTC-cross cohort, then promote the most informative indicators into a bounded triples stage.
+  - `todo` `AWF-279` Analyze clue-harvesting outputs and choose the next branch.
+    Use the anchored breadth results to identify which indicator families, symbol clusters, and trade-density failure modes deserve refinement. This gate decides whether the next branch should remain within the current mode or graduate to a new strategy mode.
 
 ## Backlog
+
+- `todo` `AWF-277` Freeze the breadth-first baseline campaign protocol.
+  Turn the agreed campaign shape into a fixed experimental protocol: `25` indicators, anchored `2h / 180d`, fixed BTC-cross majors, fixed ATR-based exit, singles + pairs first, then a bounded triples stage selected from evidence. The purpose is clue harvesting rather than immediate strategy promotion.
+
+- `todo` `AWF-278` Execute the baseline clue-harvesting campaign.
+  Run the agreed breadth-first matrix under the current single-layer entry model and persist all evidence using the existing pilot-analysis and artifact contracts. This campaign should maximize interpretability, not parameter coverage.
+
+- `todo` `AWF-279` Analyze clue-harvesting outputs and choose the next branch.
+  Convert the breadth-first campaign into a decision memo: which indicator families repeatedly survive, which BTC-cross symbols behave as cluster supporters versus draggers, and whether low trade density or worst-symbol support is the main blocker. Use that evidence to decide whether to keep refining the current mode or open a new strategy-mode branch.
+
+- `done` `AWF-280` Freeze the hierarchical state/trigger/add-on mode as a technical note.
+  Captured the new idea as `plans/AUTOWFO_STATE_TRIGGER_MODE_NOTE.md` so the design does not get lost while the baseline clue-harvesting campaign is completed first. The note defines the intent, required system changes, compatibility with the current single-layer combo-entry mode, and why implementation is deferred until after the breadth-first baseline campaign.
 
 - `done` `AWF-274` Anchored exact-lane overlap validation.
   Re-ran the canonical `2h / 180d` exact lane with fixed `end=2026-04-09T14:00:00Z` (`20260411_anchored_exact_main`, `20260411_anchored_exact_sens`). Result: the backfill-aware loader achieved the full anchored shared window (`realized_shared_days = 181`), which validates the anchored-window contract on real `2h` BTC-cross data. Under the stricter full-window evidence, however, the exact lane downgraded to `hold` (`30` stable-positive rows, `0` gate-passed).
