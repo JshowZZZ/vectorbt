@@ -5,6 +5,7 @@ import json
 import sys as _sys
 from datetime import datetime, timezone
 from http import HTTPStatus
+from pathlib import Path
 
 
 _RERUN_CAMPAIGN_PRESETS = (
@@ -69,12 +70,14 @@ _RERUN_CAMPAIGN_PRESETS = (
         "optional": False,
         "promotion_policy": {
             "full_window_gate": {
+                "policy_kind": "promotive",
                 "timeframe": "2h",
                 "data_days": 180,
                 "trade_gate_policy": "flat",
                 "min_combo_trades": 0.5,
             },
             "short_window_gate": {
+                "policy_kind": "supporting",
                 "timeframe": "2h",
                 "data_days": 120,
                 "trade_gate_policy": "window_aware",
@@ -83,6 +86,7 @@ _RERUN_CAMPAIGN_PRESETS = (
                 "trade_gate_min_ratio": 0.75,
             },
             "rejected_density_lane": {
+                "policy_kind": "rejected",
                 "timeframe": "1h",
                 "data_days": 180,
                 "reason": "awf263_density_follow_up_failed",
@@ -438,6 +442,14 @@ def _find_config_preset(preset_id):
     return None
 
 
+def _resolve_runtime_path(path_value):
+    cp = _cp()
+    path = Path(str(path_value or "").strip())
+    if path.is_absolute():
+        return path
+    return (cp.ROOT / path).resolve()
+
+
 def _apply_config_preset(preset_id):
     cp = _cp()
     preset = _find_config_preset(preset_id)
@@ -670,6 +682,76 @@ def _apply_config_preset_scope_test(
     }
 
 
+def _evaluate_preset_promotion(preset_id, analysis_json, out_json=None):
+    from autowfo import pilot_analysis
+
+    preset = _find_config_preset(preset_id)
+    if preset is None:
+        raise ValueError(f"Unknown config preset: {preset_id}")
+    promotion_policy = copy.deepcopy(preset.get("promotion_policy", {}))
+    if not promotion_policy:
+        raise ValueError(f"Preset has no promotion policy: {preset_id}")
+
+    analysis_path = _resolve_runtime_path(analysis_json)
+    analysis_payload = pilot_analysis.load_analysis_report(analysis_path)
+    verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+    payload = {
+        "preset_id": str(preset.get("preset_id") or preset_id),
+        "preset_title": str(preset.get("title") or ""),
+        "analysis_json": str(analysis_path),
+        "promotion_policy": promotion_policy,
+        "verdict": verdict,
+    }
+    if out_json not in (None, ""):
+        out_path = _resolve_runtime_path(out_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload["out_json"] = str(out_path)
+    return payload
+
+
+def _build_preset_operator_bundle(preset_id, analysis_json_list, out_json=None):
+    from autowfo import pilot_analysis
+
+    preset = _find_config_preset(preset_id)
+    if preset is None:
+        raise ValueError(f"Unknown config preset: {preset_id}")
+    promotion_policy = copy.deepcopy(preset.get("promotion_policy", {}))
+    if not promotion_policy:
+        raise ValueError(f"Preset has no promotion policy: {preset_id}")
+
+    analysis_inputs = [str(item).strip() for item in list(analysis_json_list or []) if str(item).strip()]
+    if not analysis_inputs:
+        raise ValueError("at least one analysis_json is required")
+
+    items = []
+    for analysis_item in analysis_inputs:
+        analysis_path = _resolve_runtime_path(analysis_item)
+        analysis_payload = pilot_analysis.load_analysis_report(analysis_path)
+        verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+        items.append(
+            {
+                "analysis_json": str(analysis_path),
+                "analysis_context": verdict.get("analysis_context"),
+                "summary": dict((analysis_payload.get("summary") or {})),
+                "verdict": verdict,
+            }
+        )
+
+    payload = {
+        "preset_id": str(preset.get("preset_id") or preset_id),
+        "preset_title": str(preset.get("title") or ""),
+        "promotion_policy": promotion_policy,
+        "items": items,
+    }
+    if out_json not in (None, ""):
+        out_path = _resolve_runtime_path(out_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload["out_json"] = str(out_path)
+    return payload
+
+
 def _fetch_top_symbols(limit=10):
     cp = _cp()
     from autowfo.engine_helpers import DEFAULT_CONFIG
@@ -872,6 +954,70 @@ def try_handle_post(handler, parsed):
                 status=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
         return True
+    if parsed.path == "/config/evaluate-preset-promotion":
+        try:
+            payload = handler._read_json_payload()
+            result = _evaluate_preset_promotion(
+                payload.get("preset_id"),
+                payload.get("analysis_json"),
+                out_json=payload.get("out_json"),
+            )
+            handler._send(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"Promotion policy evaluated: {result['preset_title']}",
+                        "details": result,
+                    },
+                    ensure_ascii=False,
+                ),
+                "application/json; charset=utf-8",
+            )
+        except ValueError as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": str(exc)}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        except Exception as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": f"Failed to evaluate promotion policy: {exc}"}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return True
+    if parsed.path == "/config/build-preset-bundle":
+        try:
+            payload = handler._read_json_payload()
+            result = _build_preset_operator_bundle(
+                payload.get("preset_id"),
+                payload.get("analysis_json_list"),
+                out_json=payload.get("out_json"),
+            )
+            handler._send(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"Operator bundle built: {result['preset_title']}",
+                        "details": result,
+                    },
+                    ensure_ascii=False,
+                ),
+                "application/json; charset=utf-8",
+            )
+        except ValueError as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": str(exc)}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        except Exception as exc:
+            handler._send(
+                json.dumps({"ok": False, "message": f"Failed to build operator bundle: {exc}"}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return True
     if parsed.path == "/clear-log":
         try:
             cp.ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -928,6 +1074,8 @@ __all__ = [
     "_normalize_preset_scope_variants",
     "_apply_config_preset_and_enqueue",
     "_apply_config_preset_scope_test",
+    "_evaluate_preset_promotion",
+    "_build_preset_operator_bundle",
     "_fetch_top_symbols",
     "try_handle_get",
     "try_handle_post",

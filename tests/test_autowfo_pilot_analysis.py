@@ -220,6 +220,73 @@ def test_compare_pilot_runs_window_aware_trade_gate_keeps_full_window_floor():
     assert row["effective_trade_floor"] == 0.5
 
 
+def test_evaluate_promotion_verdict_promotes_full_window_gate_pass():
+    analysis_payload = {
+        "main_run": {"timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]},
+        "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+    }
+    promotion_policy = {
+        "full_window_gate": {
+            "policy_kind": "promotive",
+            "timeframe": "2h",
+            "data_days": 180,
+            "trade_gate_policy": "flat",
+            "min_combo_trades": 0.5,
+        }
+    }
+
+    verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+
+    assert verdict["matched_policy_name"] == "full_window_gate"
+    assert verdict["verdict"] == "promote"
+    assert verdict["reason"] == "full_window_gate_passed"
+
+
+def test_evaluate_promotion_verdict_holds_supporting_window_pass():
+    analysis_payload = {
+        "main_run": {"timeframe_diagnostics": [{"timeframe": "2h", "data_days": 120, "realized_shared_days": 121}]},
+        "summary": {"stable_positive_rows": 24, "gate_passed_rows": 24},
+    }
+    promotion_policy = {
+        "short_window_gate": {
+            "policy_kind": "supporting",
+            "timeframe": "2h",
+            "data_days": 120,
+            "trade_gate_policy": "window_aware",
+            "min_combo_trades": 0.5,
+            "trade_gate_reference_days": 180,
+            "trade_gate_min_ratio": 0.75,
+        }
+    }
+
+    verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+
+    assert verdict["matched_policy_name"] == "short_window_gate"
+    assert verdict["verdict"] == "hold"
+    assert verdict["reason"] == "short_window_gate_passed"
+
+
+def test_evaluate_promotion_verdict_rejects_density_lane():
+    analysis_payload = {
+        "main_run": {"timeframe_diagnostics": [{"timeframe": "1h", "data_days": 180, "realized_shared_days": 181}]},
+        "summary": {"stable_positive_rows": 0, "gate_passed_rows": 0},
+    }
+    promotion_policy = {
+        "rejected_density_lane": {
+            "policy_kind": "rejected",
+            "timeframe": "1h",
+            "data_days": 180,
+            "reason": "awf263_density_follow_up_failed",
+        }
+    }
+
+    verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+
+    assert verdict["matched_policy_name"] == "rejected_density_lane"
+    assert verdict["verdict"] == "no_go"
+    assert verdict["reason"] == "awf263_density_follow_up_failed"
+
+
 def test_compare_pilot_runs_marks_evidence_equivalent_superset_as_redundant():
     main_combo = pd.concat(
         [

@@ -111,6 +111,25 @@ Interpretation:
 - This means short-window exact-lane review should stop relying on ad hoc reruns with manually reduced `min_combo_trades`.
 - That policy is now frozen into the operator preset contract, so future exact-lane scope/range workflows can read the same promotion criteria directly from the preset metadata.
 
+### AWF-266 / AWF-267: promotion verdict automation
+
+- Scope-test verdict: `artifacts/reports/pilot_verdict_awf266_exact_lane_scope_test.json`
+- Short-window verdict: `artifacts/reports/pilot_verdict_awf266_exact_lane_range120.json`
+- Density-lane verdict: `artifacts/reports/pilot_verdict_awf266_exact_lane_density_1h.json`
+
+Outcome:
+
+- `2h / 180d` scope-test -> `promote`
+- `2h / 120d` window-aware short-window check -> `hold`
+- `1h / 180d` density lane -> `no_go`
+
+Interpretation:
+
+- The frozen exact lane now has an explicit operator-facing verdict path, not just analysis reports.
+- Promotion logic is now consistent across CLI and control-panel workflows.
+- The lane should be promoted only on full-window `2h` evidence, held under the supporting short-window check, and explicitly rejected on the `1h` density branch.
+- The current operator handoff is bundled in `artifacts/reports/pilot_bundle_awf268_exact_lane_operator.json`, so the preset policy, reports, and verdicts can now move together as one review artifact.
+
 ## Decision
 
 ### Conclusion

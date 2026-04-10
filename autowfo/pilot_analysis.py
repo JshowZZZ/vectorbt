@@ -368,6 +368,76 @@ def _resolve_base_config_path(config_path: str | Path | None, cwd: str | Path | 
     return candidate if candidate.exists() else None
 
 
+def _extract_analysis_context(analysis_payload: Mapping[str, Any]) -> Dict[str, Any]:
+    main_run = analysis_payload.get("main_run") or {}
+    diagnostics = list(main_run.get("timeframe_diagnostics") or [])
+    first_diag = diagnostics[0] if diagnostics and isinstance(diagnostics[0], dict) else {}
+    return {
+        "timeframe": first_diag.get("timeframe"),
+        "data_days": _safe_int(first_diag.get("data_days") or first_diag.get("requested_data_days")),
+        "realized_shared_days": _safe_int(first_diag.get("realized_shared_days")),
+    }
+
+
+def _match_promotion_policy_entry(
+    analysis_context: Mapping[str, Any],
+    promotion_policy: Mapping[str, Any],
+) -> Tuple[str | None, Dict[str, Any] | None]:
+    timeframe = analysis_context.get("timeframe")
+    data_days = _safe_int(analysis_context.get("data_days"))
+    if not isinstance(promotion_policy, Mapping):
+        return None, None
+    for policy_name, raw_entry in promotion_policy.items():
+        if not isinstance(raw_entry, Mapping):
+            continue
+        policy_timeframe = raw_entry.get("timeframe")
+        policy_days = _safe_int(raw_entry.get("data_days"))
+        if timeframe == policy_timeframe and data_days == policy_days:
+            return str(policy_name), dict(raw_entry)
+    return None, None
+
+
+def evaluate_promotion_verdict(
+    analysis_payload: Mapping[str, Any],
+    promotion_policy: Mapping[str, Any],
+) -> Dict[str, Any]:
+    analysis_context = _extract_analysis_context(analysis_payload)
+    policy_name, policy_entry = _match_promotion_policy_entry(analysis_context, promotion_policy)
+    summary = dict(analysis_payload.get("summary") or {})
+
+    stable_positive_rows = int(summary.get("stable_positive_rows", 0) or 0)
+    gate_passed_rows = int(summary.get("gate_passed_rows", 0) or 0)
+
+    verdict = "hold"
+    reason = "policy_unmapped"
+    if policy_entry is not None:
+        policy_kind = str(policy_entry.get("policy_kind") or "").strip().lower()
+        if policy_kind == "rejected":
+            verdict = "no_go"
+            reason = str(policy_entry.get("reason") or "rejected_lane")
+        elif gate_passed_rows > 0:
+            verdict = "promote" if policy_kind == "promotive" else "hold"
+            reason = f"{policy_name}_passed"
+        elif stable_positive_rows > 0:
+            verdict = "hold"
+            reason = f"{policy_name}_stable_but_below_gate"
+        else:
+            verdict = "no_go"
+            reason = f"{policy_name}_no_stable_positive"
+
+    return {
+        "analysis_context": analysis_context,
+        "matched_policy_name": policy_name,
+        "matched_policy": policy_entry,
+        "summary": {
+            "stable_positive_rows": stable_positive_rows,
+            "gate_passed_rows": gate_passed_rows,
+        },
+        "verdict": verdict,
+        "reason": reason,
+    }
+
+
 def build_replay_config_from_analysis(
     analysis_payload: Mapping[str, Any],
     main_run: Mapping[str, Any],

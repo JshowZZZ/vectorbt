@@ -9,7 +9,7 @@
 
 - Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: `AWF-266`.
+- Active items: `AWF-270`.
 
 ## Backlog
 
@@ -67,8 +67,16 @@
   Added a formal trade-gate policy layer to `autowfo pilot-analyze` with `flat` and conservative `window_aware` modes. The new `window_aware` policy keeps the baseline `0.5` trade floor for full `180d` windows, but relaxes short-window exact-lane review to `max(data_days / 180, 0.75) * 0.5`. Re-analyzing `20260410_101315` / `20260410_101628` under this policy restored `24` gate-passed rows at `2h / 120d`, while `20260410_102301` / `20260410_102302` remained `0` gate-passed on `1h / 180d`. This closes the question in favor of a conservative window-aware policy for short-window exact-lane review.
 - `done` `AWF-265` Exact-lane promotion policy freeze.
   Carried the exact-lane promotion policy into the control-panel preset contract. `exact-lane-2h-4sym` now publishes explicit `full_window_gate`, `short_window_gate`, and rejected `1h` density-lane metadata through `/config/presets.json`, `/config/apply-preset`, `/config/apply-preset-and-enqueue`, and `/config/apply-preset-scope-test`, so operator workflows can consume the same promotion criteria that closed `AWF-264`.
-- `todo` `AWF-266` Exact-lane promotion verdict automation.
-  Turn the frozen preset promotion policy into a reusable paired-analysis verdict path, so operator-generated scope/range runs can emit an explicit promote/hold/no-go verdict without manual policy selection.
+- `done` `AWF-266` Exact-lane promotion verdict automation.
+  Added `python -m autowfo pilot-evaluate-promotion`, which reads a pilot-analysis report plus preset promotion policy and emits an explicit `promote` / `hold` / `no_go` verdict. Verified on real exact-lane reports: `AWF-261` scope-test -> `promote`, `AWF-264` short-window `2h / 120d` -> `hold`, `AWF-264` rejected `1h / 180d` density lane -> `no_go`.
+- `done` `AWF-267` Operator-facing exact-lane promotion verdict endpoint.
+  Added `/config/evaluate-preset-promotion`, so the control-panel workflow can evaluate an analysis report against the frozen exact-lane promotion policy and optionally persist a machine-readable verdict JSON without dropping back to ad hoc scripts.
+- `done` `AWF-268` Exact-lane verdict bundle and operator handoff.
+  Added `python -m autowfo pilot-build-bundle`, which packages the frozen preset policy, multiple pilot-analysis reports, and their derived promotion verdicts into one operator-facing JSON bundle. Generated `artifacts/reports/pilot_bundle_awf268_exact_lane_operator.json` for the current exact-lane scope/range set.
+- `done` `AWF-269` Surface the exact-lane operator bundle in the control panel.
+  Added `/config/build-preset-bundle`, so the control panel can package a frozen preset plus multiple analysis reports into one operator-facing bundle JSON without shelling out to CLI.
+- `todo` `AWF-270` Present exact-lane bundle summaries in operator UI.
+  Surface the bundle verdict summary in a lightweight control-panel view or payload so operators can review exact-lane promote/hold/no-go state without opening raw JSON artifacts.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).

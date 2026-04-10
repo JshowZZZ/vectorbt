@@ -477,7 +477,9 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
     assert exact_lane["supports_scope_test"] is True
     assert [item["variant_id"] for item in exact_lane["scope_test_variants"]] == ["main", "sensitivity"]
     assert exact_lane["promotion_policy"]["full_window_gate"]["trade_gate_policy"] == "flat"
+    assert exact_lane["promotion_policy"]["full_window_gate"]["policy_kind"] == "promotive"
     assert exact_lane["promotion_policy"]["short_window_gate"]["trade_gate_policy"] == "window_aware"
+    assert exact_lane["promotion_policy"]["short_window_gate"]["policy_kind"] == "supporting"
     assert exact_lane["promotion_policy"]["rejected_density_lane"]["reason"] == "awf263_density_follow_up_failed"
 
 
@@ -725,6 +727,107 @@ def test_config_apply_preset_scope_test_enqueues_exact_lane_pair(tmp_path, monke
         "scope-exact-lane-2h-4sym-main",
         "scope-exact-lane-2h-4sym-sensitivity",
     ]
+
+
+def test_config_evaluate_preset_promotion_returns_verdict_and_writes_report(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    analysis_path = tmp_path / "artifacts" / "reports" / "pilot_analysis_awf261_exact_lane_scope_test.json"
+    analysis_path.parent.mkdir(parents=True, exist_ok=True)
+    analysis_path.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]
+                },
+                "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "artifacts" / "reports" / "promotion_verdict.json"
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/evaluate-preset-promotion",
+            body=json.dumps(
+                {
+                    "preset_id": "exact-lane-2h-4sym",
+                    "analysis_json": "artifacts/reports/pilot_analysis_awf261_exact_lane_scope_test.json",
+                    "out_json": "artifacts/reports/promotion_verdict.json",
+                },
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["details"]["preset_id"] == "exact-lane-2h-4sym"
+    assert payload["details"]["verdict"]["matched_policy_name"] == "full_window_gate"
+    assert payload["details"]["verdict"]["verdict"] == "promote"
+    assert out_path.exists()
+
+
+def test_config_build_preset_bundle_returns_bundle_and_writes_report(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    reports_dir = tmp_path / "artifacts" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    analysis_a = reports_dir / "scope.json"
+    analysis_b = reports_dir / "range120.json"
+    analysis_a.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]
+                },
+                "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis_b.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 120, "realized_shared_days": 121}]
+                },
+                "summary": {"stable_positive_rows": 24, "gate_passed_rows": 24},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = reports_dir / "bundle.json"
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/build-preset-bundle",
+            body=json.dumps(
+                {
+                    "preset_id": "exact-lane-2h-4sym",
+                    "analysis_json_list": [
+                        "artifacts/reports/scope.json",
+                        "artifacts/reports/range120.json",
+                    ],
+                    "out_json": "artifacts/reports/bundle.json",
+                },
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["details"]["preset_id"] == "exact-lane-2h-4sym"
+    assert len(payload["details"]["items"]) == 2
+    assert payload["details"]["items"][0]["verdict"]["verdict"] == "promote"
+    assert payload["details"]["items"][1]["verdict"]["verdict"] == "hold"
+    assert out_path.exists()
 
 
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):

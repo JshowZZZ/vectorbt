@@ -450,6 +450,97 @@ def test_cli_pilot_export_config_writes_replay_config(tmp_path):
     assert payload["max_holds"] == [4]
 
 
+def test_cli_pilot_evaluate_promotion_writes_verdict(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    analysis_path = artifacts_dir / "pilot_analysis.json"
+    analysis_path.parent.mkdir(parents=True, exist_ok=True)
+    analysis_path.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]
+                },
+                "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_json = artifacts_dir / "promotion_verdict.json"
+    code = cli.main(
+        [
+            "pilot-evaluate-promotion",
+            "--analysis-json",
+            str(analysis_path),
+            "--preset-id",
+            "exact-lane-2h-4sym",
+            "--out-json",
+            str(out_json.relative_to(tmp_path)),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["preset_id"] == "exact-lane-2h-4sym"
+    assert payload["verdict"]["matched_policy_name"] == "full_window_gate"
+    assert payload["verdict"]["verdict"] == "promote"
+
+
+def test_cli_pilot_build_bundle_writes_operator_bundle(tmp_path):
+    artifacts_dir = tmp_path / "artifacts"
+    analysis_a = artifacts_dir / "a.json"
+    analysis_b = artifacts_dir / "b.json"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    analysis_a.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]
+                },
+                "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis_b.write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 120, "realized_shared_days": 121}]
+                },
+                "summary": {"stable_positive_rows": 24, "gate_passed_rows": 24},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_json = artifacts_dir / "bundle.json"
+    code = cli.main(
+        [
+            "pilot-build-bundle",
+            "--preset-id",
+            "exact-lane-2h-4sym",
+            "--analysis-json",
+            str(analysis_a),
+            "--analysis-json",
+            str(analysis_b),
+            "--out-json",
+            str(out_json.relative_to(tmp_path)),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["preset_id"] == "exact-lane-2h-4sym"
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["verdict"]["verdict"] == "promote"
+    assert payload["items"][1]["verdict"]["verdict"] == "hold"
+
+
 def test_cli_batch_continue_on_error_runs_remaining_jobs(tmp_path, monkeypatch):
     good_cfg = tmp_path / "good.json"
     bad_cfg = tmp_path / "bad.json"

@@ -239,6 +239,51 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     pilot_export_parser.add_argument("--cwd", default=".", help="Working directory")
     pilot_export_parser.set_defaults(handler=cli_impl._cmd_pilot_export_config)
 
+    pilot_verdict_parser = subparsers.add_parser(
+        "pilot-evaluate-promotion",
+        help="Evaluate a pilot-analysis report against a frozen preset promotion policy",
+    )
+    pilot_verdict_parser.add_argument(
+        "--analysis-json",
+        required=True,
+        help="Path to pilot-analysis JSON report",
+    )
+    pilot_verdict_parser.add_argument(
+        "--preset-id",
+        required=True,
+        help="Control-panel preset id that carries the promotion policy",
+    )
+    pilot_verdict_parser.add_argument(
+        "--out-json",
+        default="artifacts/pilot_promotion_verdict.json",
+        help="Output path for machine-readable promotion verdict JSON",
+    )
+    pilot_verdict_parser.add_argument("--cwd", default=".", help="Working directory")
+    pilot_verdict_parser.set_defaults(handler=cli_impl._cmd_pilot_evaluate_promotion)
+
+    pilot_bundle_parser = subparsers.add_parser(
+        "pilot-build-bundle",
+        help="Build an operator-facing bundle from a frozen preset and multiple pilot-analysis reports",
+    )
+    pilot_bundle_parser.add_argument(
+        "--preset-id",
+        required=True,
+        help="Control-panel preset id that carries the promotion policy",
+    )
+    pilot_bundle_parser.add_argument(
+        "--analysis-json",
+        action="append",
+        default=[],
+        help="Pilot-analysis JSON report path (repeatable)",
+    )
+    pilot_bundle_parser.add_argument(
+        "--out-json",
+        default="artifacts/pilot_operator_bundle.json",
+        help="Output path for machine-readable operator bundle JSON",
+    )
+    pilot_bundle_parser.add_argument("--cwd", default=".", help="Working directory")
+    pilot_bundle_parser.set_defaults(handler=cli_impl._cmd_pilot_build_bundle)
+
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
     cwd = Path(args.cwd).resolve()
@@ -610,5 +655,93 @@ def cmd_pilot_export_config(args: argparse.Namespace, cli_impl: Any) -> int:
             regimes=replay_config.get("regime_name_filter"),
         )
     )
+    return 0
+
+
+def cmd_pilot_evaluate_promotion(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import pilot_analysis
+    from autowfo.control_panel import config as control_config
+
+    cwd = Path(args.cwd).resolve()
+    analysis_json = cli_impl._resolve_path(cwd, args.analysis_json)
+    out_json = cli_impl._resolve_path(cwd, args.out_json)
+
+    analysis_payload = pilot_analysis.load_analysis_report(analysis_json)
+    preset = control_config._find_config_preset(args.preset_id)
+    if preset is None:
+        raise ValueError(f"Unknown config preset: {args.preset_id}")
+    promotion_policy = dict(preset.get("promotion_policy") or {})
+    if not promotion_policy:
+        raise ValueError(f"Preset has no promotion policy: {args.preset_id}")
+
+    payload = {
+        "preset_id": str(preset.get("preset_id") or args.preset_id),
+        "preset_title": str(preset.get("title") or ""),
+        "promotion_policy": promotion_policy,
+        "verdict": pilot_analysis.evaluate_promotion_verdict(
+            analysis_payload,
+            promotion_policy,
+        ),
+    }
+
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(cli_impl.json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    verdict = payload["verdict"]
+    print(f"[pilot-evaluate-promotion] analysis_json={analysis_json}")
+    print(f"[pilot-evaluate-promotion] preset_id={payload['preset_id']}")
+    print(f"[pilot-evaluate-promotion] out_json={out_json}")
+    print(
+        "[pilot-evaluate-promotion] verdict={verdict} reason={reason} matched_policy={policy}".format(
+            verdict=verdict.get("verdict"),
+            reason=verdict.get("reason"),
+            policy=verdict.get("matched_policy_name"),
+        )
+    )
+    return 0
+
+
+def cmd_pilot_build_bundle(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import pilot_analysis
+    from autowfo.control_panel import config as control_config
+
+    cwd = Path(args.cwd).resolve()
+    out_json = cli_impl._resolve_path(cwd, args.out_json)
+
+    preset = control_config._find_config_preset(args.preset_id)
+    if preset is None:
+        raise ValueError(f"Unknown config preset: {args.preset_id}")
+    promotion_policy = dict(preset.get("promotion_policy") or {})
+    if not promotion_policy:
+        raise ValueError(f"Preset has no promotion policy: {args.preset_id}")
+
+    analysis_inputs = [str(item).strip() for item in list(args.analysis_json or []) if str(item).strip()]
+    if not analysis_inputs:
+        raise ValueError("at least one --analysis-json is required")
+
+    bundle_items = []
+    for analysis_item in analysis_inputs:
+        analysis_path = cli_impl._resolve_path(cwd, analysis_item)
+        analysis_payload = pilot_analysis.load_analysis_report(analysis_path)
+        verdict = pilot_analysis.evaluate_promotion_verdict(analysis_payload, promotion_policy)
+        bundle_items.append(
+            {
+                "analysis_json": str(analysis_path),
+                "analysis_context": verdict.get("analysis_context"),
+                "summary": dict((analysis_payload.get("summary") or {})),
+                "verdict": verdict,
+            }
+        )
+
+    payload = {
+        "preset_id": str(preset.get("preset_id") or args.preset_id),
+        "preset_title": str(preset.get("title") or ""),
+        "promotion_policy": promotion_policy,
+        "items": bundle_items,
+    }
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(cli_impl.json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[pilot-build-bundle] preset_id={payload['preset_id']}")
+    print(f"[pilot-build-bundle] out_json={out_json}")
+    print(f"[pilot-build-bundle] items={len(bundle_items)}")
     return 0
 
