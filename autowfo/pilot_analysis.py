@@ -43,6 +43,14 @@ DEFAULT_SYMBOL_METRIC_FIELDS: Tuple[str, ...] = (
 DEFAULT_TRADE_GATE_POLICY = "flat"
 DEFAULT_TRADE_GATE_REFERENCE_DAYS = 180
 DEFAULT_TRADE_GATE_MIN_RATIO = 0.75
+DEFAULT_CLUE_SCORE_WEIGHTS: Dict[str, float] = {
+    "gate_passed_rows": 20.0,
+    "stable_positive_rows": 8.0,
+    "symbol_supported_ratio": 2.0,
+    "trade_supported_ratio": 1.0,
+    "single_stable_positive_rows": 15.0,
+    "single_gate_passed_rows": 25.0,
+}
 
 
 def _indicator_tokens(value: Any) -> Tuple[str, ...]:
@@ -305,6 +313,16 @@ def _build_protocol_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]
     }
 
 
+def _sort_indicator_values(values: Iterable[str]) -> list[str]:
+    seen: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.append(text)
+    return sorted(seen)
+
+
 def _resolve_run_root(path_or_run_id: str | Path, artifacts_dir: str | Path | None = None) -> Path:
     path = Path(path_or_run_id)
     if path.exists():
@@ -498,46 +516,42 @@ def build_replay_config_from_analysis(
     return export_config
 
 
-def compare_pilot_runs(
+def _build_compared_rows(
     main_run: Mapping[str, Any],
     sensitivity_run: Mapping[str, Any],
     *,
-    identity_fields: Iterable[str] = DEFAULT_IDENTITY_FIELDS,
-    combo_metric_fields: Iterable[str] = DEFAULT_COMBO_METRIC_FIELDS,
-    require_all_symbols_nonnegative: bool = True,
-    min_combo_return: float = 0.0,
-    min_combo_trades: float = 0.0,
-    trade_gate_policy: str = DEFAULT_TRADE_GATE_POLICY,
-    trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
-    trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
-    top_n: int = 20,
-) -> Dict[str, Any]:
-    identity_fields_tuple = tuple(identity_fields)
-    combo_metric_fields_tuple = tuple(combo_metric_fields)
+    identity_fields: Sequence[str],
+    combo_metric_fields: Sequence[str],
+    require_all_symbols_nonnegative: bool,
+    min_combo_return: float,
+    min_combo_trades: float,
+    trade_gate_policy: str,
+    trade_gate_reference_days: int,
+    trade_gate_min_ratio: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame, list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]]]:
+    main_combo = _dedupe_identity_frame(pd.DataFrame(main_run.get("combo_df")), identity_fields)
+    sensitivity_combo = _dedupe_identity_frame(pd.DataFrame(sensitivity_run.get("combo_df")), identity_fields)
 
-    main_combo = _dedupe_identity_frame(pd.DataFrame(main_run.get("combo_df")), identity_fields_tuple)
-    sensitivity_combo = _dedupe_identity_frame(pd.DataFrame(sensitivity_run.get("combo_df")), identity_fields_tuple)
+    main_metric_cols = [field for field in combo_metric_fields if field in main_combo.columns]
+    sensitivity_metric_cols = [field for field in combo_metric_fields if field in sensitivity_combo.columns]
 
-    main_metric_cols = [field for field in combo_metric_fields_tuple if field in main_combo.columns]
-    sensitivity_metric_cols = [field for field in combo_metric_fields_tuple if field in sensitivity_combo.columns]
-
-    merged = main_combo[list(identity_fields_tuple) + main_metric_cols].merge(
-        sensitivity_combo[list(identity_fields_tuple) + sensitivity_metric_cols],
-        on=list(identity_fields_tuple),
+    merged = main_combo[list(identity_fields) + main_metric_cols].merge(
+        sensitivity_combo[list(identity_fields) + sensitivity_metric_cols],
+        on=list(identity_fields),
         suffixes=("_main", "_sens"),
         how="inner",
     )
 
-    main_symbol_support = _group_symbol_support(pd.DataFrame(main_run.get("symbol_oos_df")), identity_fields_tuple)
-    sensitivity_symbol_support = _group_symbol_support(pd.DataFrame(sensitivity_run.get("symbol_oos_df")), identity_fields_tuple)
+    main_symbol_support = _group_symbol_support(pd.DataFrame(main_run.get("symbol_oos_df")), identity_fields)
+    sensitivity_symbol_support = _group_symbol_support(pd.DataFrame(sensitivity_run.get("symbol_oos_df")), identity_fields)
 
-    compared_rows = []
+    compared_rows: list[Dict[str, Any]] = []
     for _, row in merged.iterrows():
-        identity_key = _identity_key_from_row(row, identity_fields_tuple)
-        payload = _identity_payload_from_key(identity_fields_tuple, identity_key)
+        identity_key = _identity_key_from_row(row, identity_fields)
+        payload = _identity_payload_from_key(identity_fields, identity_key)
 
         metric_values: Dict[str, Any] = {}
-        for field in combo_metric_fields_tuple:
+        for field in combo_metric_fields:
             metric_values[f"{field}_main"] = _safe_json_value(row.get(f"{field}_main"))
             metric_values[f"{field}_sens"] = _safe_json_value(row.get(f"{field}_sens"))
 
@@ -621,6 +635,262 @@ def compare_pilot_runs(
     ]
     gate_passed = [row for row in compared_rows_sorted if row.get("passes_overall_gate")]
     canonical_gate_passed, redundant_gate_passed = _annotate_canonical_gate_passed(gate_passed)
+    return (
+        main_combo,
+        sensitivity_combo,
+        compared_rows_sorted,
+        stable_positive,
+        gate_passed,
+        canonical_gate_passed,
+        redundant_gate_passed,
+    )
+
+
+def build_indicator_clue_map(
+    main_run: Mapping[str, Any],
+    sensitivity_run: Mapping[str, Any],
+    *,
+    identity_fields: Iterable[str] = DEFAULT_IDENTITY_FIELDS,
+    combo_metric_fields: Iterable[str] = DEFAULT_COMBO_METRIC_FIELDS,
+    require_all_symbols_nonnegative: bool = True,
+    min_combo_return: float = 0.0,
+    min_combo_trades: float = 0.0,
+    trade_gate_policy: str = DEFAULT_TRADE_GATE_POLICY,
+    trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
+    trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
+    top_k: int = 10,
+    score_weights: Mapping[str, float] | None = None,
+) -> Dict[str, Any]:
+    identity_fields_tuple = tuple(identity_fields)
+    combo_metric_fields_tuple = tuple(combo_metric_fields)
+    weights = dict(DEFAULT_CLUE_SCORE_WEIGHTS)
+    if score_weights:
+        for key, value in score_weights.items():
+            if key in weights:
+                weights[key] = float(value)
+
+    _, _, compared_rows_sorted, stable_positive, gate_passed, _, _ = _build_compared_rows(
+        main_run=main_run,
+        sensitivity_run=sensitivity_run,
+        identity_fields=identity_fields_tuple,
+        combo_metric_fields=combo_metric_fields_tuple,
+        require_all_symbols_nonnegative=require_all_symbols_nonnegative,
+        min_combo_return=float(min_combo_return),
+        min_combo_trades=float(min_combo_trades),
+        trade_gate_policy=str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
+        trade_gate_reference_days=int(trade_gate_reference_days),
+        trade_gate_min_ratio=float(trade_gate_min_ratio),
+    )
+
+    per_indicator: Dict[str, Dict[str, Any]] = {}
+
+    def _indicator_bucket(name: str) -> Dict[str, Any]:
+        bucket = per_indicator.get(name)
+        if bucket is None:
+            bucket = {
+                "indicator": name,
+                "compared_rows": 0,
+                "symbol_supported_rows": 0,
+                "trade_supported_rows": 0,
+                "stable_positive_rows": 0,
+                "gate_passed_rows": 0,
+                "single_rows": 0,
+                "single_symbol_supported_rows": 0,
+                "single_trade_supported_rows": 0,
+                "single_stable_positive_rows": 0,
+                "single_gate_passed_rows": 0,
+                "pair_rows": 0,
+                "pair_symbol_supported_rows": 0,
+                "pair_trade_supported_rows": 0,
+                "pair_stable_positive_rows": 0,
+                "pair_gate_passed_rows": 0,
+                "partner_indicators": set(),
+                "min_return_values": [],
+                "min_trades_values": [],
+                "min_sharpe_values": [],
+            }
+            per_indicator[name] = bucket
+        return bucket
+
+    for row in compared_rows_sorted:
+        indicators = tuple(sorted(set(_indicator_tokens(row.get("indicator_list")))))
+        if not indicators:
+            continue
+        combo_size = len(indicators)
+        symbol_supported = bool(row.get("has_symbol_support_both"))
+        trade_supported = bool(row.get("passes_trade_gate"))
+        stable = bool(row.get("both_positive") and symbol_supported)
+        gate = bool(row.get("passes_overall_gate"))
+        min_return = _safe_float(row.get("min_return"))
+        min_trades = _safe_float(row.get("min_trades"))
+        min_sharpe = _safe_float(row.get("min_sharpe"))
+
+        for indicator in indicators:
+            bucket = _indicator_bucket(indicator)
+            bucket["compared_rows"] += 1
+            if symbol_supported:
+                bucket["symbol_supported_rows"] += 1
+            if trade_supported:
+                bucket["trade_supported_rows"] += 1
+            if stable:
+                bucket["stable_positive_rows"] += 1
+            if gate:
+                bucket["gate_passed_rows"] += 1
+            if combo_size == 1:
+                bucket["single_rows"] += 1
+                if symbol_supported:
+                    bucket["single_symbol_supported_rows"] += 1
+                if trade_supported:
+                    bucket["single_trade_supported_rows"] += 1
+                if stable:
+                    bucket["single_stable_positive_rows"] += 1
+                if gate:
+                    bucket["single_gate_passed_rows"] += 1
+            elif combo_size == 2:
+                bucket["pair_rows"] += 1
+                if symbol_supported:
+                    bucket["pair_symbol_supported_rows"] += 1
+                if trade_supported:
+                    bucket["pair_trade_supported_rows"] += 1
+                if stable:
+                    bucket["pair_stable_positive_rows"] += 1
+                if gate:
+                    bucket["pair_gate_passed_rows"] += 1
+                for partner in indicators:
+                    if partner != indicator:
+                        bucket["partner_indicators"].add(partner)
+            if min_return is not None:
+                bucket["min_return_values"].append(min_return)
+            if min_trades is not None:
+                bucket["min_trades_values"].append(min_trades)
+            if min_sharpe is not None:
+                bucket["min_sharpe_values"].append(min_sharpe)
+
+    indicator_rows: list[Dict[str, Any]] = []
+    for indicator, bucket in per_indicator.items():
+        compared_count = max(1, int(bucket["compared_rows"]))
+        symbol_supported_ratio = float(bucket["symbol_supported_rows"]) / float(compared_count)
+        trade_supported_ratio = float(bucket["trade_supported_rows"]) / float(compared_count)
+        avg_min_return = float(np.mean(bucket["min_return_values"])) if bucket["min_return_values"] else None
+        avg_min_trades = float(np.mean(bucket["min_trades_values"])) if bucket["min_trades_values"] else None
+        avg_min_sharpe = float(np.mean(bucket["min_sharpe_values"])) if bucket["min_sharpe_values"] else None
+        clue_score = (
+            weights["gate_passed_rows"] * float(bucket["gate_passed_rows"])
+            + weights["stable_positive_rows"] * float(bucket["stable_positive_rows"])
+            + weights["symbol_supported_ratio"] * symbol_supported_ratio
+            + weights["trade_supported_ratio"] * trade_supported_ratio
+            + weights["single_stable_positive_rows"] * float(bucket["single_stable_positive_rows"])
+            + weights["single_gate_passed_rows"] * float(bucket["single_gate_passed_rows"])
+        )
+        indicator_rows.append(
+            {
+                "indicator": indicator,
+                "clue_score": _safe_json_value(clue_score),
+                "compared_rows": int(bucket["compared_rows"]),
+                "symbol_supported_rows": int(bucket["symbol_supported_rows"]),
+                "trade_supported_rows": int(bucket["trade_supported_rows"]),
+                "symbol_supported_ratio": _safe_json_value(symbol_supported_ratio),
+                "trade_supported_ratio": _safe_json_value(trade_supported_ratio),
+                "stable_positive_rows": int(bucket["stable_positive_rows"]),
+                "gate_passed_rows": int(bucket["gate_passed_rows"]),
+                "single_rows": int(bucket["single_rows"]),
+                "single_symbol_supported_rows": int(bucket["single_symbol_supported_rows"]),
+                "single_trade_supported_rows": int(bucket["single_trade_supported_rows"]),
+                "single_stable_positive_rows": int(bucket["single_stable_positive_rows"]),
+                "single_gate_passed_rows": int(bucket["single_gate_passed_rows"]),
+                "pair_rows": int(bucket["pair_rows"]),
+                "pair_symbol_supported_rows": int(bucket["pair_symbol_supported_rows"]),
+                "pair_trade_supported_rows": int(bucket["pair_trade_supported_rows"]),
+                "pair_stable_positive_rows": int(bucket["pair_stable_positive_rows"]),
+                "pair_gate_passed_rows": int(bucket["pair_gate_passed_rows"]),
+                "partner_count": int(len(bucket["partner_indicators"])),
+                "partner_indicators": _sort_indicator_values(bucket["partner_indicators"]),
+                "avg_min_return": _safe_json_value(avg_min_return),
+                "avg_min_trades": _safe_json_value(avg_min_trades),
+                "avg_min_sharpe": _safe_json_value(avg_min_sharpe),
+            }
+        )
+
+    indicator_rows_sorted = sorted(
+        indicator_rows,
+        key=lambda row: (
+            float(row.get("clue_score") or 0.0),
+            int(row.get("gate_passed_rows") or 0),
+            int(row.get("stable_positive_rows") or 0),
+            int(row.get("single_stable_positive_rows") or 0),
+            int(row.get("partner_count") or 0),
+            float(row.get("avg_min_return") or float("-inf")),
+            float(row.get("avg_min_sharpe") or float("-inf")),
+            str(row.get("indicator") or ""),
+        ),
+        reverse=True,
+    )
+    selected = [row["indicator"] for row in indicator_rows_sorted[: max(0, int(top_k))]]
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "identity_fields": list(identity_fields_tuple),
+        "combo_metric_fields": list(combo_metric_fields_tuple),
+        "thresholds": {
+            "require_all_symbols_nonnegative": bool(require_all_symbols_nonnegative),
+            "min_combo_return": float(min_combo_return),
+            "min_combo_trades": float(min_combo_trades),
+            "trade_gate_policy": str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
+            "trade_gate_reference_days": int(trade_gate_reference_days),
+            "trade_gate_min_ratio": float(trade_gate_min_ratio),
+            "top_k": int(max(0, int(top_k))),
+        },
+        "score_weights": {key: float(value) for key, value in weights.items()},
+        "main_run": {
+            "run_id": main_run.get("run_id"),
+            "run_root": str(main_run.get("run_root")),
+            "timeframe_diagnostics": list((main_run.get("metadata") or {}).get("timeframe_diagnostics", [])),
+        },
+        "sensitivity_run": {
+            "run_id": sensitivity_run.get("run_id"),
+            "run_root": str(sensitivity_run.get("run_root")),
+            "timeframe_diagnostics": list((sensitivity_run.get("metadata") or {}).get("timeframe_diagnostics", [])),
+        },
+        "summary": {
+            "compared_combo_rows": int(len(compared_rows_sorted)),
+            "stable_positive_rows": int(len(stable_positive)),
+            "gate_passed_rows": int(len(gate_passed)),
+            "indicator_count": int(len(indicator_rows_sorted)),
+            "selected_indicator_count": int(len(selected)),
+        },
+        "selected_top_indicators": selected,
+        "indicator_rows": indicator_rows_sorted,
+    }
+
+
+def compare_pilot_runs(
+    main_run: Mapping[str, Any],
+    sensitivity_run: Mapping[str, Any],
+    *,
+    identity_fields: Iterable[str] = DEFAULT_IDENTITY_FIELDS,
+    combo_metric_fields: Iterable[str] = DEFAULT_COMBO_METRIC_FIELDS,
+    require_all_symbols_nonnegative: bool = True,
+    min_combo_return: float = 0.0,
+    min_combo_trades: float = 0.0,
+    trade_gate_policy: str = DEFAULT_TRADE_GATE_POLICY,
+    trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
+    trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
+    top_n: int = 20,
+) -> Dict[str, Any]:
+    identity_fields_tuple = tuple(identity_fields)
+    combo_metric_fields_tuple = tuple(combo_metric_fields)
+    main_combo, sensitivity_combo, compared_rows_sorted, stable_positive, gate_passed, canonical_gate_passed, redundant_gate_passed = _build_compared_rows(
+        main_run=main_run,
+        sensitivity_run=sensitivity_run,
+        identity_fields=identity_fields_tuple,
+        combo_metric_fields=combo_metric_fields_tuple,
+        require_all_symbols_nonnegative=require_all_symbols_nonnegative,
+        min_combo_return=float(min_combo_return),
+        min_combo_trades=float(min_combo_trades),
+        trade_gate_policy=str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
+        trade_gate_reference_days=int(trade_gate_reference_days),
+        trade_gate_min_ratio=float(trade_gate_min_ratio),
+    )
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -648,8 +918,8 @@ def compare_pilot_runs(
         "summary": {
             "main_combo_rows": int(len(main_combo)),
             "sensitivity_combo_rows": int(len(sensitivity_combo)),
-            "compared_combo_rows": int(len(compared_rows)),
-            "symbol_supported_rows": int(sum(1 for row in compared_rows if row.get("has_symbol_support_both"))),
+            "compared_combo_rows": int(len(compared_rows_sorted)),
+            "symbol_supported_rows": int(sum(1 for row in compared_rows_sorted if row.get("has_symbol_support_both"))),
             "stable_positive_rows": int(len(stable_positive)),
             "gate_passed_rows": int(len(gate_passed)),
             "canonical_gate_passed_rows": int(len(canonical_gate_passed)),

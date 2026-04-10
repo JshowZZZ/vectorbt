@@ -284,6 +284,71 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     pilot_bundle_parser.add_argument("--cwd", default=".", help="Working directory")
     pilot_bundle_parser.set_defaults(handler=cli_impl._cmd_pilot_build_bundle)
 
+    pilot_clue_parser = subparsers.add_parser(
+        "pilot-build-clue-map",
+        help="Build an indicator clue ranking from paired pilot runs",
+    )
+    pilot_clue_parser.add_argument("--main-run", required=True, help="Main run id or path to run directory")
+    pilot_clue_parser.add_argument("--sensitivity-run", required=True, help="Sensitivity run id or path to run directory")
+    pilot_clue_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory used when run ids are provided",
+    )
+    pilot_clue_parser.add_argument(
+        "--out-json",
+        default="artifacts/pilot_indicator_clue_map.json",
+        help="Output path for machine-readable clue ranking JSON report",
+    )
+    pilot_clue_parser.add_argument(
+        "--top-k",
+        type=int,
+        default=10,
+        help="Number of indicators to promote into the next stage",
+    )
+    pilot_clue_parser.add_argument(
+        "--min-combo-return",
+        type=float,
+        default=0.0,
+        help="Minimum worst-run combo return required to count as gate-passed",
+    )
+    pilot_clue_parser.add_argument(
+        "--min-combo-trades",
+        type=float,
+        default=0.0,
+        help="Minimum worst-run combo average OOS trade count required to count as gate-passed",
+    )
+    pilot_clue_parser.add_argument(
+        "--trade-gate-policy",
+        choices=["flat", "window_aware"],
+        default="flat",
+        help="Trade-floor policy used to evaluate paired combo sample sufficiency",
+    )
+    pilot_clue_parser.add_argument(
+        "--trade-gate-reference-days",
+        type=int,
+        default=180,
+        help="Reference window length used by the window-aware trade gate",
+    )
+    pilot_clue_parser.add_argument(
+        "--trade-gate-min-ratio",
+        type=float,
+        default=0.75,
+        help="Minimum retained fraction of the flat trade gate under the window-aware policy",
+    )
+    pilot_clue_parser.add_argument(
+        "--identity-fields",
+        default="",
+        help="Comma-separated identity fields (default uses the pilot-analysis identity schema)",
+    )
+    pilot_clue_parser.add_argument(
+        "--allow-negative-symbols",
+        action="store_true",
+        help="Disable the default all-symbols-nonnegative gate when scoring clues",
+    )
+    pilot_clue_parser.add_argument("--cwd", default=".", help="Working directory")
+    pilot_clue_parser.set_defaults(handler=cli_impl._cmd_pilot_build_clue_map)
+
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
     cwd = Path(args.cwd).resolve()
@@ -743,5 +808,45 @@ def cmd_pilot_build_bundle(args: argparse.Namespace, cli_impl: Any) -> int:
     print(f"[pilot-build-bundle] preset_id={payload['preset_id']}")
     print(f"[pilot-build-bundle] out_json={out_json}")
     print(f"[pilot-build-bundle] items={len(bundle_items)}")
+    return 0
+
+
+def cmd_pilot_build_clue_map(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import pilot_analysis
+
+    cwd = Path(args.cwd).resolve()
+    artifacts_dir = cli_impl._resolve_path(cwd, args.artifacts_dir)
+    out_json = cli_impl._resolve_path(cwd, args.out_json)
+
+    identity_fields = (
+        cli_impl._split_csv_fields(args.identity_fields) or list(pilot_analysis.DEFAULT_IDENTITY_FIELDS)
+    )
+    main_run = pilot_analysis.load_run_analysis_inputs(args.main_run, artifacts_dir=artifacts_dir)
+    sensitivity_run = pilot_analysis.load_run_analysis_inputs(args.sensitivity_run, artifacts_dir=artifacts_dir)
+    payload = pilot_analysis.build_indicator_clue_map(
+        main_run=main_run,
+        sensitivity_run=sensitivity_run,
+        identity_fields=identity_fields,
+        require_all_symbols_nonnegative=not bool(args.allow_negative_symbols),
+        min_combo_return=float(args.min_combo_return),
+        min_combo_trades=float(args.min_combo_trades),
+        trade_gate_policy=str(args.trade_gate_policy or "flat"),
+        trade_gate_reference_days=int(args.trade_gate_reference_days),
+        trade_gate_min_ratio=float(args.trade_gate_min_ratio),
+        top_k=int(args.top_k),
+    )
+
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(cli_impl.json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary = payload.get("summary", {})
+    print(f"[pilot-build-clue-map] main_run={main_run.get('run_id')}")
+    print(f"[pilot-build-clue-map] sensitivity_run={sensitivity_run.get('run_id')}")
+    print(f"[pilot-build-clue-map] out_json={out_json}")
+    print(
+        "[pilot-build-clue-map] indicators={indicators} selected={selected}".format(
+            indicators=summary.get("indicator_count", 0),
+            selected=payload.get("selected_top_indicators", []),
+        )
+    )
     return 0
 

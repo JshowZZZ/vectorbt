@@ -430,3 +430,77 @@ def test_build_replay_config_from_analysis_uses_canonical_protocol_ranges(tmp_pa
     assert replay_config["tp_atr_multipliers"] == [1.0, 1.25]
     assert replay_config["sl_atr_multipliers"] == [0.75, 1.0]
     assert replay_config["max_holds"] == [4]
+
+
+def test_build_indicator_clue_map_prefers_supported_singles_and_pairs():
+    main_combo = pd.concat(
+        [
+            _combo_frame(return_pct=0.12, trades=1.0, sharpe=1.5, indicator_list="mfi"),
+            _combo_frame(return_pct=0.11, trades=0.8, sharpe=1.2, indicator_list="obv_roc"),
+            _combo_frame(return_pct=0.02, trades=0.5, sharpe=0.5, indicator_list="cmf"),
+            _combo_frame(return_pct=0.14, trades=1.0, sharpe=1.6, indicator_list="mfi,obv_roc"),
+            _combo_frame(return_pct=0.03, trades=0.4, sharpe=0.3, indicator_list="mfi,cmf"),
+        ],
+        ignore_index=True,
+    )
+    sens_combo = pd.concat(
+        [
+            _combo_frame(return_pct=0.09, trades=0.75, sharpe=1.1, indicator_list="mfi"),
+            _combo_frame(return_pct=0.08, trades=0.75, sharpe=1.0, indicator_list="obv_roc"),
+            _combo_frame(return_pct=0.01, trades=0.5, sharpe=0.2, indicator_list="cmf"),
+            _combo_frame(return_pct=0.1, trades=0.75, sharpe=1.2, indicator_list="mfi,obv_roc"),
+            _combo_frame(return_pct=0.02, trades=0.4, sharpe=0.1, indicator_list="mfi,cmf"),
+        ],
+        ignore_index=True,
+    )
+    main_symbols = pd.concat(
+        [
+            _symbol_frame([0.2, 0.1, 0.05], indicator_list="mfi"),
+            _symbol_frame([0.15, 0.08, 0.03], indicator_list="obv_roc"),
+            _symbol_frame([0.03, 0.01, 0.0], indicator_list="cmf"),
+            _symbol_frame([0.2, 0.12, 0.06], indicator_list="mfi,obv_roc"),
+            _symbol_frame([0.05, -0.02, 0.01], indicator_list="mfi,cmf"),
+        ],
+        ignore_index=True,
+    )
+    sens_symbols = pd.concat(
+        [
+            _symbol_frame([0.1, 0.04, 0.01], trades=[0.75, 0.75, 0.75], indicator_list="mfi"),
+            _symbol_frame([0.08, 0.03, 0.01], trades=[0.75, 0.75, 0.75], indicator_list="obv_roc"),
+            _symbol_frame([0.02, 0.01, 0.0], trades=[0.5, 0.5, 0.5], indicator_list="cmf"),
+            _symbol_frame([0.12, 0.05, 0.02], trades=[0.75, 0.75, 0.75], indicator_list="mfi,obv_roc"),
+            _symbol_frame([0.04, -0.01, 0.01], trades=[0.4, 0.4, 0.4], indicator_list="mfi,cmf"),
+        ],
+        ignore_index=True,
+    )
+
+    payload = pilot_analysis.build_indicator_clue_map(
+        {
+            "run_id": "main",
+            "run_root": "artifacts/runs/main",
+            "combo_df": main_combo,
+            "symbol_oos_df": main_symbols,
+            "metadata": {"timeframe_diagnostics": [{"realized_shared_days": 180}]},
+        },
+        {
+            "run_id": "sens",
+            "run_root": "artifacts/runs/sens",
+            "combo_df": sens_combo,
+            "symbol_oos_df": sens_symbols,
+            "metadata": {"timeframe_diagnostics": [{"realized_shared_days": 180}]},
+        },
+        min_combo_return=0.0,
+        min_combo_trades=0.5,
+        top_k=2,
+    )
+
+    assert payload["summary"]["compared_combo_rows"] == 5
+    assert payload["summary"]["stable_positive_rows"] == 5
+    assert payload["summary"]["gate_passed_rows"] == 4
+    assert payload["selected_top_indicators"] == ["mfi", "obv_roc"]
+    indicator_rows = {row["indicator"]: row for row in payload["indicator_rows"]}
+    assert indicator_rows["mfi"]["single_gate_passed_rows"] == 1
+    assert indicator_rows["mfi"]["pair_gate_passed_rows"] == 1
+    assert indicator_rows["mfi"]["partner_indicators"] == ["cmf", "obv_roc"]
+    assert indicator_rows["obv_roc"]["pair_gate_passed_rows"] == 1
+    assert indicator_rows["cmf"]["gate_passed_rows"] == 1

@@ -252,6 +252,10 @@ def _cmd_pilot_build_bundle(args: argparse.Namespace) -> int:
     return cmd_plan.cmd_pilot_build_bundle(args, _self())
 
 
+def _cmd_pilot_build_clue_map(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_pilot_build_clue_map(args, _self())
+
+
 def _cmd_gate_c(args: argparse.Namespace) -> int:
     return cmd_gate.cmd_gate_c(args, _self())
 

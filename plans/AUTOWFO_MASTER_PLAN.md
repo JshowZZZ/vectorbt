@@ -51,7 +51,43 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
-### Phase 52: Baseline Clue-Harvesting Campaign (AWF-277/278/279) [Active]
+### Phase 54: Symbol-Support Boundary Mapping (AWF-284/285/286) [Active]
+- Keep the now-supported current-mode core family fixed and vary only symbol membership.
+- Fixed family center:
+  - `obv_roc + keltner_pos + ad`
+- Closest supported local extension:
+  - `obv_roc + keltner_pos + ad + dpo`
+- Purpose:
+  - identify repeatable symbol supporters versus draggers under the same anchored `2h / 180d` protocol
+- Exit criteria:
+  - a bounded symbol-membership protocol is frozen
+  - paired support-boundary runs complete under the anchored contract
+  - a decision memo states whether the current mode remains broad-cohort viable, narrows to a bounded BTC-cross cluster interpretation, or has flattened enough to reopen the deferred hierarchical mode
+
+### Phase 53: Current-Mode Family Refinement (AWF-281/282/283) [Done]
+- Stay in the current single-layer combo-entry mode for one more bounded phase before opening the deferred hierarchical mode.
+- Keep the anchored breadth protocol fixed:
+  - `2h / 180d`
+  - fixed 10-symbol BTC-cross major cohort
+  - fixed ATR-based exit
+  - same paired WFO
+- Narrow only the indicator universe around the breadth winner family:
+  - gate-passed breadth family: `obv_roc + keltner_pos + ad`
+  - nearby stable companions: `cmf`, `dpo`, `chop` / `roc`
+- Outcome target:
+  - determine whether the breadth winner is a real local family or an isolated point
+- Exit criteria:
+  - a bounded family-refinement protocol is frozen
+  - the paired family-refinement runs are completed under the anchored contract
+  - a decision memo states whether the current mode still deserves refinement or whether the deferred hierarchical mode should open next
+- Outcome:
+  - Bounded family refinement on `obv_roc`, `keltner_pos`, `ad`, `cmf`, `dpo`, and `chop` produced `105` compared rows, `33` stable-positive rows, and `2` gate-passed rows.
+  - The breadth winner `obv_roc + keltner_pos + ad` survived as a strict gate-passed core family under `trend_any / any`.
+  - A nearby local extension `obv_roc + keltner_pos + ad + dpo` also gate-passed, which confirms a real local family rather than an isolated point.
+  - The dominant blocker remains symbol support (`26/33` stable rows), not trade-only failure (`0/33`).
+  - Decision: keep refining the current mode, but shift the next axis from indicator breadth to symbol-support boundary mapping.
+
+### Phase 52: Baseline Clue-Harvesting Campaign (AWF-277/278/279) [Done]
 - Complete one more evidence-first pass in the current single-layer combo-entry mode before introducing a new strategy mode.
 - Freeze an anchored breadth-first campaign:
   - `2h / 180d`
@@ -69,6 +105,13 @@ indicators, symbols, and time windows to discover robust combinations.
   - the breadth-first campaign protocol is frozen in writing
   - the campaign has been executed under anchored conditions
   - a decision memo identifies whether the next branch should stay in the current mode or open a new mode
+- Outcome:
+  - Stage 1 singles + pairs (`975` compared rows) produced `11` stable-positive rows but `0` gate-passed rows, which was enough to build a clue-ranked top-10 indicator pool.
+  - Stage 2 evidence-selected triples (`360` compared rows) produced `44` stable-positive rows and `1` strict gate-passed family:
+    - `obv_roc + keltner_pos + ad`
+    - `trend_any / any`
+  - The dominant blocker across stable triples is worst-symbol support (`43/44` stable rows fail it), not trade-only insufficiency (`0/44`).
+  - Decision: remain in the current single-layer mode for one more bounded family-refinement phase and keep the deferred hierarchical state/trigger mode in reserve.
 
 ### Phase 51: Anchored Lane Expansion (AWF-274/275/276) [Done]
 - Validate that the new anchored-window and historical-backfill path works on real exact-lane data, not only in tests.

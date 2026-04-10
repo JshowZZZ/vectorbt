@@ -7,26 +7,50 @@
 
 ## Active Phase
 
-- Phase 52: Baseline Clue-Harvesting Campaign.
-- Last closed phase: Phase 51: Anchored Lane Expansion.
+- Phase 54: Symbol-Support Boundary Mapping.
+- Last closed phase: Phase 53: Current-Mode Family Refinement.
 - Active items:
-  - `doing` `AWF-277` Freeze the breadth-first baseline campaign protocol.
-    Define the anchored `2h / 180d` experiment matrix for `25` indicators: singles + pairs on a fixed 10-symbol BTC-cross cohort, fixed ATR-based exits, and paired WFO. The output of this step is a config protocol and an analysis plan that explicitly targets family, cluster, and trade-density clues.
-  - `todo` `AWF-278` Execute the baseline clue-harvesting campaign.
-    Run the breadth-first anchored campaign in the current single-layer entry mode: first `25` indicators as singles and pairs across the fixed 10-symbol BTC-cross cohort, then promote the most informative indicators into a bounded triples stage.
-  - `todo` `AWF-279` Analyze clue-harvesting outputs and choose the next branch.
-    Use the anchored breadth results to identify which indicator families, symbol clusters, and trade-density failure modes deserve refinement. This gate decides whether the next branch should remain within the current mode or graduate to a new strategy mode.
+  - `doing` `AWF-284` Freeze the symbol-support boundary protocol.
+    Keep the anchored `2h / 180d` protocol and the current-mode core family fixed, then define a bounded symbol-membership matrix that can identify supporters versus draggers without reopening indicator or exit breadth.
+  - `todo` `AWF-285` Execute the symbol-support boundary mapping campaign.
+    Run the bounded symbol-membership matrix around the core family and its closest local extension, persisting all evidence through the existing pilot-analysis contract.
+  - `todo` `AWF-286` Analyze symbol supporters/draggers and re-evaluate current-mode breadth.
+    Decide whether the current mode remains broad-cohort viable, narrows to a bounded BTC-cross cluster interpretation, or has flattened enough to reopen the deferred hierarchical mode.
 
 ## Backlog
 
-- `todo` `AWF-277` Freeze the breadth-first baseline campaign protocol.
-  Turn the agreed campaign shape into a fixed experimental protocol: `25` indicators, anchored `2h / 180d`, fixed BTC-cross majors, fixed ATR-based exit, singles + pairs first, then a bounded triples stage selected from evidence. The purpose is clue harvesting rather than immediate strategy promotion.
+- `doing` `AWF-284` Freeze the symbol-support boundary protocol.
+  Turn the Phase 53 decision into a fixed follow-up protocol: same anchored `2h / 180d`, same 10-symbol BTC-cross majors, same fixed ATR exit, but fixed core family plus bounded symbol-membership variations. The purpose is to map supporters versus draggers, not to reopen indicator breadth.
 
-- `todo` `AWF-278` Execute the baseline clue-harvesting campaign.
-  Run the agreed breadth-first matrix under the current single-layer entry model and persist all evidence using the existing pilot-analysis and artifact contracts. This campaign should maximize interpretability, not parameter coverage.
+- `todo` `AWF-285` Execute the symbol-support boundary mapping campaign.
+  Run the agreed symbol-membership matrix around the current-mode core family and its closest local extension, then persist all evidence using the existing pilot-analysis and artifact contracts.
 
-- `todo` `AWF-279` Analyze clue-harvesting outputs and choose the next branch.
-  Convert the breadth-first campaign into a decision memo: which indicator families repeatedly survive, which BTC-cross symbols behave as cluster supporters versus draggers, and whether low trade density or worst-symbol support is the main blocker. Use that evidence to decide whether to keep refining the current mode or open a new strategy-mode branch.
+- `todo` `AWF-286` Analyze symbol supporters/draggers and re-evaluate current-mode breadth.
+  Convert the symbol-boundary campaign into a decision memo: does the current mode still generalize on bounded BTC-cross cohorts, or is the apparent breadth fragile enough to reopen the deferred hierarchical mode?
+
+- `done` `AWF-281` Freeze the bounded current-mode family-refinement protocol.
+  Wrote `plans/AUTOWFO_CURRENT_MODE_FAMILY_REFINEMENT_PROTOCOL.md` and froze a narrow family-neighborhood campaign around the Phase 52 breadth winner: `obv_roc`, `keltner_pos`, `ad`, `cmf`, `dpo`, and `chop` with combo sizes `3..4` under the same anchored `2h / 180d` 10-symbol protocol.
+
+- `done` `AWF-282` Execute the bounded family-refinement campaign.
+  Completed the paired family-refinement runs:
+  - `20260411_family_refine_main`
+  - `20260411_family_refine_sens`
+  The bounded campaign produced `105` compared rows, `33` stable-positive rows, and `2` gate-passed rows.
+
+- `done` `AWF-283` Analyze the family-refinement outputs and re-evaluate the deferred mode split.
+  Wrote `plans/AUTOWFO_FAMILY_REFINEMENT_DECISION_20260411.md`. Decision: stay in the current single-layer combo-entry mode. The breadth winner `obv_roc + keltner_pos + ad` is not isolated; it sits inside a real local family, and the next justified branch is symbol-support boundary mapping rather than immediate implementation of the deferred hierarchical state/trigger mode.
+
+- `done` `AWF-277` Freeze the breadth-first baseline campaign protocol.
+  Wrote `plans/AUTOWFO_BASELINE_CLUE_HARVESTING_PROTOCOL.md` and froze the anchored `2h / 180d` breadth-first matrix: 25 indicators, 10 BTC-cross majors, fixed ATR exit, Stage 1 singles + pairs, and Stage 2 bounded triples selected from evidence.
+
+- `done` `AWF-278` Execute the baseline clue-harvesting campaign.
+  Completed the full breadth-first campaign under anchored conditions:
+  - Stage 1 singles + pairs: `20260411_clue_pairs_main`, `20260411_clue_pairs_sens`
+  - Stage 2 evidence-selected triples: `20260411_clue_triples_main`, `20260411_clue_triples_sens`
+  Added a formal clue-ranking contract via `pilot-build-clue-map`, which produced `artifacts/reports/indicator_clue_map_awf278_pairs.json` and selected the Stage 2 top 10 indicators.
+
+- `done` `AWF-279` Analyze clue-harvesting outputs and choose the next branch.
+  Wrote `plans/AUTOWFO_CLUE_HARVESTING_DECISION_20260411.md`. Decision: stay in the current single-layer combo-entry mode for one more bounded family-refinement phase. The breadth campaign found one strict gate-passed anchored family on the full 10-symbol cohort: `obv_roc + keltner_pos + ad` / `trend_any` / `any`. Across the full `44` stable-positive triples, the dominant blocker is worst-symbol support (`43/44`), not trade-only failure (`0/44`).
 
 - `done` `AWF-280` Freeze the hierarchical state/trigger/add-on mode as a technical note.
   Captured the new idea as `plans/AUTOWFO_STATE_TRIGGER_MODE_NOTE.md` so the design does not get lost while the baseline clue-harvesting campaign is completed first. The note defines the intent, required system changes, compatibility with the current single-layer combo-entry mode, and why implementation is deferred until after the breadth-first baseline campaign.
