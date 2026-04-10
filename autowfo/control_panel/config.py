@@ -68,6 +68,11 @@ _RERUN_CAMPAIGN_PRESETS = (
         "operator_note": "Use run/combo mode to replay the canonical lane without reopening indicator or symbol exploration.",
         "recommended_workflow": "run",
         "optional": False,
+        "bundle_analysis_json_list": (
+            "artifacts/reports/pilot_analysis_awf261_exact_lane_scope_test.json",
+            "artifacts/reports/pilot_analysis_awf264_exact_lane_range120_window_aware.json",
+            "artifacts/reports/pilot_analysis_awf264_exact_lane_density_1h_window_aware.json",
+        ),
         "promotion_policy": {
             "full_window_gate": {
                 "policy_kind": "promotive",
@@ -414,6 +419,7 @@ def _list_config_presets():
         patch = item.get("patch") if isinstance(item, dict) else {}
         scope_test_variants = item.get("scope_test_variants") if isinstance(item, dict) else None
         promotion_policy = item.get("promotion_policy") if isinstance(item, dict) else None
+        bundle_analysis_json_list = item.get("bundle_analysis_json_list") if isinstance(item, dict) else None
         presets.append(
             {
                 "preset_id": item["preset_id"],
@@ -425,6 +431,7 @@ def _list_config_presets():
                 "supports_scope_test": bool(scope_test_variants),
                 "scope_test_variants": copy.deepcopy(list(scope_test_variants or [])),
                 "promotion_policy": copy.deepcopy(promotion_policy or {}),
+                "bundle_analysis_json_list": copy.deepcopy(list(bundle_analysis_json_list or [])),
                 "timeframes": copy.deepcopy(patch.get("timeframes", [])),
                 "trade_symbols": copy.deepcopy(patch.get("trade_symbols", [])),
                 "indicator_subset": copy.deepcopy(patch.get("indicator_subset", [])),
@@ -721,6 +728,12 @@ def _build_preset_operator_bundle(preset_id, analysis_json_list, out_json=None):
         raise ValueError(f"Preset has no promotion policy: {preset_id}")
 
     analysis_inputs = [str(item).strip() for item in list(analysis_json_list or []) if str(item).strip()]
+    if not analysis_inputs:
+        analysis_inputs = [
+            str(item).strip()
+            for item in list(preset.get("bundle_analysis_json_list") or [])
+            if str(item).strip()
+        ]
     if not analysis_inputs:
         raise ValueError("at least one analysis_json is required")
 

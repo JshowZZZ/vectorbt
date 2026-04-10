@@ -132,6 +132,37 @@
    - run `ETH/BTC` and `SOL/BTC` as `baseline`
    - run `BNB/BTC` as `run combo`
 
+## Exact-Lane Operator Workflow
+1. Open `Config` and locate the preset card `Exact Lane 2h 4-Symbol`.
+2. Expand `Verdict Summary` before enqueuing new work:
+   - `2h / 180d -> promote`
+   - `2h / 120d -> hold`
+   - `1h / 180d -> no_go`
+3. Treat the verdicts as read-only policy output:
+   - `promote` means the frozen `2h / 180d` lane is still eligible for paired scope/range execution.
+   - `hold` means the shorter-window check remains supportive evidence only; do not widen symbols, indicators, or timeframe based on this row.
+   - `no_go` means the rejected density lane stays closed; do not reopen `1h` exact-lane work without a protocol-level reason.
+4. When the full-window row remains `promote`, the allowed operator actions are:
+   - `Config -> Apply Preset and Enqueue` for a direct exact-lane replay.
+   - `Config -> Apply Preset Scope Test` for the canonical paired `45/30/30` + `60/30/30` execution path.
+5. When the short-window row is only `hold`, record the observation but keep the lane frozen:
+   - do not treat it as a failure
+   - do not widen the search scope
+   - wait for the re-validation trigger below or an explicit protocol change
+
+## Exact-Lane Re-Validation Trigger
+1. The current promotive baseline is `AWF-261` with `realized_shared_days = 127` on the `2h / 180d` row.
+2. Re-run the `AWF-261`-style paired `2h / 180d` scope test when either condition is met:
+   - realized shared overlap improves by at least `30d` relative to the last promotive baseline
+   - realized shared overlap reaches the requested full-window ceiling (`180d`)
+3. Re-run immediately after any frozen-lane contract change that affects:
+   - symbol membership
+   - indicator family
+   - regime filter
+   - ATR plateau bounds
+   - promotion/trade-gate policy
+4. Do not schedule periodic `1h` density re-checks by default. The current `1h / 180d` branch remains closed unless a protocol change explicitly reopens it.
+
 ## Failure Handling
 1. `refine` run shows `run_total=0`:
    - Check `manifest.json` warnings under baseline archive.

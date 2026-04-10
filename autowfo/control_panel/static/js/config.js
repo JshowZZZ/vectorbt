@@ -67,6 +67,60 @@ export const ConfigTab = {
                 <p>{{ t('config_campaign_symbols', 'Symbols') }}: {{ formatPresetSymbols(preset.trade_symbols) }}</p>
                 <p v-if="preset.operator_note">{{ preset.operator_note }}</p>
               </div>
+              <div v-if="hasPresetVerdictSummary(preset)"
+                   class="rounded-lg border border-gray-200 dark:border-gray-700/60 bg-white/70 dark:bg-gray-950/30 p-3 space-y-2">
+                <button
+                  @click="togglePresetVerdictSummary(preset)"
+                  class="w-full flex items-center justify-between gap-3 text-left"
+                >
+                  <div class="space-y-0.5">
+                    <div class="text-xs font-semibold text-gray-800 dark:text-gray-100">
+                      {{ t('config_campaign_verdict_summary', 'Verdict Summary') }}
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                      {{ t('config_campaign_verdict_hint', 'Read the frozen scope/range verdicts without opening the raw bundle JSON.') }}
+                    </p>
+                  </div>
+                  <span class="text-[10px] font-semibold text-blue-600 dark:text-blue-300">
+                    <template v-if="presetVerdictLoading[preset.preset_id]">
+                      {{ t('config_campaign_verdict_loading', 'Loading...') }}
+                    </template>
+                    <template v-else>
+                      {{ presetVerdictOpen[preset.preset_id]
+                        ? t('config_campaign_verdict_hide', 'Hide')
+                        : t('config_campaign_verdict_show', 'Show') }}
+                    </template>
+                  </span>
+                </button>
+                <div v-if="presetVerdictOpen[preset.preset_id]" class="space-y-2">
+                  <p v-if="presetVerdictErrors[preset.preset_id]"
+                     class="text-[11px] text-red-600 dark:text-red-400">
+                    {{ presetVerdictErrors[preset.preset_id] }}
+                  </p>
+                  <div v-else-if="verdictRowsForPreset(preset).length" class="space-y-2">
+                    <div v-for="row in verdictRowsForPreset(preset)"
+                         :key="row.analysis_json"
+                         class="rounded-lg border border-gray-200 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-900/50 p-2.5 space-y-1">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-100">
+                          {{ formatVerdictContext(row) }}
+                        </span>
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              :class="verdictBadgeClass(row.verdict?.verdict)">
+                          {{ formatVerdictLabel(row.verdict?.verdict) }}
+                        </span>
+                      </div>
+                      <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                        {{ formatVerdictMetrics(row) }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-else-if="!presetVerdictLoading[preset.preset_id]"
+                     class="text-[11px] text-gray-500 dark:text-gray-400">
+                    {{ t('config_campaign_verdict_empty', 'No verdict summary is available for this preset yet.') }}
+                  </p>
+                </div>
+              </div>
               <action-button
                 @click="applyPreset(preset.preset_id)"
                 :loading="presetApplying === preset.preset_id"
@@ -310,6 +364,10 @@ export const ConfigTab = {
     const presets = ref([])
     const presetLoading = ref(false)
     const presetApplying = ref('')
+    const presetVerdictOpen = ref({})
+    const presetVerdictLoading = ref({})
+    const presetVerdictBundles = ref({})
+    const presetVerdictErrors = ref({})
     const testStatus = ref({})
     const testLog = ref('')
     let testTimer = null
@@ -485,6 +543,89 @@ export const ConfigTab = {
       return Array.isArray(symbols) && symbols.length ? symbols.join(', ') : '--'
     }
 
+    function hasPresetVerdictSummary(preset) {
+      return Array.isArray(preset?.bundle_analysis_json_list) && preset.bundle_analysis_json_list.length > 0
+    }
+
+    function verdictRowsForPreset(preset) {
+      const presetId = String(preset?.preset_id || '')
+      const bundle = presetVerdictBundles.value[presetId]
+      return Array.isArray(bundle?.items) ? bundle.items : []
+    }
+
+    function verdictBadgeClass(verdict) {
+      switch (String(verdict || '').toLowerCase()) {
+        case 'promote':
+          return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+        case 'hold':
+          return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+        case 'no_go':
+          return 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+        default:
+          return 'bg-gray-100 text-gray-700 dark:bg-gray-700/40 dark:text-gray-300'
+      }
+    }
+
+    function formatVerdictLabel(verdict) {
+      const normalized = String(verdict || '').toLowerCase()
+      if (normalized === 'promote') return t('config_campaign_verdict_promote', 'Promote')
+      if (normalized === 'hold') return t('config_campaign_verdict_hold', 'Hold')
+      if (normalized === 'no_go') return t('config_campaign_verdict_no_go', 'No-Go')
+      return verdict || '--'
+    }
+
+    function formatVerdictContext(item) {
+      const ctx = item?.analysis_context || item?.verdict?.analysis_context || {}
+      const timeframe = ctx?.timeframe || '--'
+      const days = ctx?.data_days ?? '--'
+      return `${timeframe} / ${days}d`
+    }
+
+    function formatVerdictMetrics(item) {
+      const summary = item?.summary || {}
+      const ctx = item?.analysis_context || item?.verdict?.analysis_context || {}
+      const metrics = [
+        `${t('config_campaign_verdict_stable', 'Stable')}: ${summary?.stable_positive_rows ?? 0}`,
+        `${t('config_campaign_verdict_gate', 'Gate')}: ${summary?.gate_passed_rows ?? 0}`,
+      ]
+      if (ctx?.realized_shared_days != null) {
+        metrics.push(`${t('config_campaign_verdict_shared', 'Shared')}: ${ctx.realized_shared_days}d`)
+      }
+      return metrics.join(' · ')
+    }
+
+    async function loadPresetVerdictSummary(preset) {
+      const presetId = String(preset?.preset_id || '')
+      if (!presetId || !hasPresetVerdictSummary(preset)) return
+      presetVerdictLoading.value = { ...presetVerdictLoading.value, [presetId]: true }
+      presetVerdictErrors.value = { ...presetVerdictErrors.value, [presetId]: '' }
+      try {
+        const response = await postJson('/config/build-preset-bundle', {
+          preset_id: presetId,
+          analysis_json_list: preset.bundle_analysis_json_list,
+        })
+        presetVerdictBundles.value = {
+          ...presetVerdictBundles.value,
+          [presetId]: response?.details || response || {},
+        }
+      } catch (e) {
+        const message = t('config_campaign_verdict_failed', 'Failed to load verdict summary') + ': ' + e
+        presetVerdictErrors.value = { ...presetVerdictErrors.value, [presetId]: message }
+      } finally {
+        presetVerdictLoading.value = { ...presetVerdictLoading.value, [presetId]: false }
+      }
+    }
+
+    function togglePresetVerdictSummary(preset) {
+      const presetId = String(preset?.preset_id || '')
+      if (!presetId) return
+      const nextOpen = !presetVerdictOpen.value[presetId]
+      presetVerdictOpen.value = { ...presetVerdictOpen.value, [presetId]: nextOpen }
+      if (nextOpen && !presetVerdictBundles.value[presetId] && !presetVerdictLoading.value[presetId]) {
+        loadPresetVerdictSummary(preset)
+      }
+    }
+
     async function refreshTest() {
       try {
         testStatus.value = await fetchJson('/tests/status.json')
@@ -544,6 +685,10 @@ export const ConfigTab = {
       presets,
       presetLoading,
       presetApplying,
+      presetVerdictOpen,
+      presetVerdictLoading,
+      presetVerdictBundles,
+      presetVerdictErrors,
       testStatus,
       testLog,
       availableSymbols,
@@ -559,6 +704,14 @@ export const ConfigTab = {
       loadPresets,
       saveCfg,
       applyPreset,
+      hasPresetVerdictSummary,
+      verdictRowsForPreset,
+      verdictBadgeClass,
+      formatVerdictLabel,
+      formatVerdictContext,
+      formatVerdictMetrics,
+      loadPresetVerdictSummary,
+      togglePresetVerdictSummary,
       loadTopSymbols,
       formatPresetTimeframes,
       formatPresetSymbols,

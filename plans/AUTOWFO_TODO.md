@@ -9,7 +9,7 @@
 
 - Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: `AWF-270`.
+- Active items: none. Exact-lane operator summary, action policy, and overlap re-validation policy are frozen; next paired rerun should wait for the defined trigger or an explicit protocol change.
 
 ## Backlog
 
@@ -75,8 +75,12 @@
   Added `python -m autowfo pilot-build-bundle`, which packages the frozen preset policy, multiple pilot-analysis reports, and their derived promotion verdicts into one operator-facing JSON bundle. Generated `artifacts/reports/pilot_bundle_awf268_exact_lane_operator.json` for the current exact-lane scope/range set.
 - `done` `AWF-269` Surface the exact-lane operator bundle in the control panel.
   Added `/config/build-preset-bundle`, so the control panel can package a frozen preset plus multiple analysis reports into one operator-facing bundle JSON without shelling out to CLI.
-- `todo` `AWF-270` Present exact-lane bundle summaries in operator UI.
-  Surface the bundle verdict summary in a lightweight control-panel view or payload so operators can review exact-lane promote/hold/no-go state without opening raw JSON artifacts.
+- `done` `AWF-270` Present exact-lane bundle summaries in operator UI.
+  Added a lightweight `Verdict Summary` block to the existing Config preset card for `exact-lane-2h-4sym`. The UI lazily loads the frozen bundle verdicts via `/config/build-preset-bundle`, renders the canonical `promote` / `hold` / `no_go` rows inline, and does not require a new tab or raw JSON inspection.
+- `done` `AWF-271` Exact-lane verdict-to-action runbook policy.
+  Updated `plans/AUTOWFO_RUNBOOK.md` so operator workflow now has an explicit read-only decision path after viewing the exact-lane verdict summary: `promote` keeps the `2h / 180d` lane eligible for paired scope/range execution, `hold` means observe and do not widen scope, and `no_go` means do not reopen the rejected density lane without a protocol-level reason.
+- `done` `AWF-272` Exact-lane overlap-growth re-validation policy.
+  Froze an overlap-based re-validation trigger in `plans/AUTOWFO_RUNBOOK.md`: rerun the `AWF-261`-style `2h / 180d` paired scope test when the realized shared overlap improves by at least `30d` from the last promotive baseline (currently `127d`) or reaches the full `180d` cap, and also rerun immediately after any protocol or promotion-policy change that affects the frozen lane.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).

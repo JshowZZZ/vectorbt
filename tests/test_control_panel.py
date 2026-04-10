@@ -481,6 +481,11 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
     assert exact_lane["promotion_policy"]["short_window_gate"]["trade_gate_policy"] == "window_aware"
     assert exact_lane["promotion_policy"]["short_window_gate"]["policy_kind"] == "supporting"
     assert exact_lane["promotion_policy"]["rejected_density_lane"]["reason"] == "awf263_density_follow_up_failed"
+    assert exact_lane["bundle_analysis_json_list"] == [
+        "artifacts/reports/pilot_analysis_awf261_exact_lane_scope_test.json",
+        "artifacts/reports/pilot_analysis_awf264_exact_lane_range120_window_aware.json",
+        "artifacts/reports/pilot_analysis_awf264_exact_lane_density_1h_window_aware.json",
+    ]
 
 
 def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(tmp_path, monkeypatch):
@@ -828,6 +833,64 @@ def test_config_build_preset_bundle_returns_bundle_and_writes_report(tmp_path, m
     assert payload["details"]["items"][0]["verdict"]["verdict"] == "promote"
     assert payload["details"]["items"][1]["verdict"]["verdict"] == "hold"
     assert out_path.exists()
+
+
+def test_config_build_preset_bundle_uses_preset_default_reports(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    reports_dir = tmp_path / "artifacts" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "pilot_analysis_awf261_exact_lane_scope_test.json").write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 180, "realized_shared_days": 127}]
+                },
+                "summary": {"stable_positive_rows": 30, "gate_passed_rows": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "pilot_analysis_awf264_exact_lane_range120_window_aware.json").write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "2h", "data_days": 120, "realized_shared_days": 121}]
+                },
+                "summary": {"stable_positive_rows": 24, "gate_passed_rows": 24},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "pilot_analysis_awf264_exact_lane_density_1h_window_aware.json").write_text(
+        json.dumps(
+            {
+                "main_run": {
+                    "timeframe_diagnostics": [{"timeframe": "1h", "data_days": 180, "realized_shared_days": 181}]
+                },
+                "summary": {"stable_positive_rows": 0, "gate_passed_rows": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/build-preset-bundle",
+            body=json.dumps(
+                {
+                    "preset_id": "exact-lane-2h-4sym",
+                },
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert [item["verdict"]["verdict"] for item in payload["details"]["items"]] == ["promote", "hold", "no_go"]
 
 
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):
