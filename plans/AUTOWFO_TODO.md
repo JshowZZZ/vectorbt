@@ -9,7 +9,7 @@
 
 - Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: `AWF-265`.
+- Active items: `AWF-266`.
 
 ## Backlog
 
@@ -65,8 +65,10 @@
   Ran the frozen exact lane on `1h` (`20260410_102301`, `20260410_102302`) to test whether higher bar density rescues short-window sample pressure. Result: `0/30` stable-positive and `0/30` gate-passed rows despite full `181d` overlap.
 - `done` `AWF-264` Exact-lane trade-floor policy review.
   Added a formal trade-gate policy layer to `autowfo pilot-analyze` with `flat` and conservative `window_aware` modes. The new `window_aware` policy keeps the baseline `0.5` trade floor for full `180d` windows, but relaxes short-window exact-lane review to `max(data_days / 180, 0.75) * 0.5`. Re-analyzing `20260410_101315` / `20260410_101628` under this policy restored `24` gate-passed rows at `2h / 120d`, while `20260410_102301` / `20260410_102302` remained `0` gate-passed on `1h / 180d`. This closes the question in favor of a conservative window-aware policy for short-window exact-lane review.
-- `todo` `AWF-265` Exact-lane promotion policy freeze.
-  Carry the new window-aware trade gate into the operator-facing exact-lane promotion criteria, so future `2h` short-window checks and range decisions use one explicit policy instead of ad hoc report-by-report overrides.
+- `done` `AWF-265` Exact-lane promotion policy freeze.
+  Carried the exact-lane promotion policy into the control-panel preset contract. `exact-lane-2h-4sym` now publishes explicit `full_window_gate`, `short_window_gate`, and rejected `1h` density-lane metadata through `/config/presets.json`, `/config/apply-preset`, `/config/apply-preset-and-enqueue`, and `/config/apply-preset-scope-test`, so operator workflows can consume the same promotion criteria that closed `AWF-264`.
+- `todo` `AWF-266` Exact-lane promotion verdict automation.
+  Turn the frozen preset promotion policy into a reusable paired-analysis verdict path, so operator-generated scope/range runs can emit an explicit promote/hold/no-go verdict without manual policy selection.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).

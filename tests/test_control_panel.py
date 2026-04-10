@@ -476,6 +476,9 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
     exact_lane = next(item for item in payload["presets"] if item["preset_id"] == "exact-lane-2h-4sym")
     assert exact_lane["supports_scope_test"] is True
     assert [item["variant_id"] for item in exact_lane["scope_test_variants"]] == ["main", "sensitivity"]
+    assert exact_lane["promotion_policy"]["full_window_gate"]["trade_gate_policy"] == "flat"
+    assert exact_lane["promotion_policy"]["short_window_gate"]["trade_gate_policy"] == "window_aware"
+    assert exact_lane["promotion_policy"]["rejected_density_lane"]["reason"] == "awf263_density_follow_up_failed"
 
 
 def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(tmp_path, monkeypatch):
@@ -542,6 +545,7 @@ def test_config_apply_exact_lane_preset_persists_lane_controls(tmp_path, monkeyp
     assert response.status == 200
     assert payload["ok"] is True
     assert payload["preset"]["preset_id"] == "exact-lane-2h-4sym"
+    assert payload["preset"]["promotion_policy"]["short_window_gate"]["trade_gate_policy"] == "window_aware"
 
     saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
     assert saved_cfg["combo_sizes"] == [3]
@@ -654,6 +658,7 @@ def test_config_apply_preset_and_enqueue_exact_lane_workflow(tmp_path, monkeypat
     assert payload["ok"] is True
     details = payload["details"]
     assert details["preset"]["preset_id"] == "exact-lane-2h-4sym"
+    assert details["preset"]["promotion_policy"]["full_window_gate"]["min_combo_trades"] == 0.5
     assert details["job"]["workflow"] == "run"
     assert details["job"]["mode"] == "combo"
     assert details["job"]["allow_seen_key_reuse"] is True
@@ -691,6 +696,7 @@ def test_config_apply_preset_scope_test_enqueues_exact_lane_pair(tmp_path, monke
     assert payload["ok"] is True
     details = payload["details"]
     assert details["preset"]["preset_id"] == "exact-lane-2h-4sym"
+    assert details["preset"]["promotion_policy"]["short_window_gate"]["trade_gate_min_ratio"] == 0.75
     assert [item["variant_id"] for item in details["variants"]] == ["main", "sensitivity"]
     assert len(details["jobs"]) == 2
 

@@ -109,6 +109,7 @@ Interpretation:
 - The short-window `2h` failure is best understood as sample pressure under a flat gate, not as edge collapse.
 - A conservative window-aware policy is enough to recover the structurally alive `120d` lane without changing the `1h` no-go outcome.
 - This means short-window exact-lane review should stop relying on ad hoc reruns with manually reduced `min_combo_trades`.
+- That policy is now frozen into the operator preset contract, so future exact-lane scope/range workflows can read the same promotion criteria directly from the preset metadata.
 
 ## Decision
 

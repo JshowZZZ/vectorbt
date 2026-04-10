@@ -67,6 +67,27 @@ _RERUN_CAMPAIGN_PRESETS = (
         "operator_note": "Use run/combo mode to replay the canonical lane without reopening indicator or symbol exploration.",
         "recommended_workflow": "run",
         "optional": False,
+        "promotion_policy": {
+            "full_window_gate": {
+                "timeframe": "2h",
+                "data_days": 180,
+                "trade_gate_policy": "flat",
+                "min_combo_trades": 0.5,
+            },
+            "short_window_gate": {
+                "timeframe": "2h",
+                "data_days": 120,
+                "trade_gate_policy": "window_aware",
+                "min_combo_trades": 0.5,
+                "trade_gate_reference_days": 180,
+                "trade_gate_min_ratio": 0.75,
+            },
+            "rejected_density_lane": {
+                "timeframe": "1h",
+                "data_days": 180,
+                "reason": "awf263_density_follow_up_failed",
+            },
+        },
         "scope_test_variants": (
             {
                 "variant_id": "main",
@@ -388,6 +409,7 @@ def _list_config_presets():
     for item in _RERUN_CAMPAIGN_PRESETS:
         patch = item.get("patch") if isinstance(item, dict) else {}
         scope_test_variants = item.get("scope_test_variants") if isinstance(item, dict) else None
+        promotion_policy = item.get("promotion_policy") if isinstance(item, dict) else None
         presets.append(
             {
                 "preset_id": item["preset_id"],
@@ -398,6 +420,7 @@ def _list_config_presets():
                 "optional": bool(item.get("optional")),
                 "supports_scope_test": bool(scope_test_variants),
                 "scope_test_variants": copy.deepcopy(list(scope_test_variants or [])),
+                "promotion_policy": copy.deepcopy(promotion_policy or {}),
                 "timeframes": copy.deepcopy(patch.get("timeframes", [])),
                 "trade_symbols": copy.deepcopy(patch.get("trade_symbols", [])),
                 "indicator_subset": copy.deepcopy(patch.get("indicator_subset", [])),
@@ -553,7 +576,11 @@ def _apply_config_preset_and_enqueue(
         started, start_msg = cp._batch_start()
 
     return {
-        "preset": {"preset_id": preset["preset_id"], "title": preset["title"]},
+        "preset": {
+            "preset_id": preset["preset_id"],
+            "title": preset["title"],
+            "promotion_policy": copy.deepcopy(preset.get("promotion_policy", {})),
+        },
         "config": cfg,
         "config_path": str(cfg_path),
         "job": job,
@@ -630,7 +657,11 @@ def _apply_config_preset_scope_test(
         started, start_msg = cp._batch_start()
 
     return {
-        "preset": {"preset_id": preset["preset_id"], "title": preset["title"]},
+        "preset": {
+            "preset_id": preset["preset_id"],
+            "title": preset["title"],
+            "promotion_policy": copy.deepcopy(preset.get("promotion_policy", {})),
+        },
         "config": cfg,
         "jobs": queue_jobs,
         "variants": variant_details,
@@ -748,6 +779,7 @@ def try_handle_post(handler, parsed):
                         "preset": {
                             "preset_id": preset["preset_id"],
                             "title": preset["title"],
+                            "promotion_policy": copy.deepcopy(preset.get("promotion_policy", {})),
                         },
                         "config": cfg,
                     },
