@@ -316,6 +316,8 @@ def test_cli_pilot_analyze_writes_machine_readable_report(tmp_path):
             str(out_json.relative_to(tmp_path)),
             "--min-combo-trades",
             "0.5",
+            "--trade-gate-policy",
+            "window_aware",
             "--cwd",
             str(tmp_path),
         ]
@@ -324,6 +326,7 @@ def test_cli_pilot_analyze_writes_machine_readable_report(tmp_path):
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert payload["summary"]["compared_combo_rows"] == 1
     assert payload["summary"]["gate_passed_rows"] == 1
+    assert payload["thresholds"]["trade_gate_policy"] == "window_aware"
     assert payload["top_gate_passed"][0]["indicator_list"] == "mfi,obv_roc"
 
 

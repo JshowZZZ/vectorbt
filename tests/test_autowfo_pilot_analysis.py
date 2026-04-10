@@ -5,12 +5,12 @@ import pandas as pd
 from autowfo import pilot_analysis
 
 
-def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0, indicator_list="mfi,obv_roc"):
+def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0, indicator_list="mfi,obv_roc", data_days=180):
     return pd.DataFrame(
         [
             {
                 "timeframe": "2h",
-                "data_days": 180,
+                "data_days": data_days,
                 "indicator_list": indicator_list,
                 "regime_name": "trend_high",
                 "vol_mode": "high",
@@ -29,7 +29,7 @@ def _combo_frame(return_pct=0.1, trades=1.0, sharpe=1.0, indicator_list="mfi,obv
     )
 
 
-def _symbol_frame(returns, trades=None, indicator_list="mfi,obv_roc"):
+def _symbol_frame(returns, trades=None, indicator_list="mfi,obv_roc", data_days=180):
     if trades is None:
         trades = [1.0] * len(returns)
     rows = []
@@ -37,7 +37,7 @@ def _symbol_frame(returns, trades=None, indicator_list="mfi,obv_roc"):
         rows.append(
             {
                 "timeframe": "2h",
-                "data_days": 180,
+                "data_days": data_days,
                 "indicator_list": indicator_list,
                 "regime_name": "trend_high",
                 "vol_mode": "high",
@@ -150,6 +150,74 @@ def test_compare_pilot_runs_excludes_rows_without_symbol_support_from_stable_pos
     assert payload["summary"]["stable_positive_rows"] == 0
     assert payload["summary"]["gate_passed_rows"] == 0
     assert payload["top_stable_positive"] == []
+
+
+def test_compare_pilot_runs_window_aware_trade_gate_relaxes_short_window_floor():
+    main_run = {
+        "run_id": "main",
+        "run_root": "artifacts/runs/main",
+        "combo_df": _combo_frame(return_pct=0.12, trades=0.5, sharpe=1.5, data_days=120),
+        "symbol_oos_df": _symbol_frame([0.2, 0.1, 0.05], trades=[0.5, 0.5, 0.5], data_days=120),
+        "metadata": {"timeframe_diagnostics": [{"requested_data_days": 120, "realized_shared_days": 121}]},
+    }
+    sens_run = {
+        "run_id": "sens",
+        "run_root": "artifacts/runs/sens",
+        "combo_df": _combo_frame(return_pct=0.08, trades=0.375, sharpe=1.1, data_days=120),
+        "symbol_oos_df": _symbol_frame([0.1, 0.04, 0.01], trades=[0.375, 0.375, 0.375], data_days=120),
+        "metadata": {"timeframe_diagnostics": [{"requested_data_days": 120, "realized_shared_days": 121}]},
+    }
+
+    payload = pilot_analysis.compare_pilot_runs(
+        main_run,
+        sens_run,
+        min_combo_return=0.0,
+        min_combo_trades=0.5,
+        trade_gate_policy="window_aware",
+        trade_gate_reference_days=180,
+        trade_gate_min_ratio=0.75,
+        top_n=5,
+    )
+
+    assert payload["summary"]["gate_passed_rows"] == 1
+    assert payload["thresholds"]["trade_gate_policy"] == "window_aware"
+    row = payload["top_gate_passed"][0]
+    assert row["passes_trade_gate"] is True
+    assert row["effective_trade_floor"] == 0.375
+
+
+def test_compare_pilot_runs_window_aware_trade_gate_keeps_full_window_floor():
+    main_run = {
+        "run_id": "main",
+        "run_root": "artifacts/runs/main",
+        "combo_df": _combo_frame(return_pct=0.12, trades=0.5, sharpe=1.5, data_days=180),
+        "symbol_oos_df": _symbol_frame([0.2, 0.1, 0.05], trades=[0.5, 0.5, 0.5], data_days=180),
+        "metadata": {"timeframe_diagnostics": [{"requested_data_days": 180, "realized_shared_days": 127}]},
+    }
+    sens_run = {
+        "run_id": "sens",
+        "run_root": "artifacts/runs/sens",
+        "combo_df": _combo_frame(return_pct=0.08, trades=0.375, sharpe=1.1, data_days=180),
+        "symbol_oos_df": _symbol_frame([0.1, 0.04, 0.01], trades=[0.375, 0.375, 0.375], data_days=180),
+        "metadata": {"timeframe_diagnostics": [{"requested_data_days": 180, "realized_shared_days": 127}]},
+    }
+
+    payload = pilot_analysis.compare_pilot_runs(
+        main_run,
+        sens_run,
+        min_combo_return=0.0,
+        min_combo_trades=0.5,
+        trade_gate_policy="window_aware",
+        trade_gate_reference_days=180,
+        trade_gate_min_ratio=0.75,
+        top_n=5,
+    )
+
+    assert payload["summary"]["stable_positive_rows"] == 1
+    assert payload["summary"]["gate_passed_rows"] == 0
+    row = payload["top_stable_positive"][0]
+    assert row["passes_trade_gate"] is False
+    assert row["effective_trade_floor"] == 0.5
 
 
 def test_compare_pilot_runs_marks_evidence_equivalent_superset_as_redundant():

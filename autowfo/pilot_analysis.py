@@ -40,6 +40,10 @@ DEFAULT_SYMBOL_METRIC_FIELDS: Tuple[str, ...] = (
     "oos_segments",
 )
 
+DEFAULT_TRADE_GATE_POLICY = "flat"
+DEFAULT_TRADE_GATE_REFERENCE_DAYS = 180
+DEFAULT_TRADE_GATE_MIN_RATIO = 0.75
+
 
 def _indicator_tokens(value: Any) -> Tuple[str, ...]:
     if value is None:
@@ -71,6 +75,22 @@ def _safe_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return None if np.isnan(val) else val
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        val = float(value)
+        if np.isnan(val):
+            return None
+        return int(val)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _identity_key_from_row(row: pd.Series, identity_fields: Sequence[str]) -> Tuple[Any, ...]:
@@ -200,6 +220,29 @@ def _sorted_unique_values(values: Iterable[Any]) -> list[Any]:
             continue
         seen.append(value)
     return sorted(seen, key=lambda value: (value is None, str(value)))
+
+
+def _effective_trade_gate_threshold(
+    *,
+    min_combo_trades: float,
+    trade_gate_policy: str,
+    data_days: Any = None,
+    trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
+    trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
+) -> float:
+    base_threshold = max(0.0, float(min_combo_trades))
+    policy = str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY).strip().lower()
+    if policy != "window_aware":
+        return base_threshold
+
+    reference_days = max(1, int(trade_gate_reference_days))
+    floor_ratio = min(1.0, max(0.0, float(trade_gate_min_ratio)))
+    requested_days = _safe_int(data_days)
+    if requested_days is None or requested_days <= 0:
+        return base_threshold
+    scaled_ratio = min(float(requested_days) / float(reference_days), 1.0)
+    effective_ratio = max(floor_ratio, scaled_ratio)
+    return base_threshold * effective_ratio
 
 
 def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
@@ -394,6 +437,9 @@ def compare_pilot_runs(
     require_all_symbols_nonnegative: bool = True,
     min_combo_return: float = 0.0,
     min_combo_trades: float = 0.0,
+    trade_gate_policy: str = DEFAULT_TRADE_GATE_POLICY,
+    trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
+    trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
     top_n: int = 20,
 ) -> Dict[str, Any]:
     identity_fields_tuple = tuple(identity_fields)
@@ -446,6 +492,13 @@ def compare_pilot_runs(
         min_return = None if main_return is None or sens_return is None else min(main_return, sens_return)
         min_trades = None if main_trades is None or sens_trades is None else min(main_trades, sens_trades)
         min_sharpe = None if main_sharpe is None or sens_sharpe is None else min(main_sharpe, sens_sharpe)
+        effective_trade_floor = _effective_trade_gate_threshold(
+            min_combo_trades=min_combo_trades,
+            trade_gate_policy=trade_gate_policy,
+            data_days=row.get("data_days"),
+            trade_gate_reference_days=trade_gate_reference_days,
+            trade_gate_min_ratio=trade_gate_min_ratio,
+        )
 
         passes_symbol_support = (
             has_symbol_support_both
@@ -455,7 +508,7 @@ def compare_pilot_runs(
             else has_symbol_support_both
         )
         passes_return_gate = min_return is not None and min_return > float(min_combo_return)
-        passes_trade_gate = min_trades is not None and min_trades >= float(min_combo_trades)
+        passes_trade_gate = min_trades is not None and min_trades >= float(effective_trade_floor)
         passes_overall_gate = bool(both_positive and passes_symbol_support and passes_return_gate and passes_trade_gate)
 
         payload.update(metric_values)
@@ -474,6 +527,8 @@ def compare_pilot_runs(
                 "passes_return_gate": bool(passes_return_gate),
                 "passes_trade_gate": bool(passes_trade_gate),
                 "passes_overall_gate": bool(passes_overall_gate),
+                "trade_gate_policy": str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
+                "effective_trade_floor": _safe_json_value(effective_trade_floor),
             }
         )
         compared_rows.append(payload)
@@ -505,6 +560,9 @@ def compare_pilot_runs(
             "require_all_symbols_nonnegative": bool(require_all_symbols_nonnegative),
             "min_combo_return": float(min_combo_return),
             "min_combo_trades": float(min_combo_trades),
+            "trade_gate_policy": str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
+            "trade_gate_reference_days": int(trade_gate_reference_days),
+            "trade_gate_min_ratio": float(trade_gate_min_ratio),
             "top_n": int(max(0, int(top_n))),
         },
         "main_run": {

@@ -83,6 +83,33 @@ Interpretation:
   - but no stable-positive rows survive the paired contract
 - Current evidence still supports a `2h` lane-specific interpretation.
 
+### AWF-264: trade-floor policy review
+
+- New analysis: `artifacts/reports/pilot_analysis_awf264_exact_lane_range120_window_aware.json`
+- Cross-check: `artifacts/reports/pilot_analysis_awf264_exact_lane_density_1h_window_aware.json`
+
+Window-aware policy:
+
+- base trade floor: `0.5`
+- reference window: `180d`
+- effective short-window floor: `max(data_days / 180, 0.75) * 0.5`
+
+Outcome:
+
+- `2h / 120d`:
+  - `stable_positive_rows = 24`
+  - `gate_passed_rows = 24`
+  - effective trade floor = `0.375`
+- `1h / 180d`:
+  - `stable_positive_rows = 0`
+  - `gate_passed_rows = 0`
+
+Interpretation:
+
+- The short-window `2h` failure is best understood as sample pressure under a flat gate, not as edge collapse.
+- A conservative window-aware policy is enough to recover the structurally alive `120d` lane without changing the `1h` no-go outcome.
+- This means short-window exact-lane review should stop relying on ad hoc reruns with manually reduced `min_combo_trades`.
+
 ## Decision
 
 ### Conclusion
@@ -94,6 +121,7 @@ Current decision: `NARROW-GO` for continued `2h` exact-lane work, `NO-GO` for br
 1. The operator-generated `2h` scope test is fully reproducible and strong.
 2. The first temporal range contraction (`120d`) weakens only because of trade-floor pressure, not because the symbol-supported edge disappears.
 3. The first density expansion (`1h`) fails completely despite full overlap and more bars.
+4. A conservative window-aware trade floor resolves the `120d` ambiguity without reopening the rejected `1h` lane.
 
 ### Operational reading
 
@@ -102,12 +130,16 @@ The lane should currently be treated as:
 - robust enough to keep as a frozen `2h` candidate
 - not robust enough to justify wider timeframe expansion
 - sensitive to sample sufficiency under shorter shared windows
+- eligible for short-window review only under the conservative window-aware trade gate
 
 ## Recommended next step
 
 1. Do not widen into generic multi-timeframe range campaigns.
 2. Keep the lane fixed at `2h`.
-3. Focus the next analysis on trade-floor policy and sample sufficiency:
-   - whether the current `0.5` paired trade gate is too strict for short-window exact-lane validation
-   - whether the lane should require a longer shared window before any broader promotion
-4. If another expansion is attempted, it should stay inside the `2h` lane and target evidence policy, not raw bar density.
+3. Treat short-window `2h` exact-lane checks with the conservative window-aware trade gate:
+   - `effective_trade_floor = max(data_days / 180, 0.75) * 0.5`
+   - keep the flat `0.5` gate for full-window checks
+4. Focus the next analysis on promotion criteria, not on rediscovering the policy:
+   - whether the lane should require both flat-gate `180d` validation and window-aware `120d` validation before broader promotion
+   - how this policy should surface in operator-facing exact-lane workflows and reports
+5. If another expansion is attempted, it should stay inside the `2h` lane and target promotion policy, not raw bar density.

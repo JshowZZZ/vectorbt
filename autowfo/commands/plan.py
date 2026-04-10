@@ -182,6 +182,24 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
         help="Minimum worst-run combo average OOS trade count required to pass the overall gate",
     )
     pilot_parser.add_argument(
+        "--trade-gate-policy",
+        choices=["flat", "window_aware"],
+        default="flat",
+        help="Trade-floor policy used to evaluate paired combo sample sufficiency",
+    )
+    pilot_parser.add_argument(
+        "--trade-gate-reference-days",
+        type=int,
+        default=180,
+        help="Reference window length used by the window-aware trade gate",
+    )
+    pilot_parser.add_argument(
+        "--trade-gate-min-ratio",
+        type=float,
+        default=0.75,
+        help="Minimum retained fraction of the flat trade gate under the window-aware policy",
+    )
+    pilot_parser.add_argument(
         "--identity-fields",
         default="",
         help="Comma-separated identity fields (default uses the pilot-analysis identity schema)",
@@ -539,6 +557,9 @@ def cmd_pilot_analyze(args: argparse.Namespace, cli_impl: Any) -> int:
         require_all_symbols_nonnegative=not bool(args.allow_negative_symbols),
         min_combo_return=float(args.min_combo_return),
         min_combo_trades=float(args.min_combo_trades),
+        trade_gate_policy=str(args.trade_gate_policy or "flat"),
+        trade_gate_reference_days=int(args.trade_gate_reference_days),
+        trade_gate_min_ratio=float(args.trade_gate_min_ratio),
         top_n=int(args.top_n),
     )
 

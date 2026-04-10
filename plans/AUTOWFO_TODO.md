@@ -9,7 +9,7 @@
 
 - Phase 50: Exact-Lane Scope Testing.
 - Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: `AWF-261`.
+- Active items: `AWF-265`.
 
 ## Backlog
 
@@ -57,16 +57,16 @@
   Added control-panel endpoints that turn a preset directly into a planned config plus queued batch job, so the frozen exact lane can be consumed deliberately from operator workflow rather than only via config parity tests.
 - `done` `AWF-260` Exact-lane scope-test phase entry path.
   Added paired scope-test enqueue support for preset-defined WFO variants (`45/30/30` main and `60/30/30` sensitivity), so the exact lane now has a first-class entry into the next range/scope-testing phase without manual JSON editing.
-- `todo` `AWF-261` Execute and evaluate the exact-lane paired scope-test workflow.
-  Run the operator-generated exact-lane scope-test pair, analyze the paired results with the pilot-analysis contract, and decide whether the lane is stable enough to justify broader range testing.
 - `done` `AWF-261` Execute and evaluate the exact-lane paired scope-test workflow.
   Ran the operator-generated exact-lane main/sensitivity pair (`20260410_100403`, `20260410_100537`) and analyzed it with `pilot_analysis_awf261_exact_lane_scope_test.json`. Result: `30/30` compared rows were stable-positive and `30/30` passed the current gate.
 - `done` `AWF-262` Exact-lane temporal range test on `2h / 120d`.
   Ran a shorter-window paired range test (`20260410_101315`, `20260410_101628`) and analyzed it under both strict and relaxed trade floors. Result: the lane retained `24/30` stable-positive rows, but strict `min_combo_trades=0.5` reduced gate-passed rows to `0`; relaxing to `0.375` restored `24` gate-passed rows.
 - `done` `AWF-263` Exact-lane density follow-up on `1h / 180d`.
   Ran the frozen exact lane on `1h` (`20260410_102301`, `20260410_102302`) to test whether higher bar density rescues short-window sample pressure. Result: `0/30` stable-positive and `0/30` gate-passed rows despite full `181d` overlap.
-- `todo` `AWF-264` Exact-lane trade-floor policy review.
-  Decide whether short-window exact-lane validation should keep the current paired `min_combo_trades=0.5` gate, or whether sample-sufficiency policy should become window-aware before any broader promotion.
+- `done` `AWF-264` Exact-lane trade-floor policy review.
+  Added a formal trade-gate policy layer to `autowfo pilot-analyze` with `flat` and conservative `window_aware` modes. The new `window_aware` policy keeps the baseline `0.5` trade floor for full `180d` windows, but relaxes short-window exact-lane review to `max(data_days / 180, 0.75) * 0.5`. Re-analyzing `20260410_101315` / `20260410_101628` under this policy restored `24` gate-passed rows at `2h / 120d`, while `20260410_102301` / `20260410_102302` remained `0` gate-passed on `1h / 180d`. This closes the question in favor of a conservative window-aware policy for short-window exact-lane review.
+- `todo` `AWF-265` Exact-lane promotion policy freeze.
+  Carry the new window-aware trade gate into the operator-facing exact-lane promotion criteria, so future `2h` short-window checks and range decisions use one explicit policy instead of ad hoc report-by-report overrides.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
