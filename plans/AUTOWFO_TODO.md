@@ -59,6 +59,14 @@
   Added paired scope-test enqueue support for preset-defined WFO variants (`45/30/30` main and `60/30/30` sensitivity), so the exact lane now has a first-class entry into the next range/scope-testing phase without manual JSON editing.
 - `todo` `AWF-261` Execute and evaluate the exact-lane paired scope-test workflow.
   Run the operator-generated exact-lane scope-test pair, analyze the paired results with the pilot-analysis contract, and decide whether the lane is stable enough to justify broader range testing.
+- `done` `AWF-261` Execute and evaluate the exact-lane paired scope-test workflow.
+  Ran the operator-generated exact-lane main/sensitivity pair (`20260410_100403`, `20260410_100537`) and analyzed it with `pilot_analysis_awf261_exact_lane_scope_test.json`. Result: `30/30` compared rows were stable-positive and `30/30` passed the current gate.
+- `done` `AWF-262` Exact-lane temporal range test on `2h / 120d`.
+  Ran a shorter-window paired range test (`20260410_101315`, `20260410_101628`) and analyzed it under both strict and relaxed trade floors. Result: the lane retained `24/30` stable-positive rows, but strict `min_combo_trades=0.5` reduced gate-passed rows to `0`; relaxing to `0.375` restored `24` gate-passed rows.
+- `done` `AWF-263` Exact-lane density follow-up on `1h / 180d`.
+  Ran the frozen exact lane on `1h` (`20260410_102301`, `20260410_102302`) to test whether higher bar density rescues short-window sample pressure. Result: `0/30` stable-positive and `0/30` gate-passed rows despite full `181d` overlap.
+- `todo` `AWF-264` Exact-lane trade-floor policy review.
+  Decide whether short-window exact-lane validation should keep the current paired `min_combo_trades=0.5` gate, or whether sample-sufficiency policy should become window-aware before any broader promotion.
 
 ## Maintenance
 - Dependency tracking: pandas 2.x baseline validation and upgrade-readiness checks (targeted periodic smoke + full regression).
@@ -187,6 +195,17 @@
   - The exact lane now exposes the canonical `45/30/30` main and `60/30/30` sensitivity pair as a first-class control-panel workflow.
 - 2026-04-10: `AWF-261` opened.
   - Next step: execute the exact-lane scope-test pair from the new operator workflow and re-evaluate the lane with the pilot-analysis contract before attempting wider range testing.
+- 2026-04-10: `AWF-261` completed.
+  - Operator-generated exact-lane scope test runs `20260410_100403` and `20260410_100537` reproduced the full plateau under the paired WFO contract.
+  - `pilot_analysis_awf261_exact_lane_scope_test.json` reported `30` compared rows, `30` stable-positive rows, and `30` gate-passed rows.
+- 2026-04-10: `AWF-262` completed.
+  - A shorter-window `2h / 120d` range test (`20260410_101315`, `20260410_101628`) retained `24` stable-positive rows but `0` gate-passed rows at the strict paired trade floor.
+  - Re-analyzing the same pair with `min_combo_trades=0.375` restored `24` gate-passed rows, which localizes the failure mode to trade density rather than edge collapse.
+- 2026-04-10: `AWF-263` completed.
+  - A `1h / 180d` density follow-up (`20260410_102301`, `20260410_102302`) produced `0` stable-positive rows and `0` gate-passed rows.
+  - Conclusion: higher bar density does not rescue the lane; current evidence still supports a `2h` lane-specific interpretation.
+- 2026-04-10: `AWF-264` opened.
+  - Next step: review whether the short-window exact-lane failure should be treated as a hard no-go, or as a sample-sufficiency policy issue tied to the current paired trade gate.
 - 2026-03-29: Phase 49 closed. `storage compare-ranking` was run on `46` trusted runs for both `legacy -> composite` and `absolute -> relative`.
   - `legacy -> composite`: average OOS return delta `-0.6002` (`0/44` improved returns), but OOS min-trades delta `+2.9159` (`44/44` improved) and drawdown delta `+0.5235` (`37/38` improved). This confirms composite is a sample-sufficiency / risk-shaping upgrade, not a raw-return maximizer.
   - `absolute -> relative`: average OOS return delta `+0.2994` (`42/44` improved returns) and Sharpe-like delta `+0.1834` (`20/30` improved), at the cost of OOS min-trades delta `-1.6545` (`41/44` worsened) and drawdown delta `-0.2848` (`34/44` worsened).
