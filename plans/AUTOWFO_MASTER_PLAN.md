@@ -51,7 +51,22 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
-### Phase 50: Exact-Lane Scope Testing (AWF-259/260/261) [Active]
+### Phase 51: Anchored Lane Expansion (AWF-274/275/276) [Done]
+- Validate that the new anchored-window and historical-backfill path works on real exact-lane data, not only in tests.
+- Keep the research `end` fixed and widen only one axis at a time so broader indicator and symbol evidence stays comparable.
+- AWF-274: rerun the canonical `2h / 180d` exact lane with a fixed `end` and verify realized shared overlap improves meaningfully beyond the prior `~127d` baseline.
+- AWF-275: run anchored widening passes on the same fixed `end`: first the bounded 5-indicator neighborhood on the exact 4-symbol cluster, then the bounded 5-symbol cluster.
+- AWF-276: analyze the anchored reruns under the existing pilot-analysis contract and decide whether the next branch should widen indicators, widen symbols, or remain exact-lane only.
+- Outcome:
+  - Anchored-window + historical-backfill is validated on real `2h` BTC-cross data: the fixed `end=2026-04-09T14:00:00Z` exact-lane rerun reached `realized_shared_days = 181`.
+  - The broader time-consistent evidence is weaker than the prior `~127d` baseline: the exact lane remains stable-positive but downgrades from `promote` to `hold` under the strict full-window gate.
+  - Anchored 5-indicator widening on the 4-symbol cluster (`17` stable-positive, `0` gate-passed) and 5-symbol cluster (`10` stable-positive, `0` gate-passed) do not justify broader expansion yet.
+- Exit criteria:
+  - One anchored exact-lane rerun has been completed and its realized shared overlap is recorded as evidence.
+  - At least one anchored broadened-indicator campaign and one anchored broadened-symbol campaign have been completed on the same fixed `end`.
+  - A written decision gate identifies the safest next expansion axis.
+
+### Phase 50: Exact-Lane Scope Testing (AWF-259/260/261) [Done]
 - Promote the frozen exact lane from replay/preset readiness into an operator-driven scope-testing workflow.
 - AWF-259: allow a control-panel preset to be applied, written as a planned config, and enqueued in one step.
 - AWF-260: expose the paired main/sensitivity WFO scope-test entry (`45/30/30` and `60/30/30`) from the preset definition itself.

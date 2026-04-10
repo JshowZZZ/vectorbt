@@ -7,11 +7,20 @@
 
 ## Active Phase
 
-- Phase 50: Exact-Lane Scope Testing.
-- Last closed phase: Phase 49: Trusted Ranking Rollout.
-- Active items: none. Time-anchored research windows and cache backfill are now available; future reruns can widen windows by config as overlap grows.
+- No active phase at the moment.
+- Last closed phase: Phase 51: Anchored Lane Expansion.
+- Active items: none. Anchored full-window reruns closed the overlap question and showed that broader indicator/symbol widening is not yet justified under a fixed `180d` `2h` window.
 
 ## Backlog
+
+- `done` `AWF-274` Anchored exact-lane overlap validation.
+  Re-ran the canonical `2h / 180d` exact lane with fixed `end=2026-04-09T14:00:00Z` (`20260411_anchored_exact_main`, `20260411_anchored_exact_sens`). Result: the backfill-aware loader achieved the full anchored shared window (`realized_shared_days = 181`), which validates the anchored-window contract on real `2h` BTC-cross data. Under the stricter full-window evidence, however, the exact lane downgraded to `hold` (`30` stable-positive rows, `0` gate-passed).
+
+- `done` `AWF-275` Anchored controlled widening across indicators and symbols.
+  Ran two bounded widening pairs on the same fixed `end`: a 5-indicator neighborhood on the exact 4-symbol cluster (`20260411_anchored_4sym5ind_main`, `20260411_anchored_4sym5ind_sens`) and the same 5-indicator neighborhood on the bounded 5-symbol cluster (`20260411_anchored_5sym5ind_main`, `20260411_anchored_5sym5ind_sens`). Result: both broader campaigns produced stable-positive rows (`17` and `10` respectively), but neither produced any gate-passed candidates under the fixed full-window contract.
+
+- `done` `AWF-276` Anchored widening decision gate.
+  Compared the anchored exact lane and both widening branches under the same pilot-analysis contract. Decision: keep anchored-window/backfill support, but do not widen indicator or symbol scope yet. The exact lane stays usable only as a frozen `hold` replay candidate, not as a promotive lane, and the broadened 5-indicator / 4-symbol and 5-indicator / 5-symbol branches are both `no-go` for expansion under the current fixed-window evidence.
 
 - `done` `AWF-273` Parameterize fixed data windows and historical cache backfill.
   Extended timeframe config to accept optional anchored window bounds while preserving `days` as the adjustable size control; current operator path exposes optional `end` for fixed-window reruns. The data loader now backfills older OHLCV rows when the requested window starts before the existing cache, so widening a study window later can remain a config-only change instead of requiring manual cache deletion.

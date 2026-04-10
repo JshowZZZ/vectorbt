@@ -69,7 +69,7 @@ _RERUN_CAMPAIGN_PRESETS = (
         "recommended_workflow": "run",
         "optional": False,
         "bundle_analysis_json_list": (
-            "artifacts/reports/pilot_analysis_awf261_exact_lane_scope_test.json",
+            "artifacts/reports/pilot_analysis_awf274_anchored_exact_lane.json",
             "artifacts/reports/pilot_analysis_awf264_exact_lane_range120_window_aware.json",
             "artifacts/reports/pilot_analysis_awf264_exact_lane_density_1h_window_aware.json",
         ),
