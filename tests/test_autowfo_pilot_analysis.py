@@ -354,6 +354,201 @@ def test_compare_pilot_runs_marks_evidence_equivalent_superset_as_redundant():
     assert redundant_summary["field_values"]["indicator_list"] == ["mfi,obv_roc,atr_ratio,macd_hist"]
 
 
+def test_compare_pilot_runs_distinguishes_state_trigger_role_variants():
+    main_combo = pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": "obv_roc,keltner_pos",
+                "trigger_indicator_list": "ad",
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": "pair-a",
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "oos_avg_total_return_pct": 0.12,
+                "oos_avg_total_trades": 1.0,
+                "oos_sharpe_like": 1.2,
+            },
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": "obv_roc,keltner_pos,ad",
+                "trigger_indicator_list": "ad",
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": "pair-b",
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "oos_avg_total_return_pct": 0.04,
+                "oos_avg_total_trades": 0.75,
+                "oos_sharpe_like": 0.4,
+            },
+        ]
+    )
+    sens_combo = pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": "obv_roc,keltner_pos",
+                "trigger_indicator_list": "ad",
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": "pair-a",
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "oos_avg_total_return_pct": 0.09,
+                "oos_avg_total_trades": 0.75,
+                "oos_sharpe_like": 0.9,
+            },
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": "obv_roc,keltner_pos,ad",
+                "trigger_indicator_list": "ad",
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": "pair-b",
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "oos_avg_total_return_pct": 0.03,
+                "oos_avg_total_trades": 0.5,
+                "oos_sharpe_like": 0.3,
+            },
+        ]
+    )
+    main_symbols = pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": state_indicator_list,
+                "trigger_indicator_list": trigger_indicator_list,
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": filter_name,
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "symbol": symbol,
+                "oos_avg_total_return_pct": ret,
+                "oos_avg_total_trades": trade_count,
+                "oos_positive_segment_ratio": 0.5,
+                "oos_segments": 2.0,
+            }
+            for state_indicator_list, trigger_indicator_list, filter_name, symbol, ret, trade_count in [
+                ("obv_roc,keltner_pos", "ad", "pair-a", "LTC/BTC", 0.2, 1.0),
+                ("obv_roc,keltner_pos", "ad", "pair-a", "LINK/BTC", 0.1, 1.0),
+                ("obv_roc,keltner_pos", "ad", "pair-a", "SOL/BTC", 0.05, 1.0),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "LTC/BTC", 0.08, 0.75),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "LINK/BTC", 0.04, 0.75),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "SOL/BTC", 0.02, 0.75),
+            ]
+        ]
+    )
+    sens_symbols = pd.DataFrame(
+        [
+            {
+                "timeframe": "2h",
+                "data_days": 180,
+                "strategy_mode": "state_trigger_entry",
+                "state_indicator_list": state_indicator_list,
+                "trigger_indicator_list": trigger_indicator_list,
+                "indicator_list": "obv_roc,keltner_pos,ad",
+                "regime_name": "trend_any",
+                "vol_mode": "any",
+                "filter_name": filter_name,
+                "vol_lookback": None,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "state_exit_policy": "state_reversal",
+                "symbol": symbol,
+                "oos_avg_total_return_pct": ret,
+                "oos_avg_total_trades": trade_count,
+                "oos_positive_segment_ratio": 0.5,
+                "oos_segments": 2.0,
+            }
+            for state_indicator_list, trigger_indicator_list, filter_name, symbol, ret, trade_count in [
+                ("obv_roc,keltner_pos", "ad", "pair-a", "LTC/BTC", 0.1, 0.75),
+                ("obv_roc,keltner_pos", "ad", "pair-a", "LINK/BTC", 0.04, 0.75),
+                ("obv_roc,keltner_pos", "ad", "pair-a", "SOL/BTC", 0.01, 0.75),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "LTC/BTC", 0.05, 0.5),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "LINK/BTC", 0.03, 0.5),
+                ("obv_roc,keltner_pos,ad", "ad", "pair-b", "SOL/BTC", 0.01, 0.5),
+            ]
+        ]
+    )
+
+    payload = pilot_analysis.compare_pilot_runs(
+        {
+            "run_id": "main",
+            "run_root": "artifacts/runs/main",
+            "combo_df": main_combo,
+            "symbol_oos_df": main_symbols,
+            "metadata": {},
+        },
+        {
+            "run_id": "sens",
+            "run_root": "artifacts/runs/sens",
+            "combo_df": sens_combo,
+            "symbol_oos_df": sens_symbols,
+            "metadata": {},
+        },
+        min_combo_return=0.0,
+        min_combo_trades=0.5,
+        top_n=5,
+    )
+
+    assert payload["summary"]["compared_combo_rows"] == 2
+    assert payload["summary"]["gate_passed_rows"] == 2
+    assert payload["identity_fields"][2:5] == ["strategy_mode", "state_indicator_list", "trigger_indicator_list"]
+    state_rows = {
+        (row["state_indicator_list"], row["trigger_indicator_list"]): row
+        for row in payload["top_gate_passed"]
+    }
+    assert ("obv_roc,keltner_pos", "ad") in state_rows
+    assert ("obv_roc,keltner_pos,ad", "ad") in state_rows
+
+
 def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):
     run_root = tmp_path / "artifacts" / "runs" / "20260409_010000"
     (run_root / "results").mkdir(parents=True)

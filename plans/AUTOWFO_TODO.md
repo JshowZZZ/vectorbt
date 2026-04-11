@@ -14,12 +14,13 @@
     Expanded `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md` into the first concrete Phase 60 contract: fixed `drop SOL/BTC` working cohort, explicit state/trigger seed sets, explicit additive config surface (`strategy_mode`, `state_indicator_sets`, `trigger_indicator_sets`, `allow_shared_indicator_roles`, `state_exit_policy`), and explicit comparison target against the frozen Phase 59 micro-cohort baseline.
   - `done` `AWF-303` Implement the additive hierarchical state-trigger mode.
     Completed the additive state-trigger execution path end to end: role-aware search-space generation, state/trigger artifact metadata, state-filtered trigger entries, explicit state-reversal exits, control-panel config preservation, and frozen AWF-304 protocol configs/preset for replay. Validation: `198` focused engine/evaluator/control-panel tests passed.
-  - `doing` `AWF-304` Execute and compare the first hierarchical pilot.
+  - `done` `AWF-304` Execute and compare the first hierarchical pilot.
     Completed the first paired state-trigger pilot runs under the frozen `2h / 180d` contract:
     - main: `20260411_154620`
     - sensitivity: `20260411_154758`
-    Paired report: `artifacts/reports/pilot_analysis_awf304_state_trigger.json`.
-    Current result: `15` compared / `4` stable-positive / `0` gate-passed, which is materially weaker than the frozen current-mode `drop SOL/BTC` reference `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json` (`75` compared / `25` stable-positive / `3` gate-passed). Final decision memo still pending.
+    Corrected paired report: `artifacts/reports/pilot_analysis_awf304_state_trigger.json`.
+    Decision memo: `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`.
+    Final result: role-aware reanalysis restores the expected `18` compared rows, but the first hierarchical seed matrix still produces only `5` stable-positive rows and `0` gate-passed rows, versus the frozen current-mode `drop SOL/BTC` reference `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json` (`75` compared / `25` stable-positive / `3` gate-passed). Decision: bounded fail, no promotion.
   - `done` `AWF-305` Exit-parameter sensitivity test on the 10-symbol breadth cohort.
     Completed the bounded TP/SL grid (`9` paired cells / `18` runs) on the full 10-symbol current-mode cohort and wrote `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`. Conclusion: `BNB/BTC` remains the clear symbol-intrinsic dragger across the whole exit grid, while `ADA/BTC`, `DOGE/BTC`, and `DOT/BTC` remain the lowest-pressure supporters. This is a sidecar evidence task only; it does not displace Phase 60 as the active implementation track.
   - `done` `AWF-306` Pilot history sortable table in the control panel.
@@ -77,8 +78,8 @@
 - `done` `AWF-303` Implement the additive hierarchical state-trigger mode.
   Added the new state-trigger strategy mode without disturbing the existing combo-entry mode: role-aware combo construction, comparable result fields, evaluator state/trigger semantics, explicit state-reversal exits, control-panel preset support, and frozen AWF-304 replay configs in `plans/protocols/`.
 
-- `doing` `AWF-304` Execute and compare the first hierarchical pilot.
-  Ran the first paired hierarchical pilot as runs `20260411_154620` and `20260411_154758`, then wrote `artifacts/reports/pilot_analysis_awf304_state_trigger.json`. Initial comparison is negative versus the frozen `drop SOL/BTC` current-mode reference: the hierarchical pair produced `4` stable-positive rows and `0` gate-passed rows, versus `25` stable-positive and `3` gate-passed in `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json`. A decision memo is still pending.
+- `done` `AWF-304` Execute and compare the first hierarchical pilot.
+  Ran the first paired hierarchical pilot as runs `20260411_154620` and `20260411_154758`, then corrected the paired analysis to keep role-distinct state/trigger rows separate in `artifacts/reports/pilot_analysis_awf304_state_trigger.json`. Final result: `18` compared / `5` stable-positive / `0` gate-passed, still materially weaker than the frozen `drop SOL/BTC` current-mode reference (`75` / `25` / `3`). Decision memo: `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`.
 
 - `done` `AWF-305` Exit-parameter sensitivity test on the 10-symbol breadth cohort.
   Completed all `18` runs plus `9` paired pilot-analysis reports under the frozen `2h / 180d` anchored contract. Decision memo: `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`. Result: `BNB/BTC` is robustly dragger-like across every TP/SL cell, `SOL/BTC` remains the secondary pressure point, and `ADA/BTC` / `DOGE/BTC` / `DOT/BTC` remain the lowest-pressure supporter set. This tightens current-mode cohort evidence but does not change the active Phase 60 priority.

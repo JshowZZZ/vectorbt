@@ -15,6 +15,9 @@ SCHEMA_VERSION = "1.0.0"
 DEFAULT_IDENTITY_FIELDS: Tuple[str, ...] = (
     "timeframe",
     "data_days",
+    "strategy_mode",
+    "state_indicator_list",
+    "trigger_indicator_list",
     "indicator_list",
     "regime_name",
     "vol_mode",
@@ -112,6 +115,10 @@ def _identity_payload_from_key(identity_fields: Sequence[str], key: Sequence[Any
 def _dedupe_identity_frame(df: pd.DataFrame, identity_fields: Sequence[str]) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame(columns=list(identity_fields))
+    df = df.copy()
+    for field in identity_fields:
+        if field not in df.columns:
+            df[field] = None
     seen = set()
     keep_rows = []
     for idx, row in df.iterrows():
@@ -253,7 +260,11 @@ def _effective_trade_gate_threshold(
     return base_threshold * effective_ratio
 
 
-def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
+def _annotate_canonical_gate_passed(
+    rows: Sequence[Dict[str, Any]],
+    *,
+    identity_fields: Sequence[str],
+) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
     canonical_rows: list[Dict[str, Any]] = []
     redundant_rows: list[Dict[str, Any]] = []
     ordered_rows = sorted(
@@ -281,7 +292,7 @@ def _annotate_canonical_gate_passed(rows: Sequence[Dict[str, Any]]) -> Tuple[lis
             break
         if matched is not None:
             row["is_canonical_family"] = False
-            row["redundant_of"] = _identity_key_from_row(pd.Series(matched), DEFAULT_IDENTITY_FIELDS)
+            row["redundant_of"] = _identity_key_from_row(pd.Series(matched), identity_fields)
             row["canonical_indicator_list"] = matched.get("indicator_list")
             row["canonical_reason"] = "evidence_equivalent_superset"
             redundant_rows.append(row)
@@ -294,6 +305,10 @@ def _build_protocol_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]
     if not rows:
         return {"row_count": 0, "field_values": {}}
     fields = (
+        "strategy_mode",
+        "state_indicator_list",
+        "trigger_indicator_list",
+        "state_exit_policy",
         "indicator_list",
         "regime_name",
         "vol_mode",
@@ -634,7 +649,10 @@ def _build_compared_rows(
         row for row in compared_rows_sorted if row.get("both_positive") and row.get("has_symbol_support_both")
     ]
     gate_passed = [row for row in compared_rows_sorted if row.get("passes_overall_gate")]
-    canonical_gate_passed, redundant_gate_passed = _annotate_canonical_gate_passed(gate_passed)
+    canonical_gate_passed, redundant_gate_passed = _annotate_canonical_gate_passed(
+        gate_passed,
+        identity_fields=identity_fields,
+    )
     return (
         main_combo,
         sensitivity_combo,

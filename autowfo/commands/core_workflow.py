@@ -28,6 +28,8 @@ def _write_runtime_config(
     config_path: Path,
     mode: Optional[str],
     workers: Optional[int],
+    *,
+    use_run_workspace: bool,
 ) -> tuple[Path, Optional[str]]:
     artifacts_dir = cwd / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -39,7 +41,7 @@ def _write_runtime_config(
         config["max_workers"] = int(workers)
 
     run_id = _new_run_id()
-    if mode is not None:
+    if use_run_workspace:
         workspace = _build_run_workspace(cwd, run_id)
         workspace.ensure_directories()
         runtime_config_path = workspace.runtime_config_path
@@ -77,6 +79,7 @@ def _run_workflow(
         config_path=config_path,
         mode=mode if workflow == "run" else None,
         workers=workers,
+        use_run_workspace=(workflow == "run"),
     )
     env = os.environ.copy()
     env["VBT_RUNTIME_CONFIG_PATH"] = str(runtime_config_path)

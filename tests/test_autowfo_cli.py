@@ -52,6 +52,46 @@ def test_cli_run_writes_runtime_config_and_invokes_sweep(tmp_path, monkeypatch):
     assert calls[0]["env"]["VBT_RUNTIME_CONFIG_PATH"] == str(runtime_cfg)
 
 
+def test_cli_run_without_mode_uses_run_workspace_runtime_config(tmp_path, monkeypatch):
+    cfg_path = tmp_path / "experiment.json"
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "search_mode": "combo",
+                "timeframes": [{"timeframe": "1h", "days": 2}],
+                "combo_sizes": [1],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def _fake_run(cmd, cwd, env, check):
+        calls.append({"cmd": cmd, "cwd": cwd, "env": env, "check": check})
+        return 0
+
+    monkeypatch.setattr(cli.subprocess, "run", _fake_run)
+    code = cli.main(
+        [
+            "run",
+            "--config",
+            str(cfg_path),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+    run_id = calls[0]["env"]["VBT_RUN_ID"]
+    runtime_cfg = tmp_path / "artifacts" / "runs" / run_id / "runtime" / "sweep_config.json"
+    payload = json.loads(runtime_cfg.read_text(encoding="utf-8"))
+    assert payload["search_mode"] == "combo"
+    assert calls[0]["cmd"] == [cli.sys.executable, "-m", "autowfo.run_btc_regime_sweep"]
+    assert "VBT_SWEEP_MODE" not in calls[0]["env"]
+    assert calls[0]["env"]["VBT_RUNTIME_CONFIG_PATH"] == str(runtime_cfg)
+
+
 def test_cli_baseline_writes_runtime_config_and_invokes_baseline(tmp_path, monkeypatch):
     cfg_path = tmp_path / "experiment.json"
     cfg_path.write_text(

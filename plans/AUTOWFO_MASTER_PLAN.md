@@ -76,7 +76,20 @@ indicators, symbols, and time windows to discover robust combinations.
     - `trigger_indicator_sets`
     - `allow_shared_indicator_roles`
     - `state_exit_policy`
-  - remaining work is `AWF-303` execution semantics plus `AWF-304` paired pilot
+  - `AWF-303` execution semantics are now complete and validated
+  - `AWF-304` first paired pilot is now complete:
+    - runs:
+      - `20260411_154620`
+      - `20260411_154758`
+    - corrected paired report:
+      - `artifacts/reports/pilot_analysis_awf304_state_trigger.json`
+    - decision memo:
+      - `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`
+    - outcome:
+      - corrected role-aware report: `18` compared / `5` stable-positive / `0` gate-passed
+      - frozen current-mode `drop SOL/BTC` reference remains stronger at
+        `75` compared / `25` stable-positive / `3` gate-passed
+      - the first hierarchical seed matrix is a bounded fail and is not yet promotable
   - three new-factor sidecar tracks registered (AWF-307/308/309); run in parallel
     with Phase 60, do not block it; results feed into Phase 60 state/trigger candidate pool
   - historical anchored replay sidecar (`AWF-310`) completed first as the lowest-risk
@@ -867,6 +880,7 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-04-12: `AWF-303` completed the additive hierarchical execution path and `AWF-304` closed its first paired pilot decision. The state-trigger mode now runs end to end with role-aware search space construction, state-filtered trigger entries, explicit state-reversal exits, and comparable artifact metadata. During `AWF-304` analysis, the paired pilot report initially collapsed role-distinct rows because pilot-analysis identity still assumed current-mode contracts; that was fixed by making the default identity role-aware (`strategy_mode`, `state_indicator_list`, `trigger_indicator_list`) before final evaluation. The corrected report `artifacts/reports/pilot_analysis_awf304_state_trigger.json` shows `18` compared / `5` stable-positive / `0` gate-passed, versus the frozen current-mode `drop SOL/BTC` reference `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json` at `75` / `25` / `3`. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`. Current interpretation: the first state-trigger seed matrix is directionally interesting but not promotable; Phase 60 remains a bounded research branch rather than the new default strategy path.
 - 2026-04-11: `AWF-305` completed the bounded TP/SL sensitivity sidecar on the full 10-symbol current-mode cohort (`18` runs, `9` paired reports, decision memo `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`). The exit-grid sweep did not overturn the earlier cohort-boundary evidence: `BNB/BTC` stayed the dominant dragger across all `9` TP/SL cells, `SOL/BTC` remained the main secondary pressure point, and `ADA/BTC` / `DOGE/BTC` / `DOT/BTC` stayed the lowest-pressure supporter set. This strengthens the symbol-role evidence but does not change Phase 60 as the active implementation branch.
 - 2026-04-11: `AWF-302` was tightened from a note into a concrete implementation protocol. `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md` now freezes the exact `drop SOL/BTC` working cohort, the first state/trigger seed sets, and the additive config surface needed for implementation. Runtime config normalization now accepts the new Phase 60 keys, so `AWF-303` can focus on execution semantics instead of renegotiating the contract.
 - 2026-04-11: `AWF-306` completed the pilot-history operator view. Results now expose `/pilot-history.json`, which scans `artifacts/reports/pilot_analysis_*.json` under a strict paired-report schema guard and skips malformed or non-contract files safely; the Results page renders these summaries in a sortable/searchable "Pilot History" table below the leaderboard, so operators can compare pilot evidence without opening raw JSON files one by one.
