@@ -75,6 +75,18 @@ def test_normalize_trade_symbols():
     assert got == ["ETH/BTC", "SOL/BTC"]
 
 
+def test_normalize_indicator_sets():
+    got = e._normalize_indicator_sets(
+        "obv_roc,keltner_pos; obv_roc,keltner_pos,ad; missing ; cmf",
+        ["obv_roc", "keltner_pos", "ad", "cmf"],
+    )
+    assert got == [
+        ("obv_roc", "keltner_pos"),
+        ("obv_roc", "keltner_pos", "ad"),
+        ("cmf",),
+    ]
+
+
 def test_safe_int_and_safe_float_defaulting():
     nan_value = float("nan")
     assert e._safe_int(None, 7) == 7
@@ -166,6 +178,7 @@ def test_build_sweep_schema_fields_contract():
 def test_resolve_runtime_settings_normalizes_fields():
     config = {
         "search_mode": "refine",
+        "strategy_mode": "state_trigger_entry",
         "timeframes": [{"timeframe": "1h", "days": 30, "end": "2026-04-10T10:00:00Z"}],
         "combo_sizes": [2],
         "combo_seed": 9,
@@ -175,6 +188,10 @@ def test_resolve_runtime_settings_normalizes_fields():
         "combo_group_fields": ["indicator_list"],
         "trade_symbols": "ETH/BTC,BTC/USDT,SOL/BTC",
         "indicator_subset": "mfi,cmf,missing,mfi",
+        "state_indicator_sets": "macd_hist,obv_roc; macd_hist,obv_roc,cmf; macd_hist,obv_roc",
+        "trigger_indicator_sets": [["cmf"], ["chop"], ["chop"]],
+        "allow_shared_indicator_roles": "false",
+        "state_exit_policy": "state_reversal",
         "regime_preset": "pilot_trend_3",
         "regime_name_filter": "trend_high,trend_high,trend_low",
         "pilot_fixed_indicator_params": "true",
@@ -207,12 +224,13 @@ def test_resolve_runtime_settings_normalizes_fields():
         config,
         base_symbol="BTC/USDT",
         default_trade_symbols=["BNB/BTC"],
-        available_indicator_keys=["mfi", "cmf", "macd_hist"],
+        available_indicator_keys=["mfi", "cmf", "macd_hist", "obv_roc", "chop"],
         normalize_split_mode_fn=_normalize_mode,
         resolve_ranking_config_fn=lambda ranking: {"resolved": ranking.get("mode")},
     )
 
     assert got["search_mode"] == "refine"
+    assert got["strategy_mode"] == "state_trigger_entry"
     assert got["timeframe_configs"] == [{"timeframe": "1h", "days": 30, "end": "2026-04-10T10:00:00Z"}]
     assert got["combo_seed"] == 9
     assert got["max_workers"] == 1
@@ -221,6 +239,10 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["combo_group_fields"] == ["indicator_list"]
     assert got["trade_symbols"] == ["ETH/BTC", "SOL/BTC"]
     assert got["indicator_subset"] == ["mfi", "cmf"]
+    assert got["state_indicator_sets"] == [("macd_hist", "obv_roc"), ("macd_hist", "obv_roc", "cmf")]
+    assert got["trigger_indicator_sets"] == [("cmf",), ("chop",)]
+    assert got["allow_shared_indicator_roles"] is False
+    assert got["state_exit_policy"] == "state_reversal"
     assert got["regime_preset"] == "pilot_trend_3"
     assert got["regime_name_filter"] == ["trend_high", "trend_low"]
     assert got["pilot_fixed_indicator_params"] is True
@@ -260,6 +282,9 @@ def test_resolve_runtime_settings_uses_default_trade_symbols_when_empty():
     )
     assert got["trade_symbols"] == ["BNB/BTC", "SOL/BTC"]
     assert got["indicator_subset"] == ["mfi", "cmf"]
+    assert got["strategy_mode"] == "combo_entry"
+    assert got["state_indicator_sets"] == []
+    assert got["trigger_indicator_sets"] == []
 
 
 def test_build_regime_variants_characterization():

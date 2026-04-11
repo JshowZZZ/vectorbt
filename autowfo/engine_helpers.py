@@ -12,6 +12,7 @@ import pandas as pd
 
 DEFAULT_CONFIG = {
     "search_mode": "combo",
+    "strategy_mode": "combo_entry",
     "combo_sizes": [2, 3, 4],
     "combo_seed": 42,
     "max_workers": 1,
@@ -40,6 +41,10 @@ DEFAULT_CONFIG = {
     "combo_group_fields": ["indicator_list", "regime_name", "vol_mode"],
     "trade_symbols": ["ETH/BTC", "BNB/BTC", "SOL/BTC"],
     "indicator_subset": None,
+    "state_indicator_sets": None,
+    "trigger_indicator_sets": None,
+    "allow_shared_indicator_roles": True,
+    "state_exit_policy": "state_reversal",
     "regime_preset": "full",
     "regime_name_filter": None,
     "pilot_fixed_indicator_params": False,
@@ -397,6 +402,13 @@ def _normalize_search_mode(mode):
     return search_mode
 
 
+def _normalize_strategy_mode(mode):
+    strategy_mode = str(mode or "combo_entry").strip().lower()
+    if strategy_mode not in {"combo_entry", "state_trigger_entry"}:
+        return "combo_entry"
+    return strategy_mode
+
+
 def _normalize_trade_symbols(trade_symbols, base_symbol, default_trade_symbols):
     values = trade_symbols
     if isinstance(values, str):
@@ -459,6 +471,38 @@ def _normalize_indicator_subset(indicator_subset, available_indicator_keys):
     return normalized or list(available_indicator_keys)
 
 
+def _normalize_indicator_sets(indicator_sets, available_indicator_keys):
+    if not available_indicator_keys:
+        return []
+    values = indicator_sets
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [part.strip() for part in values.split(";") if part.strip()]
+    normalized = []
+    seen = set()
+    for raw_group in values:
+        if isinstance(raw_group, str):
+            raw_items = [item.strip() for item in raw_group.split(",") if item.strip()]
+        elif isinstance(raw_group, (list, tuple)):
+            raw_items = [str(item).strip() for item in raw_group if str(item).strip()]
+        else:
+            continue
+        group = []
+        for item in raw_items:
+            if item not in available_indicator_keys or item in group:
+                continue
+            group.append(item)
+        if not group:
+            continue
+        group_key = tuple(group)
+        if group_key in seen:
+            continue
+        seen.add(group_key)
+        normalized.append(group_key)
+    return normalized
+
+
 def _normalize_regime_preset(value):
     preset = str(value or "full").strip().lower()
     if preset not in {"full", "pilot_trend_3"}:
@@ -486,6 +530,13 @@ def _normalize_risk_mode(value):
     if risk_mode not in {"fixed_pct", "atr_multiple"}:
         return "fixed_pct"
     return risk_mode
+
+
+def _normalize_state_exit_policy(value):
+    policy = str(value or "state_reversal").strip().lower()
+    if policy not in {"state_reversal"}:
+        return "state_reversal"
+    return policy
 
 
 def _has_all_config_fields(values, strict_fields):
@@ -558,6 +609,7 @@ def _resolve_runtime_settings(
     resolve_ranking_config_fn,
 ):
     search_mode = _normalize_search_mode(default_config.get("search_mode", "combo"))
+    strategy_mode = _normalize_strategy_mode(default_config.get("strategy_mode", "combo_entry"))
     timeframe_configs = _normalize_timeframe_configs(default_config.get("timeframes"))
     combo_sizes = default_config["combo_sizes"]
     combo_seed = int(default_config.get("combo_seed", 42))
@@ -575,6 +627,21 @@ def _resolve_runtime_settings(
     indicator_subset = _normalize_indicator_subset(
         default_config.get("indicator_subset"),
         available_indicator_keys or [],
+    )
+    state_indicator_sets = _normalize_indicator_sets(
+        default_config.get("state_indicator_sets"),
+        available_indicator_keys or [],
+    )
+    trigger_indicator_sets = _normalize_indicator_sets(
+        default_config.get("trigger_indicator_sets"),
+        available_indicator_keys or [],
+    )
+    allow_shared_indicator_roles = _safe_bool(
+        default_config.get("allow_shared_indicator_roles", True),
+        True,
+    )
+    state_exit_policy = _normalize_state_exit_policy(
+        default_config.get("state_exit_policy", "state_reversal")
     )
     regime_preset = _normalize_regime_preset(default_config.get("regime_preset", "full"))
     regime_name_filter = _normalize_regime_name_filter(default_config.get("regime_name_filter"))
@@ -626,6 +693,7 @@ def _resolve_runtime_settings(
 
     return {
         "search_mode": search_mode,
+        "strategy_mode": strategy_mode,
         "timeframe_configs": timeframe_configs,
         "combo_sizes": combo_sizes,
         "combo_seed": combo_seed,
@@ -635,6 +703,10 @@ def _resolve_runtime_settings(
         "combo_group_fields": combo_group_fields,
         "trade_symbols": trade_symbols,
         "indicator_subset": indicator_subset,
+        "state_indicator_sets": state_indicator_sets,
+        "trigger_indicator_sets": trigger_indicator_sets,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "regime_preset": regime_preset,
         "regime_name_filter": regime_name_filter,
         "pilot_fixed_indicator_params": pilot_fixed_indicator_params,

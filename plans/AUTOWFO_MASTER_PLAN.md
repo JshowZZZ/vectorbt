@@ -68,6 +68,15 @@ indicators, symbols, and time windows to discover robust combinations.
   - the first hierarchical protocol is frozen
   - the additive mode is implemented without breaking the existing combo-entry path
   - a first anchored pilot has been compared against the frozen current-mode micro-cohort baseline
+- Current status:
+  - `AWF-302` is now frozen in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md`
+  - explicit config contract seeded for implementation:
+    - `strategy_mode`
+    - `state_indicator_sets`
+    - `trigger_indicator_sets`
+    - `allow_shared_indicator_roles`
+    - `state_exit_policy`
+  - remaining work is `AWF-303` execution semantics plus `AWF-304` paired pilot
 
 ### Phase 59: SOL-Drop Micro-Cohort Refinement (AWF-299/300/301) [Done]
 - Run one final current-mode micro-cohort refinement around the validated `drop SOL/BTC`
@@ -777,6 +786,7 @@ Each experiment should record:
 
 ## Change Log
 - 2026-04-11: `AWF-305` completed the bounded TP/SL sensitivity sidecar on the full 10-symbol current-mode cohort (`18` runs, `9` paired reports, decision memo `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`). The exit-grid sweep did not overturn the earlier cohort-boundary evidence: `BNB/BTC` stayed the dominant dragger across all `9` TP/SL cells, `SOL/BTC` remained the main secondary pressure point, and `ADA/BTC` / `DOGE/BTC` / `DOT/BTC` stayed the lowest-pressure supporter set. This strengthens the symbol-role evidence but does not change Phase 60 as the active implementation branch.
+- 2026-04-11: `AWF-302` was tightened from a note into a concrete implementation protocol. `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md` now freezes the exact `drop SOL/BTC` working cohort, the first state/trigger seed sets, and the additive config surface needed for implementation. Runtime config normalization now accepts the new Phase 60 keys, so `AWF-303` can focus on execution semantics instead of renegotiating the contract.
 - 2026-04-11: `AWF-306` completed the pilot-history operator view. Results now expose `/pilot-history.json`, which scans `artifacts/reports/pilot_analysis_*.json` under a strict paired-report schema guard and skips malformed or non-contract files safely; the Results page renders these summaries in a sortable/searchable "Pilot History" table below the leaderboard, so operators can compare pilot evidence without opening raw JSON files one by one.
 - 2026-04-11: `AWF-273` completed the time-anchored research-window contract. Timeframe configs can now carry an explicit anchored end timestamp while preserving `days` as the adjustable window-size parameter, and the loader now backfills older OHLCV rows when a widened or anchored request starts before the current cache. This removes the previous coupling between study-window expansion and manual cache deletion, and makes future exact-lane reruns reproducible against a fixed window boundary when needed.
 - 2026-04-10: `AWF-272` completed the exact-lane overlap-growth re-validation policy. `plans/AUTOWFO_RUNBOOK.md` now freezes when the promotive `2h / 180d` scope test should be rerun: once realized shared overlap improves by at least `30d` from the current `127d` baseline or reaches the full `180d` ceiling, and immediately after any frozen-lane contract change. This keeps the exact lane under time-based review without reopening broad discovery work.

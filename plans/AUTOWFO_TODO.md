@@ -10,10 +10,10 @@
 - Phase 60: Hierarchical State-Trigger Mode Opening.
 - Last closed phase: Phase 59: SOL-Drop Micro-Cohort Refinement.
 - Active items:
-  - `doing` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
-    Turn the deferred design note into a concrete, minimal first protocol seeded by the current-mode winners and anchored to the same paired `2h / 180d` contract.
-  - `todo` `AWF-303` Implement the additive hierarchical state-trigger mode.
-    Add a new strategy mode that supports a long-horizon state filter, short-horizon trigger, and state-reversal exit without changing the existing combo-entry mode.
+  - `done` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
+    Expanded `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md` into the first concrete Phase 60 contract: fixed `drop SOL/BTC` working cohort, explicit state/trigger seed sets, explicit additive config surface (`strategy_mode`, `state_indicator_sets`, `trigger_indicator_sets`, `allow_shared_indicator_roles`, `state_exit_policy`), and explicit comparison target against the frozen Phase 59 micro-cohort baseline.
+  - `doing` `AWF-303` Implement the additive hierarchical state-trigger mode.
+    Runtime config normalization now accepts the new state-trigger contract keys, but the search/evaluator path still needs the actual execution semantics: state-filtered trigger entries, state-reversal exits, and comparable artifact fields without disturbing the existing combo-entry mode.
   - `todo` `AWF-304` Execute and compare the first hierarchical pilot.
     Run the minimal state-trigger pilot against the frozen `drop SOL/BTC` current-mode micro-cohort baseline and decide whether the new mode deserves continued investment.
   - `done` `AWF-305` Exit-parameter sensitivity test on the 10-symbol breadth cohort.
@@ -23,11 +23,11 @@
 
 ## Backlog
 
-- `doing` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
-  Turn the deferred mode note into a concrete first protocol seeded by the current-mode winners: state candidates around `obv_roc + keltner_pos`, trigger candidates around `ad`, `cmf`, and `chop`, anchored to the same paired `2h / 180d` contract.
+- `done` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
+  Protocol now frozen in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md`: exact `drop SOL/BTC` working cohort, anchored `2h / 180d` paired WFO, explicit state candidates (`obv_roc + keltner_pos`, `obv_roc + keltner_pos + ad`), explicit trigger candidates (`ad`, `cmf`, `chop`), and explicit additive config contract.
 
-- `todo` `AWF-303` Implement the additive hierarchical state-trigger mode.
-  Add the new strategy mode without disturbing the existing combo-entry mode, keeping artifacts and analysis comparable wherever possible.
+- `doing` `AWF-303` Implement the additive hierarchical state-trigger mode.
+  Add the new strategy mode without disturbing the existing combo-entry mode, keeping artifacts and analysis comparable wherever possible. Config/runtime normalization support for the new contract keys has landed; remaining work is the actual search/evaluator execution path and comparable output fields.
 
 - `todo` `AWF-304` Execute and compare the first hierarchical pilot.
   Run the minimal state-trigger pilot and compare it against the frozen `drop SOL/BTC` current-mode micro-cohort baseline.
