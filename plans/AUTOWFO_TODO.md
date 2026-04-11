@@ -20,8 +20,45 @@
     Completed the bounded TP/SL grid (`9` paired cells / `18` runs) on the full 10-symbol current-mode cohort and wrote `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`. Conclusion: `BNB/BTC` remains the clear symbol-intrinsic dragger across the whole exit grid, while `ADA/BTC`, `DOGE/BTC`, and `DOT/BTC` remain the lowest-pressure supporters. This is a sidecar evidence task only; it does not displace Phase 60 as the active implementation track.
   - `done` `AWF-306` Pilot history sortable table in the control panel.
     Added `/pilot-history.json` plus a Results-page "Pilot History" `DataTable` under the leaderboard. The endpoint only accepts pilot-analysis JSON files that satisfy the paired-report schema contract, skips malformed/non-contract files safely, and exposes sortable summary rows for operator review. Protocol: `plans/AUTOWFO_PILOT_HISTORY_UI_PROTOCOL.md`.
+  - `todo` `AWF-307` Funding Rate signal indicator sidecar (Track A).
+    Run `funding_gate` as entry overlay on the full 10-symbol cohort under the same anchored contract, to test whether perpetual-market funding data reduces `BNB/BTC`'s dragger frequency.
+    Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
+  - `todo` `AWF-308` Open Interest signal indicator sidecar (Track B).
+    Run `oi_roc` as a combo member in the bounded family neighborhood to test whether derivatives open-interest rate-of-change adds gate-passed density that price/volume misses.
+    Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
+  - `todo` `AWF-309` Cross-timeframe HTF confirmation filter sidecar (Track C).
+    Run `htf_trend` as an overlay gate (resampled from existing `2h` data, zero new data cost) on the full 10-symbol cohort. Execute before Tracks A and B due to lowest implementation risk.
+    Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
+  - `done` `AWF-310` Historical anchored replay sidecar.
+    Re-ran the frozen full 10-symbol bounded-family current-mode baseline on a one-year-earlier anchored `180d` window (`end = 2025-04-09T14:00:00Z`) as runs `20260411_awf310_hist180_main` and `20260411_awf310_hist180_sens`, then wrote `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`. Result: full `181d` overlap is reproducible on the older slice, but the current canonical family does not survive there. The older window is best classified as `directional-only`, with `21` stable-positive rows, `0` gate-passed rows, and `SOL/BTC` replacing `BNB/BTC` as the dominant blocker.
+    Protocol: `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_PROTOCOL.md`.
 
 ## Backlog
+
+- `todo` `AWF-307` Execute and analyze the Funding Rate signal indicator sidecar.
+  Run the bounded Track A pilot (`funding_gate` as entry overlay) against the Phase 53 10-symbol baseline under the same anchored `2h / 180d` contract. Determine whether `funding_gate` reduces `BNB/BTC` worst-presence or unlocks new gate-passed rows.
+  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track A.
+  Expected artifacts: `pilot_analysis_awf307_funding_gate.json`.
+
+- `todo` `AWF-308` Execute and analyze the Open Interest signal indicator sidecar.
+  Run the bounded Track B pilot (`oi_roc` as combo member) within the six-indicator family neighborhood on the full 10-symbol cohort. Determine whether OI rate-of-change adds stable-positive density or gate-passed rows that price/volume indicators miss.
+  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track B.
+  Expected artifacts: `pilot_analysis_awf308_oi_roc.json`.
+
+- `todo` `AWF-309` Execute and analyze the cross-timeframe HTF confirmation filter sidecar.
+  Run the bounded Track C pilot (`htf_trend` as entry overlay gate, resampled from existing `2h` data) on the full 10-symbol cohort. This is the lowest-cost new factor test as it requires no new data source. Determine whether multi-timeframe alignment improves `BNB/BTC` min-symbol return or stable-positive density.
+  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track C.
+  Expected artifacts: `pilot_analysis_awf309_htf_trend.json`.
+
+- `done` `AWF-310` Execute and analyze the historical anchored replay sidecar.
+  Completed the older anchored pair:
+  - `20260411_awf310_hist180_main`
+  - `20260411_awf310_hist180_sens`
+  Compared it against the full-window bounded-family baseline
+  `artifacts/reports/pilot_analysis_awf282_family_refine.json`.
+  Protocol: `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_PROTOCOL.md`.
+  Expected artifacts: `pilot_analysis_awf310_hist180.json` and
+  `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`.
 
 - `done` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
   Protocol now frozen in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md`: exact `drop SOL/BTC` working cohort, anchored `2h / 180d` paired WFO, explicit state candidates (`obv_roc + keltner_pos`, `obv_roc + keltner_pos + ad`), explicit trigger candidates (`ad`, `cmf`, `chop`), and explicit additive config contract.

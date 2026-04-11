@@ -77,6 +77,65 @@ indicators, symbols, and time windows to discover robust combinations.
     - `allow_shared_indicator_roles`
     - `state_exit_policy`
   - remaining work is `AWF-303` execution semantics plus `AWF-304` paired pilot
+  - three new-factor sidecar tracks registered (AWF-307/308/309); run in parallel
+    with Phase 60, do not block it; results feed into Phase 60 state/trigger candidate pool
+  - historical anchored replay sidecar (`AWF-310`) completed first as the lowest-risk
+    temporal robustness check before funding/OI tracks
+
+### New-Factor Sidecar Tracks (AWF-307/308/309) [Active, parallel to Phase 60]
+- Explore three candidate factors absent from the existing 25-indicator library,
+  motivated by the persistent `BNB/BTC` symbol-intrinsic dragger finding across the
+  full Phase 52–59 evidence chain.
+- Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`
+- Tracks:
+  - **Track A (AWF-307)**: Funding Rate as signal indicator (`funding_gate`)
+    - perpetual-market crowding signal; addresses BNB Launchpool event-driven entries
+    - execution order: 2nd (requires Binance funding-rate data pipeline)
+  - **Track B (AWF-308)**: Open Interest rate-of-change (`oi_roc`)
+    - derivatives-market accumulation confirmation; complementary to `OBV_ROC`
+    - execution order: 3rd (requires Binance OI data pipeline)
+  - **Track C (AWF-309)**: Cross-timeframe HTF confirmation filter (`htf_trend`)
+    - daily-trend alignment gate derived by resampling existing 2h data; zero new data cost
+    - execution order: 1st (lowest implementation risk)
+- Exit criteria per track: pass/fail against the success criteria in the protocol
+- If any track passes: promote the factor as a Phase 60 state or trigger candidate
+- If all tracks fail: proceed with existing six-indicator family only
+- These tracks are sidecar evidence; they do not displace Phase 60 as the active
+  implementation milestone
+
+### Temporal Sidecar Replay (AWF-310) [Active, parallel to Phase 60]
+- Re-run the frozen full 10-symbol current-mode baseline on a one-year-earlier
+  anchored `180d` window:
+  - `timeframe = 2h`
+  - `days = 180`
+  - `end = 2025-04-09T14:00:00Z`
+- Keep everything else fixed:
+  - same 10-symbol BTC-cross cohort
+  - same bounded family neighborhood
+  - same ATR exit
+  - same paired WFO
+- Purpose:
+  - collect temporal robustness evidence before opening external-data factor tracks
+  - determine whether current blocker/supporter roles already existed one year earlier
+  - give Phase 60 a cleaner time-slice comparison than a same-window external-factor test
+- Protocol: `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_PROTOCOL.md`
+- Exit criteria:
+  - paired replay completed
+  - pilot-analysis report written
+  - decision memo classifies the older slice as `replay-confirmed`, `directional-only`,
+    or `time-local`
+- Outcome:
+  - `20260411_awf310_hist180_main` / `20260411_awf310_hist180_sens` completed on the
+    older anchor `end = 2025-04-09T14:00:00Z`
+  - full `181d` shared overlap reproduced on both runs
+  - paired report: `artifacts/reports/pilot_analysis_awf310_hist180.json`
+  - result classification: `directional-only`
+    - `105` compared / `21` stable-positive / `0` gate-passed
+    - the current canonical family `obv_roc + keltner_pos + ad` does not survive
+    - `SOL/BTC` becomes the dominant blocker on the older slice, with `BNB/BTC`
+      remaining a secondary pressure point
+  - interpretation: the current bounded family shows earlier directional structure,
+    but its strongest modern gate-passed form is time-local rather than fully replay-confirmed
 
 ### Phase 59: SOL-Drop Micro-Cohort Refinement (AWF-299/300/301) [Done]
 - Run one final current-mode micro-cohort refinement around the validated `drop SOL/BTC`
