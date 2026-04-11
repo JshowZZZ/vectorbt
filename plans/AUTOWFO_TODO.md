@@ -7,26 +7,106 @@
 
 ## Active Phase
 
-- Phase 54: Symbol-Support Boundary Mapping.
-- Last closed phase: Phase 53: Current-Mode Family Refinement.
+- Phase 60: Hierarchical State-Trigger Mode Opening.
+- Last closed phase: Phase 59: SOL-Drop Micro-Cohort Refinement.
 - Active items:
-  - `doing` `AWF-284` Freeze the symbol-support boundary protocol.
-    Keep the anchored `2h / 180d` protocol and the current-mode core family fixed, then define a bounded symbol-membership matrix that can identify supporters versus draggers without reopening indicator or exit breadth.
-  - `todo` `AWF-285` Execute the symbol-support boundary mapping campaign.
-    Run the bounded symbol-membership matrix around the core family and its closest local extension, persisting all evidence through the existing pilot-analysis contract.
-  - `todo` `AWF-286` Analyze symbol supporters/draggers and re-evaluate current-mode breadth.
-    Decide whether the current mode remains broad-cohort viable, narrows to a bounded BTC-cross cluster interpretation, or has flattened enough to reopen the deferred hierarchical mode.
+  - `doing` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
+    Turn the deferred design note into a concrete, minimal first protocol seeded by the current-mode winners and anchored to the same paired `2h / 180d` contract.
+  - `todo` `AWF-303` Implement the additive hierarchical state-trigger mode.
+    Add a new strategy mode that supports a long-horizon state filter, short-horizon trigger, and state-reversal exit without changing the existing combo-entry mode.
+  - `todo` `AWF-304` Execute and compare the first hierarchical pilot.
+    Run the minimal state-trigger pilot against the frozen `drop SOL/BTC` current-mode micro-cohort baseline and decide whether the new mode deserves continued investment.
 
 ## Backlog
 
-- `doing` `AWF-284` Freeze the symbol-support boundary protocol.
-  Turn the Phase 53 decision into a fixed follow-up protocol: same anchored `2h / 180d`, same 10-symbol BTC-cross majors, same fixed ATR exit, but fixed core family plus bounded symbol-membership variations. The purpose is to map supporters versus draggers, not to reopen indicator breadth.
+- `doing` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
+  Turn the deferred mode note into a concrete first protocol seeded by the current-mode winners: state candidates around `obv_roc + keltner_pos`, trigger candidates around `ad`, `cmf`, and `chop`, anchored to the same paired `2h / 180d` contract.
 
-- `todo` `AWF-285` Execute the symbol-support boundary mapping campaign.
-  Run the agreed symbol-membership matrix around the current-mode core family and its closest local extension, then persist all evidence using the existing pilot-analysis and artifact contracts.
+- `todo` `AWF-303` Implement the additive hierarchical state-trigger mode.
+  Add the new strategy mode without disturbing the existing combo-entry mode, keeping artifacts and analysis comparable wherever possible.
 
-- `todo` `AWF-286` Analyze symbol supporters/draggers and re-evaluate current-mode breadth.
-  Convert the symbol-boundary campaign into a decision memo: does the current mode still generalize on bounded BTC-cross cohorts, or is the apparent breadth fragile enough to reopen the deferred hierarchical mode?
+- `todo` `AWF-304` Execute and compare the first hierarchical pilot.
+  Run the minimal state-trigger pilot and compare it against the frozen `drop SOL/BTC` current-mode micro-cohort baseline.
+
+- `done` `AWF-299` Freeze the SOL-drop micro-cohort refinement protocol.
+  Wrote `plans/AUTOWFO_SOL_DROP_MICRO_COHORT_PROTOCOL.md` and froze one final current-mode branch: anchored `2h / 180d`, `drop SOL/BTC` as the working 8-symbol cohort, promoted 9-symbol as the comparison baseline, and a narrowed pair-lift neighborhood around `obv_roc`, `keltner_pos`, `ad`, `cmf`, and `chop`.
+
+- `done` `AWF-300` Execute the SOL-drop micro-cohort refinement campaign.
+  Completed the paired micro-cohort runs:
+  - promoted 9-symbol baseline:
+    - `20260411_microcohort_promoted9_main`
+    - `20260411_microcohort_promoted9_sens`
+  - `drop SOL/BTC` micro-cohort:
+    - `20260411_microcohort_dropsol_main`
+    - `20260411_microcohort_dropsol_sens`
+
+- `done` `AWF-301` Analyze the micro-cohort refinement and decide whether current mode is finished.
+  Wrote `plans/AUTOWFO_SOL_DROP_MICRO_COHORT_DECISION_20260411.md`. Decision: stop narrowing the current single-layer mode after this point. The `drop SOL/BTC` micro-cohort still adds one new canonical gate-passed pair, but it does so while reducing overall stable-positive density. Keep it as the strongest frozen current-mode reference branch and open the hierarchical state-trigger mode next.
+
+- `done` `AWF-296` Freeze the promoted pair-lift validation protocol.
+  Wrote `plans/AUTOWFO_PROMOTED_PAIR_LIFT_VALIDATION_PROTOCOL.md` and froze the smallest next-step branch: promoted 9-symbol `2..3` baseline versus `drop SOL/BTC` under the same anchored contract and fixed indicator neighborhood.
+
+- `done` `AWF-297` Execute the promoted pair-lift validation campaign.
+  Reused the completed Phase 57 evidence branches:
+  - promoted 9-symbol baseline:
+    - `artifacts/reports/pilot_analysis_awf294_supportlift_baseline.json`
+  - `drop SOL/BTC` branch:
+    - `artifacts/reports/pilot_analysis_awf294_supportlift_drop_sol-btc.json`
+
+- `done` `AWF-298` Analyze pair-lift validation and re-evaluate mode branching.
+  Wrote `plans/AUTOWFO_PROMOTED_PAIR_LIFT_DECISION_20260411.md`. Decision: promote `drop SOL/BTC` as the final current-mode micro-cohort working branch. It preserves both promoted-baseline winners and adds one more gate-passed row (`obv_roc + keltner_pos` / `trend_high` / `high`) without reducing stable-positive density.
+
+- `done` `AWF-293` Freeze the promoted-cohort support-lift protocol.
+  Wrote `plans/AUTOWFO_PROMOTED_COHORT_SUPPORT_LIFT_PROTOCOL.md` and froze a bounded internal leave-one-out test on the promoted 9-symbol cohort with the same anchored contract, the same fixed exit overlay, and the same current-mode neighborhood narrowed to pair/triple support-lift candidates.
+
+- `done` `AWF-294` Execute the promoted-cohort support-lift mapping campaign.
+  Completed the internal promoted-cohort leave-one-out matrix plus the matching promoted 9-symbol `2..3` baseline:
+  - promoted baseline:
+    - `20260411_supportlift_baseline_main`
+    - `20260411_supportlift_baseline_sens`
+  - leave-one-out support-lift variants:
+    - `20260411_supportlift_*_main`
+    - `20260411_supportlift_*_sens`
+  Aggregate summary: `artifacts/reports/pilot_analysis_awf294_supportlift_summary.json`.
+
+- `done` `AWF-295` Analyze support-lift results and re-evaluate mode branching.
+  Wrote `plans/AUTOWFO_PROMOTED_COHORT_SUPPORT_LIFT_DECISION_20260411.md`. Decision: the current mode still has one justified narrow follow-up. `drop SOL/BTC` is the only promoted-cohort leave-one-out variant that lifts a new gate-passed row (`obv_roc + keltner_pos` / `trend_high` / `high`), while `DOGE/BTC` remains the strongest supporter. The next justified branch is pair-lift validation on `drop SOL/BTC`, not immediate opening of the deferred hierarchical mode.
+
+- `done` `AWF-290` Freeze the promoted-cohort refinement protocol.
+  Wrote `plans/AUTOWFO_PROMOTED_COHORT_REFINEMENT_PROTOCOL.md` and froze the Phase 56 bounded refinement matrix: same six-indicator family neighborhood, same anchored `2h / 180d` contract, widened combo sizes `2..5`, promoted 9-symbol working cohort, and full 10-symbol breadth-monitor comparison branch.
+
+- `done` `AWF-291` Execute the promoted-cohort refinement campaign.
+  Completed the paired promoted-versus-breadth-monitor refinement runs:
+  - promoted 9-symbol cohort:
+    - `20260411_promoted9_refine_main`
+    - `20260411_promoted9_refine_sens`
+  - full 10-symbol breadth-monitor:
+    - `20260411_baseline10_refine_main`
+    - `20260411_baseline10_refine_sens`
+  Results under the same `2..5` matrix:
+  - promoted cohort: `168` compared / `49` stable-positive / `3` gate-passed
+  - full 10-symbol cohort: `168` compared / `45` stable-positive / `2` gate-passed
+
+- `done` `AWF-292` Analyze the promoted-cohort refinement results and re-evaluate mode branching.
+  Wrote `plans/AUTOWFO_PROMOTED_COHORT_REFINEMENT_DECISION_20260411.md`. Decision: current mode still dominates the breadth-monitor baseline on the promoted 9-symbol branch, but the extra `2..5` refinement step did not create a new canonical gate-passed family. The next justified branch is promoted-cohort support-lift mapping around the strongest near-gate pair/triple candidates, not immediate opening of the deferred hierarchical mode.
+
+- `done` `AWF-287` Freeze the BNB-drop validation protocol.
+  Wrote `plans/AUTOWFO_BNB_DROP_VALIDATION_PROTOCOL.md` to freeze the exact two-cohort comparison: full 10-symbol baseline versus `drop BNB/BTC`, with the same family neighborhood and anchored protocol.
+
+- `done` `AWF-288` Execute the BNB-drop cohort validation campaign.
+  Reused the already-completed family-refinement baseline (`artifacts/reports/pilot_analysis_awf282_family_refine.json`) and the completed symbol-boundary `drop BNB/BTC` variant (`artifacts/reports/pilot_analysis_awf285_drop_bnb-btc.json`) as the two evidence branches under the same paired analysis contract.
+
+- `done` `AWF-289` Analyze the BNB-drop branch and decide whether to promote it.
+  Wrote `plans/AUTOWFO_BNB_DROP_DECISION_20260411.md`. Decision: promote the `drop BNB/BTC` 9-symbol branch as the preferred current-mode working cohort, while retaining the full 10-symbol cohort as the breadth-monitor baseline.
+
+- `done` `AWF-284` Freeze the symbol-support boundary protocol.
+  Updated `plans/AUTOWFO_SYMBOL_SUPPORT_BOUNDARY_PROTOCOL.md` to freeze an explicit leave-one-out symbol-membership matrix under the same anchored `2h / 180d` family-neighborhood contract.
+
+- `done` `AWF-285` Execute the symbol-support boundary mapping campaign.
+  Completed the full leave-one-out matrix around the current-mode family neighborhood and wrote paired reports for all 10 dropped-symbol variants plus aggregate summary `artifacts/reports/pilot_analysis_awf285_symbol_boundary_summary.json`.
+
+- `done` `AWF-286` Analyze symbol supporters/draggers and re-evaluate current-mode breadth.
+  Wrote `plans/AUTOWFO_SYMBOL_BOUNDARY_DECISION_20260411.md`. Decision: the current mode remains broad-cohort viable; `BNB/BTC` is the strongest dragger and `DOGE/BTC` is the strongest supporter. The next justified branch is a small cohort-comparison phase centered on whether the `drop BNB/BTC` branch deserves promotion.
 
 - `done` `AWF-281` Freeze the bounded current-mode family-refinement protocol.
   Wrote `plans/AUTOWFO_CURRENT_MODE_FAMILY_REFINEMENT_PROTOCOL.md` and froze a narrow family-neighborhood campaign around the Phase 52 breadth winner: `obv_roc`, `keltner_pos`, `ad`, `cmf`, `dpo`, and `chop` with combo sizes `3..4` under the same anchored `2h / 180d` 10-symbol protocol.

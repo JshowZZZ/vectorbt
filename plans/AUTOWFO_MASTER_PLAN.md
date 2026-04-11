@@ -51,7 +51,137 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
-### Phase 54: Symbol-Support Boundary Mapping (AWF-284/285/286) [Active]
+### Phase 60: Hierarchical State-Trigger Mode Opening (AWF-302/303/304) [Active]
+- Open the deferred hierarchical state/trigger mode as the next active strategy model.
+- Fixed scope:
+  - additive new mode; existing combo-entry mode stays intact
+  - anchored `2h / 180d` paired WFO
+  - seed state candidates from the strongest current-mode winners:
+    - `obv_roc + keltner_pos`
+    - `obv_roc + keltner_pos + ad`
+  - seed trigger candidates from the strongest nearby companions:
+    - `ad`
+    - `cmf`
+    - `chop`
+  - state-reversal exit only in the first pilot
+- Exit criteria:
+  - the first hierarchical protocol is frozen
+  - the additive mode is implemented without breaking the existing combo-entry path
+  - a first anchored pilot has been compared against the frozen current-mode micro-cohort baseline
+
+### Phase 59: SOL-Drop Micro-Cohort Refinement (AWF-299/300/301) [Done]
+- Run one final current-mode micro-cohort refinement around the validated `drop SOL/BTC`
+  pair-lift branch.
+- Fixed scope:
+  - anchored `2h / 180d`
+  - same fixed ATR exit
+  - working cohort:
+    - promoted branch minus `SOL/BTC`
+  - comparison branch:
+    - promoted 9-symbol baseline
+  - fixed pair-lift neighborhood:
+    - `obv_roc`, `keltner_pos`, `ad`, `cmf`, `chop`
+- Exit criteria:
+  - the SOL-drop micro-cohort protocol is frozen
+  - the final micro-cohort refinement cycle has completed
+  - a decision memo states whether the current mode still compounds evidence or whether the deferred hierarchical state/trigger mode should finally open
+- Outcome:
+  - promoted 9-symbol baseline: `27` stable-positive / `2` gate-passed
+  - `drop SOL/BTC` micro-cohort: `25` stable-positive / `3` gate-passed
+  - the micro-cohort preserves both promoted-baseline winners and adds one more:
+    - `obv_roc + keltner_pos` / `trend_high` / `high`
+  - Decision: current mode has reached diminishing returns. Keep the `drop SOL/BTC` branch as the strongest frozen current-mode reference and open the hierarchical state-trigger mode next.
+
+### Phase 58: Promoted Pair-Lift Validation (AWF-296/297/298) [Done]
+- Validate the single strongest support-lift branch discovered inside the promoted cohort:
+  - `drop SOL/BTC`
+- Fixed scope:
+  - anchored `2h / 180d`
+  - same fixed ATR exit
+  - same promoted support-lift `2..3` matrix
+  - compare only:
+    - promoted 9-symbol baseline
+    - promoted branch minus `SOL/BTC`
+- Exit criteria:
+  - the pair-lift validation protocol is frozen
+  - the baseline-versus-`drop SOL/BTC` comparison has completed
+  - a decision memo states whether the lifted pair branch justifies one more micro-cohort current-mode cycle or whether the deferred hierarchical state/trigger mode should open next
+- Outcome:
+  - `drop SOL/BTC` strictly improves the promoted 9-symbol support-lift baseline:
+    - promoted baseline: `24` stable-positive / `2` gate-passed
+    - `drop SOL/BTC`: `24` stable-positive / `3` gate-passed
+  - The branch preserves both promoted-baseline winners and adds one more:
+    - `obv_roc + keltner_pos` / `trend_high` / `high`
+  - Decision: promote `drop SOL/BTC` as the final current-mode micro-cohort working branch before the deferred hierarchical mode is reconsidered.
+
+### Phase 57: Promoted-Cohort Support-Lift Mapping (AWF-293/294/295) [Done]
+- Keep the promoted 9-symbol branch fixed and ask the narrowest next question:
+  - are one or two remaining symbols still blocking the strongest trade-supported near-gate
+    current-mode rows?
+- Fixed scope:
+  - anchored `2h / 180d`
+  - same fixed ATR exit
+  - same promoted 9-symbol cohort
+  - same current-mode family center around `obv_roc`, `keltner_pos`, `cmf`, `ad`,
+    `chop`, and `dpo`
+  - bounded leave-one-out support-lift matrix focused on pair/triple candidates
+- Exit criteria:
+  - the promoted-cohort support-lift protocol is frozen
+  - the leave-one-out support-lift matrix has completed
+  - a decision memo states whether current mode still has room for one more support-focused cycle or whether the deferred hierarchical mode should open next
+- Outcome:
+  - promoted 9-symbol `2..3` baseline: `24` stable-positive / `2` gate-passed
+  - internal leave-one-out support-lift found one clear blocker:
+    - dropping `SOL/BTC` lifts a new gate-passed row:
+      - `obv_roc + keltner_pos` / `trend_high` / `high`
+  - `DOGE/BTC` remains the clearest supporter:
+    - dropping it removes all gate-passed rows
+  - Decision: keep the current mode open for one final narrow validation branch centered on the discovered `drop SOL/BTC` pair-lift.
+
+### Phase 56: Promoted-Cohort Current-Mode Refinement (AWF-290/291/292) [Done]
+- Promote the `drop BNB/BTC` branch from diagnostic evidence into the next working
+  current-mode cohort.
+- Keep two roles distinct:
+  - working cohort:
+    - `drop BNB/BTC`
+  - breadth-monitor baseline:
+    - full 10-symbol BTC-cross cohort
+- Exit criteria:
+  - the promoted-cohort refinement protocol is frozen
+  - the promoted cohort has completed one more bounded current-mode refinement cycle
+  - a decision memo states whether the promoted cohort continues to justify current-mode work or whether gains have flattened enough to open the deferred hierarchical mode
+- Outcome:
+  - The promoted 9-symbol branch still dominates the full 10-symbol breadth-monitor
+    branch under the same widened `2..5` refinement matrix:
+    - promoted cohort: `49` stable-positive / `3` gate-passed
+    - full 10-symbol cohort: `45` stable-positive / `2` gate-passed
+  - The promoted cohort preserves the extra `trend_high` core-family winner revealed by
+    dropping `BNB/BTC`.
+  - The widening step improves stable density but does **not** create a new canonical
+    gate-passed family beyond the existing promoted set.
+  - Decision: stay in the current mode one more time, but shift from family densification
+    to support-lift mapping around the strongest near-gate pair/triple rows.
+
+### Phase 55: BNB-Drop Cohort Validation (AWF-287/288/289) [Done]
+- Keep the current family neighborhood fixed and compare only two cohort branches:
+  - full 10-symbol BTC-cross major cohort
+  - `drop BNB/BTC` 9-symbol cohort
+- Purpose:
+  - decide whether the BNB-dropped branch should become the preferred current-mode
+    working cohort or remain only diagnostic
+- Exit criteria:
+  - the two-cohort comparison protocol is frozen
+  - both cohort branches are analyzed under the same paired contract
+  - a decision memo states whether `BNB/BTC` should remain inside the active broad current-mode lane
+- Outcome:
+  - The `drop BNB/BTC` branch strictly dominates the full 10-symbol baseline under the same family-neighborhood contract:
+    - full 10-symbol baseline: `33` stable-positive / `2` gate-passed
+    - `drop BNB/BTC`: `37` stable-positive / `3` gate-passed
+  - The branch keeps both baseline gate-passed rows and adds one more:
+    - `obv_roc + keltner_pos + ad` / `trend_high` / `high`
+  - Decision: promote `drop BNB/BTC` as the preferred working current-mode cohort, while retaining the full 10-symbol cohort as the breadth-monitor baseline.
+
+### Phase 54: Symbol-Support Boundary Mapping (AWF-284/285/286) [Done]
 - Keep the now-supported current-mode core family fixed and vary only symbol membership.
 - Fixed family center:
   - `obv_roc + keltner_pos + ad`
@@ -63,6 +193,15 @@ indicators, symbols, and time windows to discover robust combinations.
   - a bounded symbol-membership protocol is frozen
   - paired support-boundary runs complete under the anchored contract
   - a decision memo states whether the current mode remains broad-cohort viable, narrows to a bounded BTC-cross cluster interpretation, or has flattened enough to reopen the deferred hierarchical mode
+- Outcome:
+  - leave-one-out stress confirmed the current mode remains broad-cohort viable under the full 10-symbol family-neighborhood baseline
+  - `BNB/BTC` is the clearest dragger:
+    - dropping it improves gate-passed rows from `2` to `3`
+    - dropping it improves stable-positive rows from `33` to `37`
+    - it unlocks an additional gate-passed `trend_high` core-family row
+  - `DOGE/BTC` is the clearest supporter:
+    - dropping it removes all gate-passed rows and cuts stable-positive rows to `25`
+  - Decision: continue in the current mode and open a small follow-up branch to validate whether the `drop BNB/BTC` cohort should be promoted beyond diagnostic use.
 
 ### Phase 53: Current-Mode Family Refinement (AWF-281/282/283) [Done]
 - Stay in the current single-layer combo-entry mode for one more bounded phase before opening the deferred hierarchical mode.

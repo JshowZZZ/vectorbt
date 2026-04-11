@@ -23,14 +23,20 @@ The next question is:
   - `sl_atr_multipliers = [1.0]`
   - `max_holds = [4]`
 
-## Fixed Core Family
-Primary family:
+## Fixed Family Neighborhood
+Use the same bounded neighborhood that closed Phase 53:
 - `obv_roc`
 - `keltner_pos`
 - `ad`
-
-Secondary local extension:
+- `cmf`
 - `dpo`
+- `chop`
+
+Combo sizes remain:
+- `3`
+- `4`
+
+This keeps the local-family question alive while varying only symbol membership.
 
 ## Source Cohort
 Use the same 10-symbol BTC-cross major set as the source universe:
@@ -45,14 +51,23 @@ Use the same 10-symbol BTC-cross major set as the source universe:
 - `DOGE/BTC`
 - `DOT/BTC`
 
-## Boundary-Mapping Principle
-Vary symbol membership only in bounded, interpretable ways:
-- start with the full 10-symbol cohort
-- then test small, explainable sub-cohorts or leave-one-out variants
-- do not reopen indicator breadth, timeframe breadth, or exit breadth in the same phase
+## Boundary-Mapping Matrix
+Reference baseline:
+- reuse the Phase 53 full 10-symbol paired family-neighborhood result
+  - `20260411_family_refine_main`
+  - `20260411_family_refine_sens`
+
+New execution matrix:
+- run the same family-neighborhood protocol on 10 bounded leave-one-out variants
+- each variant removes exactly one symbol from the 10-symbol source cohort
+- no other dimension changes
+
+This produces interpretable answers:
+- if dropping one symbol materially increases gate-passed rows, that symbol is a likely dragger
+- if dropping one symbol weakens or removes the existing gate-passed rows, that symbol is a likely supporter
 
 ## Decision Questions
-1. Which symbols consistently preserve all-symbol support for the core family?
+1. Which symbols consistently preserve all-symbol support for the local family neighborhood?
 2. Which symbols repeatedly act as draggers in otherwise-stable rows?
 3. Does the family remain broad-cohort viable, or is it better interpreted as a
    bounded BTC-cross cluster family?
