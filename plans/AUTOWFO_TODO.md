@@ -48,6 +48,13 @@
     Decision memo: `plans/AUTOWFO_STATE_TRIGGER_HTF_REPAIR_DECISION_20260412.md`.
     Result: `9` compared / `3` stable-positive / `1` gate-passed. The `htf_trend:1d:20` variant repairs `DOT/BTC` from `-1.45%` to `+4.93%` (main) and `-2.43%` to `+3.97%` (sensitivity), achieving `8/8` positive symbols in both runs. This is the first gate-passed hierarchical state-trigger row. Classification: `bounded pass`.
     Frozen configs: `plans/protocols/awf311_state_trigger_htf_repair_main.json`, `plans/protocols/awf311_state_trigger_htf_repair_sensitivity.json`.
+  - `done` `AWF-312` Expanded state-trigger HTF repair pilot — full trigger set with 1d:20 overlay.
+    Re-introduced all 3 trigger candidates and both state sets with `htf_trend:1d:20` overlay.
+    Runs: `20260411_172613` (main), `20260411_172748` (sensitivity).
+    Report: `artifacts/reports/pilot_analysis_awf312_expanded_htf_repair.json`.
+    Decision memo: `plans/AUTOWFO_EXPANDED_HTF_REPAIR_DECISION_20260412.md`.
+    Result: `36` compared / `10` stable-positive / `4` gate-passed / `3` canonical. The `ad` trigger gate pass reproduces and both state variants produce the same signal. The `cmf` and `chop` triggers technically pass but with avg trades < 0.2 — gate artifacts, not viable signals. Only `ad` trigger with `1d:20` is practically useful. Classification: `confirming pass`.
+    Frozen configs: `plans/protocols/awf312_expanded_htf_repair_main.json`, `plans/protocols/awf312_expanded_htf_repair_sensitivity.json`.
 
 ## Backlog
 

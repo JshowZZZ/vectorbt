@@ -104,6 +104,20 @@ indicators, symbols, and time windows to discover robust combinations.
       - first gate-passed hierarchical state-trigger row achieved
       - the hierarchical mode now has concrete positive evidence but is still less
         dense than the frozen current-mode reference (`3` gate-passed)
+  - `AWF-312` expanded state-trigger HTF repair pilot is now complete:
+    - runs:
+      - `20260411_172613` (main)
+      - `20260411_172748` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf312_expanded_htf_repair.json`
+    - decision memo:
+      - `plans/AUTOWFO_EXPANDED_HTF_REPAIR_DECISION_20260412.md`
+    - outcome:
+      - `36` compared / `10` stable-positive / `4` gate-passed / `3` canonical
+      - `ad` trigger confirmed as primary viable winner; `cmf`/`chop` are gate artifacts
+        with avg trades < 0.2
+      - hierarchical mode now formally matches current-mode baseline density (`3` canonical)
+        but only `1` row is practically viable (trades ≥ 1.0)
   - three new-factor sidecar tracks registered (AWF-307/308/309); run in parallel
     with Phase 60, do not block it; results feed into Phase 60 state/trigger candidate pool
   - historical anchored replay sidecar (`AWF-310`) completed first as the lowest-risk
@@ -894,6 +908,7 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-04-12: `AWF-312` expanded the state-trigger HTF repair to all 3 trigger candidates and both state sets with `htf_trend:1d:20`. Result: `36` compared / `10` stable-positive / `4` gate-passed / `3` canonical. The `ad` trigger gate pass from AWF-311 reproduces exactly. Two new triggers (`cmf`, `chop`) technically pass but with avg trades < 0.2 — gate artifacts. The hierarchical mode now formally matches current-mode canonical density (`3` canonical each) but only `1` row is practically viable. Decision memo: `plans/AUTOWFO_EXPANDED_HTF_REPAIR_DECISION_20260412.md`.
 - 2026-04-12: `AWF-311` completed the HTF-enhanced state-trigger repair pilot. The near-pass row from `AWF-304` (state=`obv_roc+keltner_pos`, trigger=`ad`) was combined with daily HTF confirmation overlays from the `AWF-309` bounded pass. The `htf_trend:1d:20` variant repaired `DOT/BTC` from `-1.45%`/`-2.43%` to `+4.93%`/`+3.97%`, achieving `8/8` positive symbols in both runs and producing the first gate-passed hierarchical state-trigger row: `9` compared / `3` stable-positive / `1` gate-passed. The `1d:10` variant failed because it broke `XRP/BTC` while fixing `DOT/BTC`. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_HTF_REPAIR_DECISION_20260412.md`. Phase 60 now has concrete positive evidence but the frozen current-mode `drop SOL/BTC` reference remains denser at `3` gate-passed rows.
 - 2026-04-12: `AWF-303` completed the additive hierarchical execution path and `AWF-304` closed its first paired pilot decision. The state-trigger mode now runs end to end with role-aware search space construction, state-filtered trigger entries, explicit state-reversal exits, and comparable artifact metadata. During `AWF-304` analysis, the paired pilot report initially collapsed role-distinct rows because pilot-analysis identity still assumed current-mode contracts; that was fixed by making the default identity role-aware (`strategy_mode`, `state_indicator_list`, `trigger_indicator_list`) before final evaluation. The corrected report `artifacts/reports/pilot_analysis_awf304_state_trigger.json` shows `18` compared / `5` stable-positive / `0` gate-passed, versus the frozen current-mode `drop SOL/BTC` reference `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json` at `75` / `25` / `3`. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`. Current interpretation: the first state-trigger seed matrix is directionally interesting but not promotable; Phase 60 remains a bounded research branch rather than the new default strategy path.
 - 2026-04-11: `AWF-305` completed the bounded TP/SL sensitivity sidecar on the full 10-symbol current-mode cohort (`18` runs, `9` paired reports, decision memo `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`). The exit-grid sweep did not overturn the earlier cohort-boundary evidence: `BNB/BTC` stayed the dominant dragger across all `9` TP/SL cells, `SOL/BTC` remained the main secondary pressure point, and `ADA/BTC` / `DOGE/BTC` / `DOT/BTC` stayed the lowest-pressure supporter set. This strengthens the symbol-role evidence but does not change Phase 60 as the active implementation branch.
