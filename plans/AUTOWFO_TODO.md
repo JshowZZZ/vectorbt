@@ -41,6 +41,13 @@
   - `done` `AWF-310` Historical anchored replay sidecar.
     Re-ran the frozen full 10-symbol bounded-family current-mode baseline on a one-year-earlier anchored `180d` window (`end = 2025-04-09T14:00:00Z`) as runs `20260411_awf310_hist180_main` and `20260411_awf310_hist180_sens`, then wrote `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`. Result: full `181d` overlap is reproducible on the older slice, but the current canonical family does not survive there. The older window is best classified as `directional-only`, with `21` stable-positive rows, `0` gate-passed rows, and `SOL/BTC` replacing `BNB/BTC` as the dominant blocker.
     Protocol: `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_PROTOCOL.md`.
+  - `done` `AWF-311` HTF-enhanced state-trigger symbol-support repair pilot.
+    Narrowed to the single near-pass row from `AWF-304` (state=`obv_roc+keltner_pos`, trigger=`ad`) and added daily HTF confirmation overlay (`1d:10`, `1d:20`) from the `AWF-309` bounded pass.
+    Runs: `20260411_171358` (main), `20260411_171537` (sensitivity).
+    Report: `artifacts/reports/pilot_analysis_awf311_state_trigger_htf_repair.json`.
+    Decision memo: `plans/AUTOWFO_STATE_TRIGGER_HTF_REPAIR_DECISION_20260412.md`.
+    Result: `9` compared / `3` stable-positive / `1` gate-passed. The `htf_trend:1d:20` variant repairs `DOT/BTC` from `-1.45%` to `+4.93%` (main) and `-2.43%` to `+3.97%` (sensitivity), achieving `8/8` positive symbols in both runs. This is the first gate-passed hierarchical state-trigger row. Classification: `bounded pass`.
+    Frozen configs: `plans/protocols/awf311_state_trigger_htf_repair_main.json`, `plans/protocols/awf311_state_trigger_htf_repair_sensitivity.json`.
 
 ## Backlog
 
@@ -71,6 +78,9 @@
   Protocol: `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_PROTOCOL.md`.
   Expected artifacts: `pilot_analysis_awf310_hist180.json` and
   `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`.
+
+- `done` `AWF-311` HTF-enhanced state-trigger symbol-support repair pilot.
+  Ran the narrowed state-trigger repair with daily HTF overlay as runs `20260411_171358` (main) and `20260411_171537` (sensitivity). The `htf_trend:1d:20` variant repairs `DOT/BTC` from negative to positive in both runs, achieving the first gate-passed hierarchical state-trigger row: `9` compared / `3` stable-positive / `1` gate-passed. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_HTF_REPAIR_DECISION_20260412.md`.
 
 - `done` `AWF-302` Freeze the minimal hierarchical state-trigger protocol.
   Protocol now frozen in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md`: exact `drop SOL/BTC` working cohort, anchored `2h / 180d` paired WFO, explicit state candidates (`obv_roc + keltner_pos`, `obv_roc + keltner_pos + ad`), explicit trigger candidates (`ad`, `cmf`, `chop`), and explicit additive config contract.
