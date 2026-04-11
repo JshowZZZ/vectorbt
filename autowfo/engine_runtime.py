@@ -266,6 +266,7 @@ def _build_overlay_filters(ctx, filter_spec, template):
 
 
 def _build_combo_key_values(
+    *,
     timeframe,
     data_days,
     exchange,
@@ -282,10 +283,15 @@ def _build_combo_key_values(
     wf_train_days,
     wf_test_days,
     wf_step_days,
+    strategy_mode="combo_entry",
     data_start,
     data_end,
     regime,
     filter_name,
+    state_indicator_list=None,
+    trigger_indicator_list=None,
+    allow_shared_indicator_roles=None,
+    state_exit_policy=None,
     indicator_list,
     indicator_combo,
     vol_lookback,
@@ -321,6 +327,7 @@ def _build_combo_key_values(
         "wf_step_days": wf_step_days,
         "wf_valid_days": wf_valid_days,
         "wf_mode": wf_mode,
+        "strategy_mode": strategy_mode,
         "data_start": str(data_start),
         "data_end": str(data_end),
         "regime_name": regime["regime_name"],
@@ -333,6 +340,10 @@ def _build_combo_key_values(
         if regime["regime_type"] == "rsi_revert"
         else None,
         "filter_name": filter_name,
+        "state_indicator_list": state_indicator_list,
+        "trigger_indicator_list": trigger_indicator_list,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "indicator_list": indicator_list,
         "indicator_count": len(indicator_combo),
         "vol_lookback": vol_lookback if regime["vol_mode"] != "any" else None,
@@ -390,8 +401,13 @@ def _build_combo_task_payload(
     wf_valid_days=0,
     data_start,
     data_end,
+    strategy_mode="combo_entry",
     regime,
     indicator_combo,
+    state_indicator_combo=None,
+    trigger_indicator_combo=None,
+    allow_shared_indicator_roles=None,
+    state_exit_policy=None,
     combo_params,
     filter_spec=None,
     vol_lookback,
@@ -408,8 +424,12 @@ def _build_combo_task_payload(
     risk_mode="fixed_pct",
 ):
     indicator_combo = tuple(indicator_combo)
+    state_indicator_combo = tuple(state_indicator_combo or ())
+    trigger_indicator_combo = tuple(trigger_indicator_combo or ())
     combo_params = dict(combo_params)
     indicator_list = ",".join(indicator_combo)
+    state_indicator_list = ",".join(state_indicator_combo) if state_indicator_combo else None
+    trigger_indicator_list = ",".join(trigger_indicator_combo) if trigger_indicator_combo else None
     filter_name = _compose_filter_name(
         indicator_combo_label_fn(indicator_combo),
         filter_spec=filter_spec,
@@ -433,12 +453,17 @@ def _build_combo_task_payload(
         wf_train_days=wf_train_days,
         wf_test_days=wf_test_days,
         wf_step_days=wf_step_days,
+        strategy_mode=strategy_mode,
         wf_mode=wf_mode,
         wf_valid_days=wf_valid_days,
         data_start=data_start,
         data_end=data_end,
         regime=regime,
         filter_name=filter_name,
+        state_indicator_list=state_indicator_list,
+        trigger_indicator_list=trigger_indicator_list,
+        allow_shared_indicator_roles=allow_shared_indicator_roles,
+        state_exit_policy=state_exit_policy,
         indicator_list=indicator_list,
         indicator_combo=indicator_combo,
         vol_lookback=vol_lookback,
@@ -454,11 +479,18 @@ def _build_combo_task_payload(
     combo_key = combo_key_from_dict_fn(combo_key_values)
     task_payload = {
         "combo_key": combo_key,
+        "strategy_mode": strategy_mode,
         "regime": regime,
         "indicator_combo": indicator_combo,
+        "state_indicator_combo": state_indicator_combo,
+        "trigger_indicator_combo": trigger_indicator_combo,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "combo_params": combo_params,
         "filter_spec": dict(filter_spec or {"kind": "none", "name": None}),
         "filter_name": filter_name,
+        "state_indicator_list": state_indicator_list,
+        "trigger_indicator_list": trigger_indicator_list,
         "indicator_list": indicator_list,
         "vol_lookback": vol_lookback,
         "vol_z": vol_z,
@@ -500,6 +532,7 @@ def _resolve_regime_signals(regime, vol_cond, ctx, mom_lookback):
 
 
 def _build_symbol_row(
+    *,
     timeframe,
     data_days,
     exchange,
@@ -513,6 +546,7 @@ def _build_symbol_row(
     wf_train_days,
     wf_test_days,
     wf_step_days,
+    strategy_mode="combo_entry",
     data_start,
     data_end,
     symbol,
@@ -520,6 +554,10 @@ def _build_symbol_row(
     regime_rsi_long,
     regime_rsi_short,
     filter_name,
+    state_indicator_list=None,
+    trigger_indicator_list=None,
+    allow_shared_indicator_roles=None,
+    state_exit_policy=None,
     indicator_list,
     indicator_combo,
     vol_lookback,
@@ -554,6 +592,7 @@ def _build_symbol_row(
         "wf_step_days": wf_step_days,
         "wf_valid_days": wf_valid_days,
         "wf_mode": wf_mode,
+        "strategy_mode": strategy_mode,
         "data_start": str(data_start),
         "data_end": str(data_end),
         "config_sha256": config_sha256,
@@ -565,6 +604,10 @@ def _build_symbol_row(
         "regime_rsi_long": regime_rsi_long,
         "regime_rsi_short": regime_rsi_short,
         "filter_name": filter_name,
+        "state_indicator_list": state_indicator_list,
+        "trigger_indicator_list": trigger_indicator_list,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "indicator_list": indicator_list,
         "indicator_count": len(indicator_combo),
         "vol_lookback": vol_lookback if regime["vol_mode"] != "any" else None,
@@ -609,6 +652,7 @@ def _build_symbol_row(
 
 
 def _build_oos_symbol_row(
+    *,
     timeframe,
     data_days,
     exchange,
@@ -622,6 +666,7 @@ def _build_oos_symbol_row(
     wf_train_days,
     wf_test_days,
     wf_step_days,
+    strategy_mode="combo_entry",
     data_start,
     data_end,
     symbol,
@@ -629,6 +674,10 @@ def _build_oos_symbol_row(
     regime_rsi_long,
     regime_rsi_short,
     filter_name,
+    state_indicator_list=None,
+    trigger_indicator_list=None,
+    allow_shared_indicator_roles=None,
+    state_exit_policy=None,
     indicator_list,
     indicator_combo,
     vol_lookback,
@@ -664,6 +713,7 @@ def _build_oos_symbol_row(
         "wf_step_days": wf_step_days,
         "wf_valid_days": wf_valid_days,
         "wf_mode": wf_mode,
+        "strategy_mode": strategy_mode,
         "data_start": str(data_start),
         "data_end": str(data_end),
         "config_sha256": config_sha256,
@@ -675,6 +725,10 @@ def _build_oos_symbol_row(
         "regime_rsi_long": regime_rsi_long,
         "regime_rsi_short": regime_rsi_short,
         "filter_name": filter_name,
+        "state_indicator_list": state_indicator_list,
+        "trigger_indicator_list": trigger_indicator_list,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "indicator_list": indicator_list,
         "indicator_count": len(indicator_combo),
         "vol_lookback": vol_lookback if regime["vol_mode"] != "any" else None,
@@ -725,6 +779,7 @@ def _build_oos_symbol_row(
 
 
 def _build_combo_row(
+    *,
     timeframe,
     data_days,
     exchange,
@@ -741,12 +796,17 @@ def _build_combo_row(
     wf_train_days,
     wf_test_days,
     wf_step_days,
+    strategy_mode="combo_entry",
     data_start,
     data_end,
     regime,
     regime_rsi_long,
     regime_rsi_short,
     filter_name,
+    state_indicator_list=None,
+    trigger_indicator_list=None,
+    allow_shared_indicator_roles=None,
+    state_exit_policy=None,
     indicator_list,
     indicator_combo,
     vol_lookback,
@@ -788,6 +848,7 @@ def _build_combo_row(
         "wf_step_days": wf_step_days,
         "wf_valid_days": wf_valid_days,
         "wf_mode": wf_mode,
+        "strategy_mode": strategy_mode,
         "data_start": str(data_start),
         "data_end": str(data_end),
         "config_sha256": config_sha256,
@@ -798,6 +859,10 @@ def _build_combo_row(
         "regime_rsi_long": regime_rsi_long,
         "regime_rsi_short": regime_rsi_short,
         "filter_name": filter_name,
+        "state_indicator_list": state_indicator_list,
+        "trigger_indicator_list": trigger_indicator_list,
+        "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        "state_exit_policy": state_exit_policy,
         "indicator_list": indicator_list,
         "indicator_count": len(indicator_combo),
         "vol_lookback": vol_lookback if regime["vol_mode"] != "any" else None,
@@ -898,7 +963,12 @@ def _append_eval_result_rows(
 
     regime = task_meta["regime"]
     indicator_combo = tuple(task_meta["indicator_combo"])
+    strategy_mode = task_meta.get("strategy_mode", "combo_entry")
     filter_name = task_meta["filter_name"]
+    state_indicator_list = task_meta.get("state_indicator_list")
+    trigger_indicator_list = task_meta.get("trigger_indicator_list")
+    allow_shared_indicator_roles = task_meta.get("allow_shared_indicator_roles")
+    state_exit_policy = task_meta.get("state_exit_policy")
     indicator_list = task_meta["indicator_list"]
     vol_lookback = task_meta["vol_lookback"]
     vol_z = task_meta["vol_z"]
@@ -930,6 +1000,7 @@ def _append_eval_result_rows(
                 wf_test_days=wf_test_days,
                 wf_step_days=wf_step_days,
                 wf_mode=wf_mode,
+                strategy_mode=strategy_mode,
                 data_start=data_start,
                 data_end=data_end,
                 symbol=symbol,
@@ -937,6 +1008,10 @@ def _append_eval_result_rows(
                 regime_rsi_long=regime_rsi_long,
                 regime_rsi_short=regime_rsi_short,
                 filter_name=filter_name,
+                state_indicator_list=state_indicator_list,
+                trigger_indicator_list=trigger_indicator_list,
+                allow_shared_indicator_roles=allow_shared_indicator_roles,
+                state_exit_policy=state_exit_policy,
                 indicator_list=indicator_list,
                 indicator_combo=indicator_combo,
                 vol_lookback=vol_lookback,
@@ -972,6 +1047,7 @@ def _append_eval_result_rows(
                     wf_step_days=wf_step_days,
                     wf_mode=wf_mode,
                     wf_valid_days=wf_valid_days,
+                    strategy_mode=strategy_mode,
                     data_start=data_start,
                     data_end=data_end,
                     symbol=symbol,
@@ -979,6 +1055,10 @@ def _append_eval_result_rows(
                     regime_rsi_long=regime_rsi_long,
                     regime_rsi_short=regime_rsi_short,
                     filter_name=filter_name,
+                    state_indicator_list=state_indicator_list,
+                    trigger_indicator_list=trigger_indicator_list,
+                    allow_shared_indicator_roles=allow_shared_indicator_roles,
+                    state_exit_policy=state_exit_policy,
                     indicator_list=indicator_list,
                     indicator_combo=indicator_combo,
                     vol_lookback=vol_lookback,
@@ -1017,10 +1097,15 @@ def _append_eval_result_rows(
         wf_mode=wf_mode,
         data_start=data_start,
         data_end=data_end,
+        strategy_mode=strategy_mode,
         regime=regime,
         regime_rsi_long=regime_rsi_long,
         regime_rsi_short=regime_rsi_short,
         filter_name=filter_name,
+        state_indicator_list=state_indicator_list,
+        trigger_indicator_list=trigger_indicator_list,
+        allow_shared_indicator_roles=allow_shared_indicator_roles,
+        state_exit_policy=state_exit_policy,
         indicator_list=indicator_list,
         indicator_combo=indicator_combo,
         vol_lookback=vol_lookback,

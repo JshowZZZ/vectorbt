@@ -371,6 +371,27 @@ def test_sanitize_config_walk_forward_fields_min_value():
     assert cfg["wf_step_days"] >= 1
 
 
+def test_sanitize_config_state_trigger_fields():
+    cfg = cp._sanitize_config(
+        {
+            "strategy_mode": "state_trigger_entry",
+            "state_indicator_sets": "obv_roc,keltner_pos; obv_roc,keltner_pos,ad",
+            "trigger_indicator_sets": [["ad"], ["cmf"]],
+            "allow_shared_indicator_roles": False,
+            "state_exit_policy": "state_reversal",
+        }
+    )
+
+    assert cfg["strategy_mode"] == "state_trigger_entry"
+    assert cfg["state_indicator_sets"] == [
+        ["obv_roc", "keltner_pos"],
+        ["obv_roc", "keltner_pos", "ad"],
+    ]
+    assert cfg["trigger_indicator_sets"] == [["ad"], ["cmf"]]
+    assert cfg["allow_shared_indicator_roles"] is False
+    assert cfg["state_exit_policy"] == "state_reversal"
+
+
 def test_validate_config_guardrails_rejects_wf_step_lt_test():
     with pytest.raises(ValueError, match="wf_step_days"):
         cp._validate_config_guardrails({"wf_test_days": 10, "wf_step_days": 2})
@@ -473,6 +494,7 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
         "wave2-xrp-4h-180d",
         "wave2-sol-usdt-2h-120d",
         "exact-lane-2h-4sym",
+        "awf304-state-trigger-2h-8sym",
     }.issubset(preset_ids)
     exact_lane = next(item for item in payload["presets"] if item["preset_id"] == "exact-lane-2h-4sym")
     assert exact_lane["supports_scope_test"] is True
@@ -487,6 +509,11 @@ def test_config_presets_endpoint_returns_rerun_presets(tmp_path, monkeypatch):
         "artifacts/reports/pilot_analysis_awf264_exact_lane_range120_window_aware.json",
         "artifacts/reports/pilot_analysis_awf264_exact_lane_density_1h_window_aware.json",
     ]
+
+    awf304 = next(item for item in payload["presets"] if item["preset_id"] == "awf304-state-trigger-2h-8sym")
+    assert awf304["supports_scope_test"] is True
+    assert [item["variant_id"] for item in awf304["scope_test_variants"]] == ["main", "sensitivity"]
+    assert awf304["recommended_workflow"] == "run"
 
 
 def test_config_apply_preset_writes_expected_config_and_preserves_hidden_fields(tmp_path, monkeypatch):
@@ -565,6 +592,101 @@ def test_config_apply_exact_lane_preset_persists_lane_controls(tmp_path, monkeyp
     assert saved_cfg["sl_atr_multipliers"] == [0.5, 0.75, 1.0, 1.25, 1.5]
     assert saved_cfg["max_holds"] == [4]
     assert saved_cfg["trade_symbols"] == ["LTC/BTC", "LINK/BTC", "SOL/BTC", "AVAX/BTC"]
+
+
+def test_config_apply_awf304_state_trigger_preset_persists_contract(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    cp.CONFIG_JSON.write_text(json.dumps(cp.DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset",
+            body=json.dumps({"preset_id": "awf304-state-trigger-2h-8sym"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["preset"]["preset_id"] == "awf304-state-trigger-2h-8sym"
+
+    saved_cfg = json.loads(cp.CONFIG_JSON.read_text(encoding="utf-8"))
+    assert saved_cfg["strategy_mode"] == "state_trigger_entry"
+    assert saved_cfg["timeframes"] == [{"timeframe": "2h", "days": 180, "end": "2026-04-09T14:00:00Z"}]
+    assert saved_cfg["wf_train_days"] == 45
+    assert saved_cfg["wf_test_days"] == 30
+    assert saved_cfg["wf_step_days"] == 30
+    assert saved_cfg["trade_symbols"] == [
+        "LTC/BTC",
+        "LINK/BTC",
+        "AVAX/BTC",
+        "ETH/BTC",
+        "XRP/BTC",
+        "ADA/BTC",
+        "DOGE/BTC",
+        "DOT/BTC",
+    ]
+    assert saved_cfg["indicator_subset"] == ["obv_roc", "keltner_pos", "ad", "cmf", "chop"]
+    assert saved_cfg["state_indicator_sets"] == [["obv_roc", "keltner_pos"], ["obv_roc", "keltner_pos", "ad"]]
+    assert saved_cfg["trigger_indicator_sets"] == [["ad"], ["cmf"], ["chop"]]
+    assert saved_cfg["allow_shared_indicator_roles"] is True
+    assert saved_cfg["state_exit_policy"] == "state_reversal"
+    assert saved_cfg["regime_preset"] == "pilot_trend_3"
+    assert saved_cfg["regime_name_filter"] == ["trend_any", "trend_high", "trend_low"]
+    assert saved_cfg["tp_atr_multipliers"] == [1.5]
+    assert saved_cfg["sl_atr_multipliers"] == [1.0]
+    assert saved_cfg["max_holds"] == [4]
+
+
+def test_awf304_protocol_configs_match_state_trigger_preset_patch():
+    preset_patch = cp._find_config_preset("awf304-state-trigger-2h-8sym")["patch"]
+    repo_root = Path(__file__).resolve().parents[1]
+    main_cfg = json.loads((repo_root / "plans" / "protocols" / "awf304_state_trigger_main.json").read_text(encoding="utf-8"))
+    sensitivity_cfg = json.loads(
+        (repo_root / "plans" / "protocols" / "awf304_state_trigger_sensitivity.json").read_text(encoding="utf-8")
+    )
+
+    compare_keys = [
+        "search_mode",
+        "strategy_mode",
+        "combo_seed",
+        "combo_sizes",
+        "timeframes",
+        "wf_test_days",
+        "wf_step_days",
+        "wf_valid_days",
+        "wf_mode",
+        "trade_symbols",
+        "indicator_subset",
+        "state_indicator_sets",
+        "trigger_indicator_sets",
+        "allow_shared_indicator_roles",
+        "state_exit_policy",
+        "regime_preset",
+        "regime_name_filter",
+        "pilot_fixed_indicator_params",
+        "pilot_single_trend_mom",
+        "risk_mode",
+        "tp_atr_multipliers",
+        "sl_atr_multipliers",
+        "max_holds",
+        "capital_mode",
+        "init_cash_usdt",
+        "order_size_pct",
+        "max_concurrent_positions",
+        "slippage_bps",
+        "spread_bps",
+        "funding_rate_daily",
+        "top_n_refine",
+    ]
+    for key in compare_keys:
+        assert main_cfg[key] == preset_patch[key]
+        assert sensitivity_cfg[key] == preset_patch[key]
+
+    assert main_cfg["wf_train_days"] == 45
+    assert sensitivity_cfg["wf_train_days"] == 60
 
 
 def test_exact_lane_preset_matches_replay_export_contract(tmp_path, monkeypatch):
@@ -732,6 +854,59 @@ def test_config_apply_preset_scope_test_enqueues_exact_lane_pair(tmp_path, monke
     assert [job["name"] for job in queue_payload["jobs"]] == [
         "scope-exact-lane-2h-4sym-main",
         "scope-exact-lane-2h-4sym-sensitivity",
+    ]
+
+
+def test_config_apply_preset_scope_test_enqueues_awf304_pair(tmp_path, monkeypatch):
+    _setup_batch_env(tmp_path, monkeypatch)
+    cp.CONFIG_JSON.write_text(json.dumps(cp.DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with _serve_handler_connection() as conn:
+        conn.request(
+            "POST",
+            "/config/apply-preset-scope-test",
+            body=json.dumps({"preset_id": "awf304-state-trigger-2h-8sym"}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    details = payload["details"]
+    assert details["preset"]["preset_id"] == "awf304-state-trigger-2h-8sym"
+    assert [item["variant_id"] for item in details["variants"]] == ["main", "sensitivity"]
+
+    variant_by_id = {item["variant_id"]: item for item in details["variants"]}
+    assert variant_by_id["main"]["wf_train_days"] == 45
+    assert variant_by_id["sensitivity"]["wf_train_days"] == 60
+
+    for variant_id, expected_train in (("main", 45), ("sensitivity", 60)):
+        cfg_path = Path(variant_by_id[variant_id]["config_path"])
+        assert cfg_path.exists()
+        cfg_payload = json.loads(cfg_path.read_text(encoding="utf-8"))
+        assert cfg_payload["strategy_mode"] == "state_trigger_entry"
+        assert cfg_payload["wf_train_days"] == expected_train
+        assert cfg_payload["wf_test_days"] == 30
+        assert cfg_payload["wf_step_days"] == 30
+        assert cfg_payload["state_indicator_sets"] == [["obv_roc", "keltner_pos"], ["obv_roc", "keltner_pos", "ad"]]
+        assert cfg_payload["trigger_indicator_sets"] == [["ad"], ["cmf"], ["chop"]]
+        assert cfg_payload["trade_symbols"] == [
+            "LTC/BTC",
+            "LINK/BTC",
+            "AVAX/BTC",
+            "ETH/BTC",
+            "XRP/BTC",
+            "ADA/BTC",
+            "DOGE/BTC",
+            "DOT/BTC",
+        ]
+
+    queue_payload = cp._load_batch_queue()
+    assert len(queue_payload["jobs"]) == 2
+    assert [job["name"] for job in queue_payload["jobs"]] == [
+        "scope-awf304-state-trigger-2h-8sym-main",
+        "scope-awf304-state-trigger-2h-8sym-sensitivity",
     ]
 
 

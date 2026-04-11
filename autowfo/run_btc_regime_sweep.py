@@ -198,6 +198,11 @@ def main():
     combo_group_fields = runtime_settings["combo_group_fields"]
     trade_symbols = runtime_settings["trade_symbols"]
     indicator_keys = runtime_settings["indicator_subset"]
+    strategy_mode = runtime_settings["strategy_mode"]
+    state_indicator_sets = runtime_settings["state_indicator_sets"]
+    trigger_indicator_sets = runtime_settings["trigger_indicator_sets"]
+    allow_shared_indicator_roles = runtime_settings["allow_shared_indicator_roles"]
+    state_exit_policy = runtime_settings["state_exit_policy"]
     regime_preset = runtime_settings["regime_preset"]
     regime_name_filter = runtime_settings["regime_name_filter"]
     filter_variants = runtime_settings["filter_variants"]
@@ -332,18 +337,48 @@ def main():
         existing_symbol_df,
         COMBO_KEY_FIELDS,
     )
-    indicator_param_options, indicator_defaults = _select_indicator_param_options(
-        autowfo_strategy._build_indicator_param_options_coarse(),
-        indicator_keys,
-        fixed_params=pilot_fixed_indicator_params,
-    )
-    combo_keys_all = engine_helpers._build_combo_keys(
-        indicator_keys=indicator_keys,
-        combo_sizes=combo_sizes,
-        combo_seed=combo_seed,
-        combo_segment_start=combo_segment_start,
-        combo_segment_size=combo_segment_size,
-    )
+    if strategy_mode == "state_trigger_entry":
+        if search_mode != "combo":
+            raise ValueError("state_trigger_entry currently supports combo search only")
+        if not state_indicator_sets or not trigger_indicator_sets:
+            raise ValueError(
+                "state_trigger_entry requires non-empty state_indicator_sets and trigger_indicator_sets"
+            )
+        state_trigger_indicator_keys = list(
+            dict.fromkeys(
+                [
+                    key
+                    for combo in list(state_indicator_sets) + list(trigger_indicator_sets)
+                    for key in combo
+                ]
+            )
+        )
+        indicator_param_options, indicator_defaults = _select_indicator_param_options(
+            autowfo_strategy._build_indicator_param_options_coarse(),
+            state_trigger_indicator_keys,
+            fixed_params=pilot_fixed_indicator_params,
+        )
+        combo_keys_all = engine_helpers._build_state_trigger_combo_keys(
+            state_indicator_sets=state_indicator_sets,
+            trigger_indicator_sets=trigger_indicator_sets,
+            allow_shared_indicator_roles=allow_shared_indicator_roles,
+            combo_seed=combo_seed,
+            combo_segment_start=combo_segment_start,
+            combo_segment_size=combo_segment_size,
+        )
+    else:
+        indicator_param_options, indicator_defaults = _select_indicator_param_options(
+            autowfo_strategy._build_indicator_param_options_coarse(),
+            indicator_keys,
+            fixed_params=pilot_fixed_indicator_params,
+        )
+        combo_keys_all = engine_helpers._build_combo_keys(
+            indicator_keys=indicator_keys,
+            combo_sizes=combo_sizes,
+            combo_seed=combo_seed,
+            combo_segment_start=combo_segment_start,
+            combo_segment_size=combo_segment_size,
+        )
 
     regime_variants = engine_helpers._build_regime_variants(
         rsi_revert_pairs,
@@ -441,7 +476,10 @@ def main():
         combo_key_from_dict_fn=combo_key_from_dict_fn,
         # AWF-106d: pass current runtime capital_mode so that CSV rows written
         # before capital_mode was persisted still produce matching seen keys.
-        null_fill_overrides={"capital_mode": capital_mode},
+        null_fill_overrides={
+            "capital_mode": capital_mode,
+            "strategy_mode": "combo_entry",
+        },
     )
     # Use stripped seen_keys (without data_start/data_end) for cross-run skip
     # decisions so that routine OHLCV refresh (data_end advances each run)
@@ -497,6 +535,8 @@ def main():
         wf_step_days=wf_step_days,
         wf_valid_days=wf_valid_days,
         wf_mode=wf_mode,
+        strategy_mode=strategy_mode,
+        state_exit_policy=state_exit_policy,
         indicator_param_fields=INDICATOR_PARAM_FIELDS,
         fees=fees,
         slippage_bps=slippage_bps,
@@ -526,6 +566,8 @@ def main():
         tp_stops=tp_stops,
         sl_stops=sl_stops,
         max_holds=max_holds,
+        strategy_mode=strategy_mode,
+        state_exit_policy=state_exit_policy,
         combo_keys_all=combo_keys_all,
         indicator_param_options=indicator_param_options,
         existing_combo_df=existing_combo_df,

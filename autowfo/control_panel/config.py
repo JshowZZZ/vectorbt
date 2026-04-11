@@ -134,6 +134,73 @@ _RERUN_CAMPAIGN_PRESETS = (
             "top_n_refine": 0,
         },
     },
+    {
+        "preset_id": "awf304-state-trigger-2h-8sym",
+        "title": "AWF-304 State-Trigger 2h 8-Symbol",
+        "summary": "Run the frozen first hierarchical state-trigger pilot against the drop SOL/BTC cohort.",
+        "operator_note": "Use scope-test to enqueue the paired 45/30/30 and 60/30/30 anchored pilot runs without reopening the contract.",
+        "recommended_workflow": "run",
+        "optional": False,
+        "scope_test_variants": (
+            {
+                "variant_id": "main",
+                "title": "Main 45/30/30",
+                "wf_train_days": 45,
+                "wf_test_days": 30,
+                "wf_step_days": 30,
+            },
+            {
+                "variant_id": "sensitivity",
+                "title": "Sensitivity 60/30/30",
+                "wf_train_days": 60,
+                "wf_test_days": 30,
+                "wf_step_days": 30,
+            },
+        ),
+        "patch": {
+            "search_mode": "combo",
+            "strategy_mode": "state_trigger_entry",
+            "combo_seed": 42,
+            "combo_sizes": [2, 3, 4],
+            "timeframes": [{"timeframe": "2h", "days": 180, "end": "2026-04-09T14:00:00Z"}],
+            "wf_train_days": 45,
+            "wf_test_days": 30,
+            "wf_step_days": 30,
+            "wf_valid_days": 0,
+            "wf_mode": "anchored",
+            "trade_symbols": [
+                "LTC/BTC",
+                "LINK/BTC",
+                "AVAX/BTC",
+                "ETH/BTC",
+                "XRP/BTC",
+                "ADA/BTC",
+                "DOGE/BTC",
+                "DOT/BTC",
+            ],
+            "indicator_subset": ["obv_roc", "keltner_pos", "ad", "cmf", "chop"],
+            "state_indicator_sets": [["obv_roc", "keltner_pos"], ["obv_roc", "keltner_pos", "ad"]],
+            "trigger_indicator_sets": [["ad"], ["cmf"], ["chop"]],
+            "allow_shared_indicator_roles": True,
+            "state_exit_policy": "state_reversal",
+            "regime_preset": "pilot_trend_3",
+            "regime_name_filter": ["trend_any", "trend_high", "trend_low"],
+            "pilot_fixed_indicator_params": True,
+            "pilot_single_trend_mom": True,
+            "risk_mode": "atr_multiple",
+            "tp_atr_multipliers": [1.5],
+            "sl_atr_multipliers": [1.0],
+            "max_holds": [4],
+            "capital_mode": "per_symbol",
+            "init_cash_usdt": 1000.0,
+            "order_size_pct": 0.5,
+            "max_concurrent_positions": 0,
+            "slippage_bps": 2.0,
+            "spread_bps": 2.0,
+            "funding_rate_daily": 0.0,
+            "top_n_refine": 0,
+        },
+    },
 )
 
 
@@ -252,6 +319,9 @@ def _sanitize_config(payload, base_config=None):
     if search_mode not in {"combo", "refine"}:
         search_mode = cfg["search_mode"]
     cfg["search_mode"] = search_mode
+    cfg["strategy_mode"] = engine_helpers._normalize_strategy_mode(
+        payload.get("strategy_mode", cfg.get("strategy_mode", "combo_entry"))
+    )
 
     combo_sizes = payload.get("combo_sizes", cfg["combo_sizes"])
     if isinstance(combo_sizes, str):
@@ -313,6 +383,48 @@ def _sanitize_config(payload, base_config=None):
         indicator_subset = [s.strip() for s in indicator_subset.split(",") if s.strip()]
     if isinstance(indicator_subset, (list, tuple)):
         cfg["indicator_subset"] = [str(item).strip() for item in indicator_subset if str(item).strip()]
+
+    def _normalize_indicator_sets_payload(values, fallback):
+        raw = values if values is not None else fallback
+        if raw in (None, ""):
+            return []
+        if isinstance(raw, str):
+            groups = [chunk.strip() for chunk in raw.split(";") if chunk.strip()]
+            raw = [
+                [token.strip() for token in group.split(",") if token.strip()]
+                for group in groups
+            ]
+        normalized = []
+        if isinstance(raw, (list, tuple)):
+            for item in raw:
+                if isinstance(item, str):
+                    combo = [token.strip() for token in item.split(",") if token.strip()]
+                elif isinstance(item, (list, tuple, set)):
+                    combo = [str(token).strip() for token in item if str(token).strip()]
+                else:
+                    continue
+                if combo:
+                    normalized.append(combo)
+        return normalized
+
+    cfg["state_indicator_sets"] = _normalize_indicator_sets_payload(
+        payload.get("state_indicator_sets"),
+        cfg.get("state_indicator_sets"),
+    )
+    cfg["trigger_indicator_sets"] = _normalize_indicator_sets_payload(
+        payload.get("trigger_indicator_sets"),
+        cfg.get("trigger_indicator_sets"),
+    )
+    cfg["allow_shared_indicator_roles"] = engine_helpers._safe_bool(
+        payload.get(
+            "allow_shared_indicator_roles",
+            cfg.get("allow_shared_indicator_roles", True),
+        ),
+        True,
+    )
+    cfg["state_exit_policy"] = engine_helpers._normalize_state_exit_policy(
+        payload.get("state_exit_policy", cfg.get("state_exit_policy", "state_reversal"))
+    )
 
     cfg["regime_preset"] = engine_helpers._normalize_regime_preset(
         payload.get("regime_preset", cfg.get("regime_preset", "full"))

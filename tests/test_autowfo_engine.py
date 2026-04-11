@@ -132,6 +132,10 @@ def test_build_sweep_schema_fields_contract():
 
     assert combo_key_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
     assert "risk_mode" in combo_key_fields
+    assert "strategy_mode" in combo_key_fields
+    assert "state_indicator_list" in combo_key_fields
+    assert "trigger_indicator_list" in combo_key_fields
+    assert "state_exit_policy" in combo_key_fields
     assert combo_key_fields[-4:] == ["cmf_threshold", "vroc_lookback", "vroc_threshold", "ad_lookback"]
     assert combo_result_fields[0 : len(combo_key_fields)] == combo_key_fields
     assert combo_result_fields[len(combo_key_fields) : len(combo_key_fields) + 2] == metadata_fields
@@ -139,7 +143,11 @@ def test_build_sweep_schema_fields_contract():
     assert combo_result_fields[-1] == "oos_segments"
 
     assert symbol_result_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
-    assert symbol_result_fields[18:20] == metadata_fields
+    assert "strategy_mode" in symbol_result_fields
+    assert "state_indicator_list" in symbol_result_fields
+    assert "trigger_indicator_list" in symbol_result_fields
+    assert "state_exit_policy" in symbol_result_fields
+    assert symbol_result_fields[symbol_result_fields.index("config_sha256") : symbol_result_fields.index("data_fingerprint") + 1] == metadata_fields
     assert symbol_result_fields[-4:] == [
         "avg_trade_pct",
         "max_drawdown_pct",
@@ -147,7 +155,11 @@ def test_build_sweep_schema_fields_contract():
         "avg_hold_hours",
     ]
     assert oos_symbol_result_fields[0:4] == ["timeframe", "data_days", "exchange", "base_symbol"]
-    assert oos_symbol_result_fields[18:20] == metadata_fields
+    assert "strategy_mode" in oos_symbol_result_fields
+    assert "state_indicator_list" in oos_symbol_result_fields
+    assert "trigger_indicator_list" in oos_symbol_result_fields
+    assert "state_exit_policy" in oos_symbol_result_fields
+    assert oos_symbol_result_fields[oos_symbol_result_fields.index("config_sha256") : oos_symbol_result_fields.index("data_fingerprint") + 1] == metadata_fields
     assert oos_symbol_result_fields[-4:] == [
         "oos_sharpe_like",
         "oos_low_trade_segment_ratio",
@@ -170,9 +182,36 @@ def test_build_sweep_schema_fields_contract():
         "wf_step_days",
         "wf_valid_days",
         "wf_mode",
+        "strategy_mode",
         "data_start",
         "data_end",
     ]
+
+
+def test_build_state_trigger_combo_keys_respects_role_metadata_and_overlap_rules():
+    got = e._build_state_trigger_combo_keys(
+        state_indicator_sets=[("obv_roc", "keltner_pos"), ("obv_roc", "keltner_pos", "ad")],
+        trigger_indicator_sets=[("ad",), ("cmf",)],
+        allow_shared_indicator_roles=True,
+        combo_seed=1,
+    )
+
+    assert len(got) == 4
+    resolved = [e._resolve_search_combo_spec(item) for item in got]
+    assert all(item["strategy_mode"] == "state_trigger_entry" for item in resolved)
+    assert any(item["state_indicator_combo"] == ("obv_roc", "keltner_pos") and item["trigger_indicator_combo"] == ("ad",) for item in resolved)
+    assert any(item["indicator_combo"] == ("obv_roc", "keltner_pos", "ad") for item in resolved)
+
+    no_overlap = e._build_state_trigger_combo_keys(
+        state_indicator_sets=[("obv_roc", "keltner_pos", "ad")],
+        trigger_indicator_sets=[("ad",), ("cmf",)],
+        allow_shared_indicator_roles=False,
+        combo_seed=1,
+    )
+
+    assert len(no_overlap) == 1
+    resolved_no_overlap = e._resolve_search_combo_spec(no_overlap[0])
+    assert resolved_no_overlap["trigger_indicator_combo"] == ("cmf",)
 
 
 def test_resolve_runtime_settings_normalizes_fields():

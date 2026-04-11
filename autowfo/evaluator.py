@@ -61,6 +61,8 @@ def _segment_combo_metrics(
     segment_close,
     segment_long,
     segment_short,
+    segment_long_exit=None,
+    segment_short_exit=None,
     segment_trade_mom,
     long_filter,
     short_filter,
@@ -87,6 +89,8 @@ def _segment_combo_metrics(
         sl_stop,
         tp_stop,
         freq=timeframe,
+        long_exits=segment_long_exit,
+        short_exits=segment_short_exit,
         long_filter=long_filter,
         short_filter=short_filter,
         init_cash=init_cash_btc,
@@ -122,6 +126,70 @@ def _segment_combo_metrics(
     return combo_metrics
 
 
+def _build_strategy_mode_signals(
+    *,
+    strategy_mode,
+    state_exit_policy,
+    long_regime,
+    short_regime,
+    indicator_combo,
+    state_indicator_combo,
+    trigger_indicator_combo,
+    combo_params,
+    ctx,
+):
+    if strategy_mode != "state_trigger_entry":
+        long_entries, short_entries, variant_params = autowfo_strategy._apply_indicator_combo(
+            long_regime,
+            short_regime,
+            indicator_combo,
+            combo_params,
+            ctx,
+        )
+        return {
+            "long_entries": long_entries,
+            "short_entries": short_entries,
+            "long_exits": None,
+            "short_exits": None,
+            "variant_params": variant_params,
+        }
+
+    if not state_indicator_combo or not trigger_indicator_combo:
+        raise RuntimeError("state_trigger_entry requires both state and trigger indicator sets")
+
+    variant_params = autowfo_strategy._coerce_indicator_params(indicator_combo, combo_params, ctx)
+    state_long, state_short, _ = autowfo_strategy._apply_indicator_combo(
+        long_regime,
+        short_regime,
+        state_indicator_combo,
+        variant_params,
+        ctx,
+    )
+    trigger_long, trigger_short, _ = autowfo_strategy._apply_indicator_combo(
+        long_regime,
+        short_regime,
+        trigger_indicator_combo,
+        variant_params,
+        ctx,
+    )
+    long_entries = state_long & trigger_long
+    short_entries = state_short & trigger_short
+
+    long_exits = None
+    short_exits = None
+    if str(state_exit_policy or "state_reversal").strip().lower() == "state_reversal":
+        long_exits = ~state_long.fillna(False)
+        short_exits = ~state_short.fillna(False)
+
+    return {
+        "long_entries": long_entries,
+        "short_entries": short_entries,
+        "long_exits": long_exits,
+        "short_exits": short_exits,
+        "variant_params": variant_params,
+    }
+
+
 def evaluate_combo_task(task, runtime):
     """Evaluate one combo task and return combo/symbol rows.
 
@@ -131,6 +199,10 @@ def evaluate_combo_task(task, runtime):
 
     regime = task["regime"]
     indicator_combo = tuple(task["indicator_combo"])
+    strategy_mode = str(task.get("strategy_mode") or "combo_entry").strip().lower()
+    state_indicator_combo = tuple(task.get("state_indicator_combo") or ())
+    trigger_indicator_combo = tuple(task.get("trigger_indicator_combo") or ())
+    state_exit_policy = task.get("state_exit_policy")
     combo_params = dict(task["combo_params"])
     vol_lookback = task["vol_lookback"]
     vol_z = task["vol_z"]
@@ -211,13 +283,22 @@ def evaluate_combo_task(task, runtime):
         bar_hours=bar_hours,
     )
 
-    long_regime_final, short_regime_final, variant_params = autowfo_strategy._apply_indicator_combo(
-        long_regime,
-        short_regime,
-        indicator_combo,
-        combo_params,
-        ctx,
+    strategy_signals = _build_strategy_mode_signals(
+        strategy_mode=strategy_mode,
+        state_exit_policy=state_exit_policy,
+        long_regime=long_regime,
+        short_regime=short_regime,
+        indicator_combo=indicator_combo,
+        state_indicator_combo=state_indicator_combo,
+        trigger_indicator_combo=trigger_indicator_combo,
+        combo_params=combo_params,
+        ctx=ctx,
     )
+    long_regime_final = strategy_signals["long_entries"]
+    short_regime_final = strategy_signals["short_entries"]
+    long_exit_signal = strategy_signals["long_exits"]
+    short_exit_signal = strategy_signals["short_exits"]
+    variant_params = strategy_signals["variant_params"]
     pf_sl_stop, pf_tp_stop = _resolve_pf_stops(
         ctx=ctx,
         risk_mode=risk_mode,
@@ -234,6 +315,8 @@ def evaluate_combo_task(task, runtime):
         pf_sl_stop,
         pf_tp_stop,
         freq=timeframe,
+        long_exits=long_exit_signal,
+        short_exits=short_exit_signal,
         long_filter=long_filter,
         short_filter=short_filter,
         init_cash=ctx["init_cash_btc"],
@@ -272,6 +355,12 @@ def evaluate_combo_task(task, runtime):
             continue
         segment_long = long_regime_final.loc[segment_close.index]
         segment_short = short_regime_final.loc[segment_close.index]
+        segment_long_exit = (
+            long_exit_signal.loc[segment_close.index] if long_exit_signal is not None else None
+        )
+        segment_short_exit = (
+            short_exit_signal.loc[segment_close.index] if short_exit_signal is not None else None
+        )
         segment_trade_mom = trade_mom.loc[segment_close.index]
         segment_overlay_long, segment_overlay_short = engine_runtime._build_overlay_filters(
             ctx,
@@ -299,6 +388,12 @@ def evaluate_combo_task(task, runtime):
             if not policy_close.empty:
                 policy_long = long_regime_final.loc[policy_close.index]
                 policy_short = short_regime_final.loc[policy_close.index]
+                policy_long_exit = (
+                    long_exit_signal.loc[policy_close.index] if long_exit_signal is not None else None
+                )
+                policy_short_exit = (
+                    short_exit_signal.loc[policy_close.index] if short_exit_signal is not None else None
+                )
                 policy_trade_mom = trade_mom.loc[policy_close.index]
                 policy_overlay_long, policy_overlay_short = engine_runtime._build_overlay_filters(
                     ctx,
@@ -324,6 +419,8 @@ def evaluate_combo_task(task, runtime):
                         segment_close=policy_close,
                         segment_long=policy_long,
                         segment_short=policy_short,
+                        segment_long_exit=policy_long_exit,
+                        segment_short_exit=policy_short_exit,
                         segment_trade_mom=policy_trade_mom,
                         long_filter=p_long_filter,
                         short_filter=p_short_filter,
@@ -359,6 +456,8 @@ def evaluate_combo_task(task, runtime):
             segment_close=segment_close,
             segment_long=segment_long,
             segment_short=segment_short,
+            segment_long_exit=segment_long_exit,
+            segment_short_exit=segment_short_exit,
             segment_trade_mom=segment_trade_mom,
             long_filter=seg_long_filter,
             short_filter=seg_short_filter,

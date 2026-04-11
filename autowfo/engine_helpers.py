@@ -113,6 +113,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "wf_step_days",
         "wf_valid_days",
         "wf_mode",
+        "strategy_mode",
         "data_start",
         "data_end",
         "regime_name",
@@ -121,6 +122,10 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "regime_rsi_long",
         "regime_rsi_short",
         "filter_name",
+        "state_indicator_list",
+        "trigger_indicator_list",
+        "allow_shared_indicator_roles",
+        "state_exit_policy",
         "indicator_list",
         "indicator_count",
         "vol_lookback",
@@ -207,6 +212,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "wf_step_days",
         "wf_valid_days",
         "wf_mode",
+        "strategy_mode",
         "data_start",
         "data_end",
         *list(artifact_row_metadata_fields),
@@ -217,6 +223,10 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "regime_rsi_long",
         "regime_rsi_short",
         "filter_name",
+        "state_indicator_list",
+        "trigger_indicator_list",
+        "allow_shared_indicator_roles",
+        "state_exit_policy",
         "indicator_list",
         "indicator_count",
         "vol_lookback",
@@ -275,6 +285,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "wf_step_days",
         "wf_valid_days",
         "wf_mode",
+        "strategy_mode",
         "data_start",
         "data_end",
         *list(artifact_row_metadata_fields),
@@ -285,6 +296,10 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "regime_rsi_long",
         "regime_rsi_short",
         "filter_name",
+        "state_indicator_list",
+        "trigger_indicator_list",
+        "allow_shared_indicator_roles",
+        "state_exit_policy",
         "indicator_list",
         "indicator_count",
         "vol_lookback",
@@ -348,6 +363,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "wf_step_days",
         "wf_valid_days",
         "wf_mode",
+        "strategy_mode",
         "data_start",
         "data_end",
     ]
@@ -901,9 +917,20 @@ def _count_coarse_combos(
 ):
     count = 0
     filter_count = max(len(filter_variants or []), 1)
+    resolved_combos = {
+        idx: _resolve_search_combo_spec(combo)
+        for idx, combo in enumerate(combo_keys_all)
+    }
     indicator_param_counts = {
-        combo: int(np.prod([len(indicator_param_options.get(key, [{}])) for key in combo]))
-        for combo in combo_keys_all
+        idx: int(
+            np.prod(
+                [
+                    len(indicator_param_options.get(key, [{}]))
+                    for key in resolved.get("indicator_combo", ())
+                ]
+            )
+        )
+        for idx, resolved in resolved_combos.items()
     }
     for regime in regime_variants:
         mom_iter = mom_lookbacks if regime["regime_type"] == "trend" else [mom_lookbacks[0]]
@@ -916,11 +943,84 @@ def _count_coarse_combos(
                 for mom_lookback in mom_iter:
                     for trade_mom_lookback in trade_mom_lookbacks:
                         for tp_stop in tp_stops:
-                                for sl_stop in sl_stops:
-                                    for max_hold in max_holds:
-                                        for combo in combo_keys_all:
-                                            count += indicator_param_counts.get(combo, 1) * filter_count
+                            for sl_stop in sl_stops:
+                                for max_hold in max_holds:
+                                    for idx, resolved in resolved_combos.items():
+                                        if not tuple(resolved.get("indicator_combo", ())):
+                                            continue
+                                        count += indicator_param_counts.get(idx, 1) * filter_count
     return count
+
+
+def _resolve_search_combo_spec(combo_value):
+    if isinstance(combo_value, dict):
+        state_indicator_combo = tuple(combo_value.get("state_indicator_combo") or ())
+        trigger_indicator_combo = tuple(combo_value.get("trigger_indicator_combo") or ())
+        indicator_combo = combo_value.get("indicator_combo")
+        if indicator_combo is None:
+            indicator_combo = tuple(
+                dict.fromkeys(list(state_indicator_combo) + list(trigger_indicator_combo))
+            )
+        else:
+            indicator_combo = tuple(indicator_combo)
+        strategy_mode = _normalize_strategy_mode(combo_value.get("strategy_mode", "combo_entry"))
+        allow_shared_indicator_roles = combo_value.get("allow_shared_indicator_roles")
+        if allow_shared_indicator_roles is not None:
+            allow_shared_indicator_roles = _safe_bool(allow_shared_indicator_roles, True)
+        return {
+            "strategy_mode": strategy_mode,
+            "indicator_combo": indicator_combo,
+            "state_indicator_combo": state_indicator_combo,
+            "trigger_indicator_combo": trigger_indicator_combo,
+            "allow_shared_indicator_roles": allow_shared_indicator_roles,
+        }
+    indicator_combo = tuple(combo_value or ())
+    return {
+        "strategy_mode": "combo_entry",
+        "indicator_combo": indicator_combo,
+        "state_indicator_combo": tuple(),
+        "trigger_indicator_combo": tuple(),
+        "allow_shared_indicator_roles": None,
+    }
+
+
+def _build_state_trigger_combo_keys(
+    state_indicator_sets,
+    trigger_indicator_sets,
+    allow_shared_indicator_roles,
+    combo_seed,
+    combo_segment_start=0,
+    combo_segment_size=None,
+):
+    combo_specs = []
+    allow_shared = _safe_bool(allow_shared_indicator_roles, True)
+    for state_indicator_combo in state_indicator_sets:
+        state_combo = tuple(state_indicator_combo or ())
+        if not state_combo:
+            continue
+        for trigger_indicator_combo in trigger_indicator_sets:
+            trigger_combo = tuple(trigger_indicator_combo or ())
+            if not trigger_combo:
+                continue
+            if not allow_shared and set(state_combo) & set(trigger_combo):
+                continue
+            indicator_combo = tuple(dict.fromkeys(list(state_combo) + list(trigger_combo)))
+            combo_specs.append(
+                {
+                    "strategy_mode": "state_trigger_entry",
+                    "indicator_combo": indicator_combo,
+                    "state_indicator_combo": state_combo,
+                    "trigger_indicator_combo": trigger_combo,
+                    "allow_shared_indicator_roles": allow_shared,
+                }
+            )
+    rng = np.random.default_rng(int(combo_seed))
+    rng.shuffle(combo_specs)
+    if combo_segment_size:
+        start = int(combo_segment_start)
+        end = start + int(combo_segment_size)
+        combo_specs = combo_specs[start:end]
+    return combo_specs
 
 
 def _apply_quality_filters(df, min_avg_daily_trades_target, min_oos_trades_target):
@@ -991,6 +1091,7 @@ _SEEN_KEY_NULL_FIELD_DEFAULTS = {
     for k, v in DEFAULT_CONFIG.items()
     if isinstance(v, (str, int, float)) and not isinstance(v, bool)
 }
+_SEEN_KEY_NULL_FIELD_DEFAULTS["strategy_mode"] = DEFAULT_CONFIG["strategy_mode"]
 
 
 def _build_seen_keys(existing_combo_df, has_all_config_fields_fn, combo_key_from_dict_fn, null_fill_overrides=None):

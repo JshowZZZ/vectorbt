@@ -5,7 +5,11 @@ import os
 import numpy as np
 import pandas as pd
 
-from .engine_helpers import _fallback_activity_filter, _strip_data_range_from_combo_key
+from .engine_helpers import (
+    _fallback_activity_filter,
+    _resolve_search_combo_spec,
+    _strip_data_range_from_combo_key,
+)
 from .engine_finalize import _build_finalize_pipeline_kwargs_from_context
 from .engine_runtime import (
     _append_eval_result_rows,
@@ -48,8 +52,12 @@ def _iter_coarse_plan(
                                 for sl_stop in sl_stops:
                                     for max_hold in max_holds:
                                         for combo_keys in combo_keys_all:
+                                            combo_spec = _resolve_search_combo_spec(combo_keys)
+                                            indicator_combo = tuple(combo_spec.get("indicator_combo", ()))
+                                            if not indicator_combo:
+                                                continue
                                             for combo_params in iter_indicator_param_combos_fn(
-                                                combo_keys, indicator_param_options
+                                                indicator_combo, indicator_param_options
                                             ):
                                                 yield (
                                                     regime,
@@ -481,13 +489,15 @@ def _run_combo_eval_step(
         emit_progress_fn(stage=stage)
         return {"skipped": True, "evaluated": False}
 
+    resolved_indicator_combo = tuple(task_payload.get("indicator_combo", ()))
+
     if pruning_tracker is not None:
         if pruning_tracker.budget_exhausted():
             if on_progress_tick_fn is not None:
                 on_progress_tick_fn(done_delta=1, skipped_delta=1)
             emit_progress_fn(stage=stage)
             return {"skipped": True, "evaluated": False, "pruned": True, "budget": True}
-        if pruning_tracker.should_prune(indicator_combo):
+        if pruning_tracker.should_prune(resolved_indicator_combo):
             pruning_tracker.increment_pruned()
             if on_progress_tick_fn is not None:
                 on_progress_tick_fn(done_delta=1, skipped_delta=1)
@@ -502,7 +512,7 @@ def _run_combo_eval_step(
         score = oos_metrics.get("oos_avg_total_return_pct", 0.0)
         if score is None or (isinstance(score, float) and math.isnan(score)):
             score = 0.0
-        pruning_tracker.record_result(indicator_combo, float(score))
+        pruning_tracker.record_result(resolved_indicator_combo, float(score))
         pruning_tracker.update_threshold()
     seen_keys.add(stripped_key)
     if on_progress_tick_fn is not None:
@@ -829,6 +839,8 @@ def _build_shared_pipeline_runtime_context(
     wf_step_days,
     wf_mode,
     wf_valid_days=0,
+    strategy_mode="combo_entry",
+    state_exit_policy=None,
     indicator_param_fields,
     fees,
     slippage_bps,
@@ -889,6 +901,8 @@ def _build_shared_pipeline_runtime_context(
         "wf_step_days": wf_step_days,
         "wf_valid_days": wf_valid_days,
         "wf_mode": wf_mode,
+        "strategy_mode": strategy_mode,
+        "state_exit_policy": state_exit_policy,
         "indicator_param_fields": indicator_param_fields,
         "fees": fees,
         "slippage_bps": slippage_bps,
@@ -1009,6 +1023,8 @@ def _build_timeframe_ready_search_kwargs(
     tp_stops,
     sl_stops,
     max_holds,
+    strategy_mode="combo_entry",
+    state_exit_policy=None,
     combo_keys_all,
     indicator_param_options,
     existing_combo_df,
@@ -1075,6 +1091,8 @@ def _build_timeframe_ready_search_kwargs(
         "tp_stops": tp_stops,
         "sl_stops": sl_stops,
         "max_holds": max_holds,
+        "strategy_mode": strategy_mode,
+        "state_exit_policy": state_exit_policy,
         "combo_keys_all": combo_keys_all,
         "indicator_param_options": indicator_param_options,
         "existing_combo_df": existing_combo_df,
@@ -1141,6 +1159,8 @@ def _build_timeframe_ready_search_context(
     tp_stops,
     sl_stops,
     max_holds,
+    strategy_mode="combo_entry",
+    state_exit_policy=None,
     combo_keys_all,
     indicator_param_options,
     existing_combo_df,
@@ -1204,6 +1224,8 @@ def _build_timeframe_ready_search_context(
         "tp_stops": tp_stops,
         "sl_stops": sl_stops,
         "max_holds": max_holds,
+        "strategy_mode": strategy_mode,
+        "state_exit_policy": state_exit_policy,
         "combo_keys_all": combo_keys_all,
         "indicator_param_options": indicator_param_options,
         "existing_combo_df": existing_combo_df,
@@ -1264,6 +1286,8 @@ def _build_timeframe_ready_search_context_from_shared(
     tp_stops,
     sl_stops,
     max_holds,
+    strategy_mode="combo_entry",
+    state_exit_policy=None,
     combo_keys_all,
     indicator_param_options,
     existing_combo_df,
@@ -1307,6 +1331,8 @@ def _build_timeframe_ready_search_context_from_shared(
         tp_stops=tp_stops,
         sl_stops=sl_stops,
         max_holds=max_holds,
+        strategy_mode=strategy_mode,
+        state_exit_policy=state_exit_policy,
         combo_keys_all=combo_keys_all,
         indicator_param_options=indicator_param_options,
         existing_combo_df=existing_combo_df,
@@ -1557,6 +1583,8 @@ def _run_timeframe_ready_search(
     tp_stops,
     sl_stops,
     max_holds,
+    strategy_mode="combo_entry",
+    state_exit_policy=None,
     combo_keys_all,
     indicator_param_options,
     existing_combo_df,
@@ -1632,6 +1660,7 @@ def _run_timeframe_ready_search(
         sl_stop,
         max_hold,
     ):
+        combo_spec = _resolve_search_combo_spec(indicator_combo)
         return _build_combo_task_payload(
             timeframe=timeframe,
             data_days=data_days,
@@ -1654,9 +1683,14 @@ def _run_timeframe_ready_search(
             wf_valid_days=wf_valid_days,
             data_start=ctx["trade_close"].index[0],
             data_end=ctx["trade_close"].index[-1],
+            strategy_mode=combo_spec.get("strategy_mode", strategy_mode),
             regime=regime,
             filter_spec=filter_spec,
-            indicator_combo=indicator_combo,
+            indicator_combo=combo_spec.get("indicator_combo", ()),
+            state_indicator_combo=combo_spec.get("state_indicator_combo", ()),
+            trigger_indicator_combo=combo_spec.get("trigger_indicator_combo", ()),
+            allow_shared_indicator_roles=combo_spec.get("allow_shared_indicator_roles"),
+            state_exit_policy=state_exit_policy,
             combo_params=combo_params,
             vol_lookback=vol_lookback,
             vol_z=vol_z,

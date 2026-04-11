@@ -5,6 +5,26 @@ import pandas as pd
 import vectorbt as vbt
 
 
+def _to_signal_matrix(signal, trade_close):
+    if signal is None:
+        return None
+    if isinstance(signal, pd.DataFrame):
+        return signal.reindex(index=trade_close.index, columns=trade_close.columns, fill_value=False).fillna(False).astype(bool)
+    if isinstance(signal, pd.Series):
+        aligned = signal.reindex(trade_close.index, fill_value=False).fillna(False).astype(bool)
+        return pd.DataFrame(
+            np.broadcast_to(aligned.to_numpy()[:, None], trade_close.shape),
+            index=trade_close.index,
+            columns=trade_close.columns,
+        )
+    aligned = pd.Series(signal, index=trade_close.index).fillna(False).astype(bool)
+    return pd.DataFrame(
+        np.broadcast_to(aligned.to_numpy()[:, None], trade_close.shape),
+        index=trade_close.index,
+        columns=trade_close.columns,
+    )
+
+
 def _run_pf(
     trade_close,
     long_regime,
@@ -15,6 +35,8 @@ def _run_pf(
     tp_stop,
     freq,
     slippage=None,
+    long_exits=None,
+    short_exits=None,
     long_filter=None,
     short_filter=None,
     init_cash=None,
@@ -27,16 +49,8 @@ def _run_pf(
     long_scores=None,
     short_scores=None,
 ):
-    long_matrix = pd.DataFrame(
-        np.broadcast_to(long_regime.to_numpy()[:, None], trade_close.shape),
-        index=trade_close.index,
-        columns=trade_close.columns,
-    )
-    short_matrix = pd.DataFrame(
-        np.broadcast_to(short_regime.to_numpy()[:, None], trade_close.shape),
-        index=trade_close.index,
-        columns=trade_close.columns,
-    )
+    long_matrix = _to_signal_matrix(long_regime, trade_close)
+    short_matrix = _to_signal_matrix(short_regime, trade_close)
     if long_filter is not None:
         long_matrix = long_matrix & long_filter.fillna(False)
     if short_filter is not None:
@@ -52,10 +66,16 @@ def _run_pf(
             short_scores = short_scores.reindex_like(short_entries).where(short_entries, -np.inf).fillna(-np.inf)
             short_ranks = short_scores.rank(axis=1, method="first", ascending=False)
             short_entries = short_entries & (short_ranks <= max_positions)
-    entries_shifted = entries.vbt.fshift(max_hold, fill_value=False)
-    short_entries_shifted = short_entries.vbt.fshift(max_hold, fill_value=False)
-    exits = entries_shifted
-    short_exits = short_entries_shifted
+    timed_exits = entries.vbt.fshift(max_hold, fill_value=False)
+    timed_short_exits = short_entries.vbt.fshift(max_hold, fill_value=False)
+    explicit_long_exits = _to_signal_matrix(long_exits, trade_close)
+    explicit_short_exits = _to_signal_matrix(short_exits, trade_close)
+    if explicit_long_exits is not None:
+        timed_exits = timed_exits | explicit_long_exits.vbt.fshift(1, fill_value=False)
+    if explicit_short_exits is not None:
+        timed_short_exits = timed_short_exits | explicit_short_exits.vbt.fshift(1, fill_value=False)
+    exits = timed_exits
+    short_exits = timed_short_exits
     group_by_param = True if cash_sharing else None
     return vbt.Portfolio.from_signals(
         trade_close,
