@@ -200,6 +200,12 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
         help="Minimum retained fraction of the flat trade gate under the window-aware policy",
     )
     pilot_parser.add_argument(
+        "--min-avg-symbol-trades",
+        type=float,
+        default=0.0,
+        help="Minimum average per-symbol OOS trade count in both runs to pass the gate (rejects near-zero-trade artifacts)",
+    )
+    pilot_parser.add_argument(
         "--identity-fields",
         default="",
         help="Comma-separated identity fields (default uses the pilot-analysis identity schema)",
@@ -670,6 +676,7 @@ def cmd_pilot_analyze(args: argparse.Namespace, cli_impl: Any) -> int:
         trade_gate_policy=str(args.trade_gate_policy or "flat"),
         trade_gate_reference_days=int(args.trade_gate_reference_days),
         trade_gate_min_ratio=float(args.trade_gate_min_ratio),
+        min_avg_symbol_trades=float(args.min_avg_symbol_trades),
         top_n=int(args.top_n),
     )
 

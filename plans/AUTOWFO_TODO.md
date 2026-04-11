@@ -55,8 +55,26 @@
     Decision memo: `plans/AUTOWFO_EXPANDED_HTF_REPAIR_DECISION_20260412.md`.
     Result: `36` compared / `10` stable-positive / `4` gate-passed / `3` canonical. The `ad` trigger gate pass reproduces and both state variants produce the same signal. The `cmf` and `chop` triggers technically pass but with avg trades < 0.2 — gate artifacts, not viable signals. Only `ad` trigger with `1d:20` is practically useful. Classification: `confirming pass`.
     Frozen configs: `plans/protocols/awf312_expanded_htf_repair_main.json`, `plans/protocols/awf312_expanded_htf_repair_sensitivity.json`.
+  - `done` `AWF-313` State-trigger temporal replay on older anchor window.
+    Replayed the validated hierarchical config (`state=obv_roc+keltner_pos`, `trigger=ad`, `htf_trend:1d:20`) on the one-year-earlier `180d` window (`end=2025-04-09T14:00:00Z`).
+    Runs: `20260411_174006` (main), `20260411_174147` (sensitivity).
+    Report: `artifacts/reports/pilot_analysis_awf313_temporal_replay_htf_state_trigger.json`.
+    Decision memo: `plans/AUTOWFO_STATE_TRIGGER_TEMPORAL_REPLAY_DECISION_20260412.md`.
+    Result: `6` compared / `0` stable-positive / `0` gate-passed. All rows negative in both runs. Classification: `time-local`.
+    Frozen configs: `plans/protocols/awf313_temporal_replay_htf_state_trigger_main.json`, `plans/protocols/awf313_temporal_replay_htf_state_trigger_sensitivity.json`.
+  - `done` `AWF-314` Add per-symbol trade-density floor to pilot analysis gate.
+    Implemented `--min-avg-symbol-trades` (default `0.0`) in pilot analysis. Rejects rows where mean per-symbol OOS trades in either run falls below the floor. Confirmed: AWF-312 with `--min-avg-symbol-trades 1.0` drops from `4` to `2` gate-passed (correctly rejecting the `cmf`/`chop` near-zero-trade artifacts).
+    Validation: `276` tests passed.
 
 ## Backlog
+
+- `done` `AWF-313` State-trigger temporal replay on older anchor window.
+  Replayed the validated hierarchical config on the one-year-earlier `180d` window.
+  Result: `6/0/0` — complete failure. All rows negative. Classification: `time-local`.
+  Decision memo: `plans/AUTOWFO_STATE_TRIGGER_TEMPORAL_REPLAY_DECISION_20260412.md`.
+
+- `done` `AWF-314` Add per-symbol trade-density floor to pilot analysis gate.
+  Implemented `--min-avg-symbol-trades` CLI arg and `min_avg_symbol_trades` param in `compare_pilot_runs`. Default `0.0` preserves backward compatibility. Setting `1.0` correctly rejects near-zero-trade gate artifacts.
 
 - `todo` `AWF-307` Execute and analyze the Funding Rate signal indicator sidecar.
   Run the bounded Track A pilot (`funding_gate` as entry overlay) against the Phase 53 10-symbol baseline under the same anchored `2h / 180d` contract. Determine whether `funding_gate` reduces `BNB/BTC` worst-presence or unlocks new gate-passed rows.

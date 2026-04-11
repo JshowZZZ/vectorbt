@@ -543,6 +543,7 @@ def _build_compared_rows(
     trade_gate_policy: str,
     trade_gate_reference_days: int,
     trade_gate_min_ratio: float,
+    min_avg_symbol_trades: float = 0.0,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]]]:
     main_combo = _dedupe_identity_frame(pd.DataFrame(main_run.get("combo_df")), identity_fields)
     sensitivity_combo = _dedupe_identity_frame(pd.DataFrame(sensitivity_run.get("combo_df")), identity_fields)
@@ -608,7 +609,17 @@ def _build_compared_rows(
         )
         passes_return_gate = min_return is not None and min_return > float(min_combo_return)
         passes_trade_gate = min_trades is not None and min_trades >= float(effective_trade_floor)
-        passes_overall_gate = bool(both_positive and passes_symbol_support and passes_return_gate and passes_trade_gate)
+        _density_floor = max(0.0, float(min_avg_symbol_trades))
+        if _density_floor > 0.0:
+            _mean_main = _safe_float((support_main.get("trade_stats") or {}).get("mean"))
+            _mean_sens = _safe_float((support_sens.get("trade_stats") or {}).get("mean"))
+            passes_symbol_trade_density = (
+                _mean_main is not None and _mean_main >= _density_floor
+                and _mean_sens is not None and _mean_sens >= _density_floor
+            )
+        else:
+            passes_symbol_trade_density = True
+        passes_overall_gate = bool(both_positive and passes_symbol_support and passes_return_gate and passes_trade_gate and passes_symbol_trade_density)
 
         payload.update(metric_values)
         payload.update(
@@ -625,9 +636,11 @@ def _build_compared_rows(
                 "passes_symbol_support_gate": bool(passes_symbol_support),
                 "passes_return_gate": bool(passes_return_gate),
                 "passes_trade_gate": bool(passes_trade_gate),
+                "passes_symbol_trade_density_gate": bool(passes_symbol_trade_density),
                 "passes_overall_gate": bool(passes_overall_gate),
                 "trade_gate_policy": str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
                 "effective_trade_floor": _safe_json_value(effective_trade_floor),
+                "min_avg_symbol_trades": _safe_json_value(_density_floor),
             }
         )
         compared_rows.append(payload)
@@ -893,6 +906,7 @@ def compare_pilot_runs(
     trade_gate_policy: str = DEFAULT_TRADE_GATE_POLICY,
     trade_gate_reference_days: int = DEFAULT_TRADE_GATE_REFERENCE_DAYS,
     trade_gate_min_ratio: float = DEFAULT_TRADE_GATE_MIN_RATIO,
+    min_avg_symbol_trades: float = 0.0,
     top_n: int = 20,
 ) -> Dict[str, Any]:
     identity_fields_tuple = tuple(identity_fields)
@@ -908,6 +922,7 @@ def compare_pilot_runs(
         trade_gate_policy=str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
         trade_gate_reference_days=int(trade_gate_reference_days),
         trade_gate_min_ratio=float(trade_gate_min_ratio),
+        min_avg_symbol_trades=float(min_avg_symbol_trades),
     )
 
     return {
@@ -921,6 +936,7 @@ def compare_pilot_runs(
             "trade_gate_policy": str(trade_gate_policy or DEFAULT_TRADE_GATE_POLICY),
             "trade_gate_reference_days": int(trade_gate_reference_days),
             "trade_gate_min_ratio": float(trade_gate_min_ratio),
+            "min_avg_symbol_trades": float(min_avg_symbol_trades),
             "top_n": int(max(0, int(top_n))),
         },
         "main_run": {

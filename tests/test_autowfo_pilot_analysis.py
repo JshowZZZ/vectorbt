@@ -549,6 +549,40 @@ def test_compare_pilot_runs_distinguishes_state_trigger_role_variants():
     assert ("obv_roc,keltner_pos,ad", "ad") in state_rows
 
 
+def test_compare_pilot_runs_min_avg_symbol_trades_rejects_low_density():
+    """Rows with avg per-symbol trades below the floor fail the gate."""
+    main_run = {
+        "run_id": "main",
+        "run_root": "artifacts/runs/main",
+        "combo_df": _combo_frame(return_pct=0.12, trades=0.16, sharpe=1.0),
+        "symbol_oos_df": _symbol_frame([0.2, 0.1, 0.05], trades=[0.2, 0.15, 0.13]),
+        "metadata": {"timeframe_diagnostics": [{"realized_shared_days": 180}]},
+    }
+    sens_run = {
+        "run_id": "sens",
+        "run_root": "artifacts/runs/sens",
+        "combo_df": _combo_frame(return_pct=0.08, trades=0.16, sharpe=0.9),
+        "symbol_oos_df": _symbol_frame([0.1, 0.04, 0.01], trades=[0.2, 0.15, 0.13]),
+        "metadata": {"timeframe_diagnostics": [{"realized_shared_days": 180}]},
+    }
+
+    # Without density floor → gate passed
+    payload_no_floor = pilot_analysis.compare_pilot_runs(
+        main_run, sens_run, min_avg_symbol_trades=0.0, top_n=5
+    )
+    assert payload_no_floor["summary"]["gate_passed_rows"] == 1
+
+    # With density floor of 1.0 → gate rejected
+    payload_with_floor = pilot_analysis.compare_pilot_runs(
+        main_run, sens_run, min_avg_symbol_trades=1.0, top_n=5
+    )
+    assert payload_with_floor["summary"]["gate_passed_rows"] == 0
+    row = payload_with_floor["top_stable_positive"][0]
+    assert row["passes_symbol_trade_density_gate"] is False
+    assert row["passes_overall_gate"] is False
+    assert payload_with_floor["thresholds"]["min_avg_symbol_trades"] == 1.0
+
+
 def test_load_run_analysis_inputs_resolves_run_id_under_artifacts(tmp_path):
     run_root = tmp_path / "artifacts" / "runs" / "20260409_010000"
     (run_root / "results").mkdir(parents=True)

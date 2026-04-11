@@ -118,6 +118,25 @@ indicators, symbols, and time windows to discover robust combinations.
         with avg trades < 0.2
       - hierarchical mode now formally matches current-mode baseline density (`3` canonical)
         but only `1` row is practically viable (trades ≥ 1.0)
+  - `AWF-313` state-trigger temporal replay on older anchor window is now complete:
+    - runs:
+      - `20260411_174006` (main)
+      - `20260411_174147` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf313_temporal_replay_htf_state_trigger.json`
+    - decision memo:
+      - `plans/AUTOWFO_STATE_TRIGGER_TEMPORAL_REPLAY_DECISION_20260412.md`
+    - outcome:
+      - `6` compared / `0` stable-positive / `0` gate-passed
+      - all rows negative in both runs; the validated hierarchical configuration completely
+        fails on the `2024-10 → 2025-04` window
+      - classification: `time-local` (consistent with AWF-310's current-mode replay)
+  - `AWF-314` per-symbol trade-density floor added to pilot analysis gate:
+    - new `--min-avg-symbol-trades` CLI parameter (default `0.0` for backward compat)
+    - rejects rows where mean per-symbol OOS trades fall below the floor in either run
+    - confirmed: AWF-312 with `--min-avg-symbol-trades 1.0` correctly drops from `4` to `2`
+      gate-passed (rejecting `cmf`/`chop` near-zero-trade artifacts)
+    - validation: `276` tests passed
   - three new-factor sidecar tracks registered (AWF-307/308/309); run in parallel
     with Phase 60, do not block it; results feed into Phase 60 state/trigger candidate pool
   - historical anchored replay sidecar (`AWF-310`) completed first as the lowest-risk
@@ -908,6 +927,8 @@ Each experiment should record:
 - runtime and memory summary
 
 ## Change Log
+- 2026-04-12: `AWF-314` added per-symbol trade-density floor (`--min-avg-symbol-trades`) to the pilot analysis gate. Default `0.0` preserves backward compat. Setting `1.0` correctly rejects the AWF-312 `cmf`/`chop` near-zero-trade artifacts (4 → 2 gate-passed). New test added to `tests/test_autowfo_pilot_analysis.py`.
+- 2026-04-12: `AWF-313` replayed the validated hierarchical state-trigger config on the one-year-earlier `180d` anchor window (`end = 2025-04-09`). Result: `6` compared / `0` stable-positive / `0` gate-passed. All rows negative in both runs. Classification: `time-local`. The hierarchical mode works on the modern `2025-10 → 2026-04` window but not the earlier epoch. Consistent with AWF-310's current-mode replay finding. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_TEMPORAL_REPLAY_DECISION_20260412.md`.
 - 2026-04-12: `AWF-312` expanded the state-trigger HTF repair to all 3 trigger candidates and both state sets with `htf_trend:1d:20`. Result: `36` compared / `10` stable-positive / `4` gate-passed / `3` canonical. The `ad` trigger gate pass from AWF-311 reproduces exactly. Two new triggers (`cmf`, `chop`) technically pass but with avg trades < 0.2 — gate artifacts. The hierarchical mode now formally matches current-mode canonical density (`3` canonical each) but only `1` row is practically viable. Decision memo: `plans/AUTOWFO_EXPANDED_HTF_REPAIR_DECISION_20260412.md`.
 - 2026-04-12: `AWF-311` completed the HTF-enhanced state-trigger repair pilot. The near-pass row from `AWF-304` (state=`obv_roc+keltner_pos`, trigger=`ad`) was combined with daily HTF confirmation overlays from the `AWF-309` bounded pass. The `htf_trend:1d:20` variant repaired `DOT/BTC` from `-1.45%`/`-2.43%` to `+4.93%`/`+3.97%`, achieving `8/8` positive symbols in both runs and producing the first gate-passed hierarchical state-trigger row: `9` compared / `3` stable-positive / `1` gate-passed. The `1d:10` variant failed because it broke `XRP/BTC` while fixing `DOT/BTC`. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_HTF_REPAIR_DECISION_20260412.md`. Phase 60 now has concrete positive evidence but the frozen current-mode `drop SOL/BTC` reference remains denser at `3` gate-passed rows.
 - 2026-04-12: `AWF-303` completed the additive hierarchical execution path and `AWF-304` closed its first paired pilot decision. The state-trigger mode now runs end to end with role-aware search space construction, state-filtered trigger entries, explicit state-reversal exits, and comparable artifact metadata. During `AWF-304` analysis, the paired pilot report initially collapsed role-distinct rows because pilot-analysis identity still assumed current-mode contracts; that was fixed by making the default identity role-aware (`strategy_mode`, `state_indicator_list`, `trigger_indicator_list`) before final evaluation. The corrected report `artifacts/reports/pilot_analysis_awf304_state_trigger.json` shows `18` compared / `5` stable-positive / `0` gate-passed, versus the frozen current-mode `drop SOL/BTC` reference `artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json` at `75` / `25` / `3`. Decision memo: `plans/AUTOWFO_STATE_TRIGGER_FIRST_PILOT_DECISION_20260412.md`. Current interpretation: the first state-trigger seed matrix is directionally interesting but not promotable; Phase 60 remains a bounded research branch rather than the new default strategy path.
