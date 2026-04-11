@@ -6,6 +6,7 @@ import csv
 from collections import deque
 import html
 import json
+import logging
 import mimetypes
 import os
 from pathlib import Path
@@ -27,6 +28,8 @@ from autowfo.control_panel.state import (
     _read_log_tail,
     _read_test_log_tail,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _cp():
@@ -458,6 +461,72 @@ def _build_advanced_results_analysis(rows, n_trials=ADVANCED_ANALYSIS_DEFAULT_TR
     }
 
 
+@_with_cp
+def _pilot_history_top_candidate(payload):
+    for key in ("top_gate_passed", "top_stable_positive"):
+        rows = payload.get(key)
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            return rows[0]
+    return {}
+
+
+@_with_cp
+def _pilot_history_row_from_payload(path, payload):
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
+    if not payload.get("schema_version"):
+        raise ValueError("missing schema_version")
+
+    main_run = payload.get("main_run")
+    sensitivity_run = payload.get("sensitivity_run")
+    summary = payload.get("summary")
+    thresholds = payload.get("thresholds")
+    if not isinstance(main_run, dict) or not main_run.get("run_id"):
+        raise ValueError("missing main_run.run_id")
+    if not isinstance(sensitivity_run, dict) or not sensitivity_run.get("run_id"):
+        raise ValueError("missing sensitivity_run.run_id")
+    if not isinstance(summary, dict) or summary.get("compared_combo_rows") is None:
+        raise ValueError("missing summary.compared_combo_rows")
+    if not isinstance(thresholds, dict):
+        raise ValueError("missing thresholds")
+
+    top_row = _pilot_history_top_candidate(payload)
+    created_dt = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0)
+    return {
+        "filename": path.name,
+        "created_utc": created_dt.isoformat(),
+        "created_ts": int(created_dt.timestamp()),
+        "main_run_id": str(main_run.get("run_id", "")),
+        "sens_run_id": str(sensitivity_run.get("run_id", "")),
+        "compared_rows": int(summary.get("compared_combo_rows") or 0),
+        "stable_positive_rows": int(summary.get("stable_positive_rows") or 0),
+        "gate_passed_rows": int(summary.get("gate_passed_rows") or 0),
+        "canonical_gate_passed_rows": int(summary.get("canonical_gate_passed_rows") or 0),
+        "min_combo_trades": _parse_float(thresholds.get("min_combo_trades")),
+        "top_indicator_list": top_row.get("indicator_list"),
+        "top_min_return": _parse_float(top_row.get("min_return")),
+        "top_regime": top_row.get("regime_name"),
+    }
+
+
+@_with_cp
+def _build_pilot_history():
+    reports_dir = ARTIFACTS / "reports"
+    rows = []
+    if not reports_dir.exists():
+        return {"rows": rows, "total": 0}
+
+    for path in sorted(reports_dir.glob("pilot_analysis_*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            rows.append(_pilot_history_row_from_payload(path, payload))
+        except Exception as exc:
+            LOGGER.warning("Skipping pilot history file %s: %s", path.name, exc)
+
+    rows.sort(key=lambda row: (row.get("created_ts") or 0, row.get("filename") or ""), reverse=True)
+    return {"rows": rows, "total": len(rows)}
+
+
 def try_handle_get(handler, parsed, path):
     if path == "/results.json":
         query = parse_qs(parsed.query)
@@ -501,6 +570,12 @@ def try_handle_get(handler, parsed, path):
             "application/json; charset=utf-8",
         )
         return True
+    if path == "/pilot-history.json":
+        handler._send(
+            json.dumps(_build_pilot_history(), ensure_ascii=False),
+            "application/json; charset=utf-8",
+        )
+        return True
     if path == "/status":
         status_path = _latest_status_html_path()
         if status_path is not None:
@@ -540,6 +615,7 @@ __all__ = [
     "_percentile",
     "_summarize_numeric",
     "_build_advanced_results_analysis",
+    "_build_pilot_history",
     "try_handle_get",
 ]
 

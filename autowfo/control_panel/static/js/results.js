@@ -485,6 +485,47 @@ export const ResultsTab = {
           </data-table>
         </div>
       </div>
+
+      <div class="rounded-xl border bg-white dark:bg-gray-800/60 border-gray-200 dark:border-gray-700/50 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ tr('results_pilot_history_title', 'Pilot 歷史紀錄') }}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ tr('results_pilot_history_desc', '所有 pilot-analysis report 的摘要') }}</p>
+        </div>
+        <div class="overflow-x-auto">
+          <data-table :columns="pilotHistoryColumns" :rows="pilotHistory" :page-size="25"
+                      sort-key="created_ts" searchable expandable
+                      :expanded-key="expandedKeyPilot"
+                      @row-click="r => toggleDetail(r, 'pilot')">
+            <template #detail="{ row }">
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+                <div v-if="row.top_indicator_list">
+                  <span class="text-gray-500">Top Indicators:</span>
+                  <span class="font-mono">{{ row.top_indicator_list }}</span>
+                </div>
+                <div v-if="row.top_regime">
+                  <span class="text-gray-500">Regime:</span>
+                  <span class="font-mono">{{ row.top_regime }}</span>
+                </div>
+                <div v-if="row.top_min_return != null">
+                  <span class="text-gray-500">Min Return:</span>
+                  <span class="font-mono"
+                        :class="row.top_min_return > 0 ? 'text-green-600' : 'text-red-500'">
+                    {{ Number(row.top_min_return).toFixed(4) }}%
+                  </span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Trade Floor:</span>
+                  <span class="font-mono">{{ row.min_combo_trades ?? '--' }}</span>
+                </div>
+                <div class="sm:col-span-2">
+                  <span class="text-gray-500">Filename:</span>
+                  <span class="font-mono text-xs break-all">{{ row.filename }}</span>
+                </div>
+              </div>
+            </template>
+          </data-table>
+        </div>
+      </div>
       </template>
     </div>
   `,
@@ -497,10 +538,12 @@ export const ResultsTab = {
     const top10LatestRun = ref([])          // AWF-107: latest-run data
     const top10Mode = ref('history')        // AWF-107: 'history' | 'latest'
     const leaderboard = ref([])
+    const pilotHistory = ref([])
     const timeframes = ref([])
     const dataNote = ref('')
     const expandedKeyTop10 = ref(null)
     const expandedKeyAll = ref(null)
+    const expandedKeyPilot = ref(null)
 
     // Expose L to window so DataTable's allDetailCols can use it
     window._AUTOWFO_L = L
@@ -942,6 +985,16 @@ export const ResultsTab = {
       { key: 'report_file', label: tr('report_file', '報告'), sortable: false },
     ]
 
+    const pilotHistoryColumns = [
+      { key: 'created_utc', label: tr('pilot_created', '時間'), sortable: true },
+      { key: 'main_run_id', label: tr('pilot_main_run', 'Main Run'), sortable: true },
+      { key: 'sens_run_id', label: tr('pilot_sens_run', 'Sens Run'), sortable: true },
+      { key: 'compared_rows', label: tr('pilot_compared', '比較數'), numeric: true, sortable: true },
+      { key: 'stable_positive_rows', label: tr('pilot_stable', '穩定正'), numeric: true, sortable: true },
+      { key: 'gate_passed_rows', label: tr('pilot_gate', '通過門檻'), numeric: true, sortable: true },
+      { key: 'canonical_gate_passed_rows', label: tr('pilot_canonical', 'Canonical'), numeric: true, sortable: true },
+    ]
+
     function pickMetric(row, keys) {
       for (const k of keys) {
         const v = Number(row[k])
@@ -1065,6 +1118,15 @@ export const ResultsTab = {
         const tf = filters.value.timeframe
         const q = tf && tf !== 'all' ? `?timeframe=${encodeURIComponent(tf)}` : ''
         payload.value = await fetchJson('/results.json' + q)
+        try {
+          const pilotPayload = await fetchJson('/pilot-history.json')
+          pilotHistory.value = (pilotPayload.rows || []).map((row, i) => ({
+            ...row,
+            _expandKey: `pilot-${i}`,
+          }))
+        } catch (_) {
+          pilotHistory.value = []
+        }
         // Extract timeframes
         const tfs = new Set()
         ;(payload.value.timeframes || []).forEach(v => { if (v && v !== 'nan') tfs.add(v) })
@@ -1198,6 +1260,8 @@ export const ResultsTab = {
       const key = row._expandKey
       if (tableId === 'top10') {
         expandedKeyTop10.value = expandedKeyTop10.value === key ? null : key
+      } else if (tableId === 'pilot') {
+        expandedKeyPilot.value = expandedKeyPilot.value === key ? null : key
       } else {
         expandedKeyAll.value = expandedKeyAll.value === key ? null : key
       }
@@ -1249,9 +1313,9 @@ export const ResultsTab = {
       if (frontierChart) frontierChart.destroy()
     })
 
-      return { loading, filters, timeframes, kpis, dataNote, allRows, filtered, top10, leaderboard,
-               tableColumns, top10Columns, lbColumns, scatterRef, histRef, frontierRef, TOP_COLS,
-               expandedKeyTop10, expandedKeyAll, retesting, retestTop, exportingSignal, exportTopSignalConfig,
+      return { loading, filters, timeframes, kpis, dataNote, allRows, filtered, top10, leaderboard, pilotHistory,
+               tableColumns, top10Columns, lbColumns, pilotHistoryColumns, scatterRef, histRef, frontierRef, TOP_COLS,
+               expandedKeyTop10, expandedKeyAll, expandedKeyPilot, retesting, retestTop, exportingSignal, exportTopSignalConfig,
                top10Display, top10LatestRun, top10Mode,
                downloadingFeedbackSpec, downloadFeedbackSpec, advancedAnalysis, advancedLoading,
                downloadingAdvanced, advancedParams, loadAdvancedAnalysis, downloadAdvancedJson, fmtNum,

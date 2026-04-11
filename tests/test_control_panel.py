@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import http.client
+import os
 import threading
 import re
 from contextlib import contextmanager
@@ -891,6 +892,130 @@ def test_config_build_preset_bundle_uses_preset_default_reports(tmp_path, monkey
     assert response.status == 200
     assert payload["ok"] is True
     assert [item["verdict"]["verdict"] for item in payload["details"]["items"]] == ["hold", "hold", "no_go"]
+
+
+def test_pilot_history_endpoint_lists_valid_reports_sorted_by_mtime(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    reports_dir = artifacts / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    older_path = reports_dir / "pilot_analysis_awf305_tp1-0_sl0-75.json"
+    older_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "thresholds": {"min_combo_trades": 0.5},
+                "main_run": {"run_id": "main-older"},
+                "sensitivity_run": {"run_id": "sens-older"},
+                "summary": {
+                    "compared_combo_rows": 105,
+                    "stable_positive_rows": 11,
+                    "gate_passed_rows": 2,
+                    "canonical_gate_passed_rows": 1,
+                },
+                "top_gate_passed": [
+                    {
+                        "indicator_list": "obv_roc,keltner_pos,ad",
+                        "min_return": 0.42,
+                        "regime_name": "trend_any",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    newer_path = reports_dir / "pilot_analysis_awf306_scope.json"
+    newer_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "thresholds": {"min_combo_trades": 0.375},
+                "main_run": {"run_id": "main-newer"},
+                "sensitivity_run": {"run_id": "sens-newer"},
+                "summary": {
+                    "compared_combo_rows": 30,
+                    "stable_positive_rows": 24,
+                    "gate_passed_rows": 24,
+                    "canonical_gate_passed_rows": 24,
+                },
+                "top_gate_passed": [],
+                "top_stable_positive": [
+                    {
+                        "indicator_list": "obv_roc,keltner_pos",
+                        "min_return": 0.21,
+                        "regime_name": "trend_high",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    os.utime(older_path, (now_ts - 60, now_ts - 60))
+    os.utime(newer_path, (now_ts, now_ts))
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/pilot-history.json")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["total"] == 2
+    assert [row["filename"] for row in payload["rows"]] == [
+        "pilot_analysis_awf306_scope.json",
+        "pilot_analysis_awf305_tp1-0_sl0-75.json",
+    ]
+    assert payload["rows"][0]["created_ts"] >= payload["rows"][1]["created_ts"]
+    assert payload["rows"][0]["main_run_id"] == "main-newer"
+    assert payload["rows"][0]["top_indicator_list"] == "obv_roc,keltner_pos"
+    assert payload["rows"][0]["top_regime"] == "trend_high"
+    assert payload["rows"][0]["min_combo_trades"] == 0.375
+    assert payload["rows"][1]["top_indicator_list"] == "obv_roc,keltner_pos,ad"
+    assert payload["rows"][1]["top_min_return"] == 0.42
+
+
+def test_pilot_history_endpoint_skips_invalid_or_non_contract_reports(tmp_path, monkeypatch):
+    artifacts = _setup_batch_env(tmp_path, monkeypatch)
+    reports_dir = artifacts / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    (reports_dir / "pilot_analysis_valid.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "thresholds": {"min_combo_trades": 0.5},
+                "main_run": {"run_id": "main-ok"},
+                "sensitivity_run": {"run_id": "sens-ok"},
+                "summary": {
+                    "compared_combo_rows": 12,
+                    "stable_positive_rows": 3,
+                    "gate_passed_rows": 1,
+                    "canonical_gate_passed_rows": 1,
+                },
+                "top_gate_passed": [],
+                "top_stable_positive": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "pilot_analysis_broken.json").write_text("{broken", encoding="utf-8")
+    (reports_dir / "pilot_analysis_wrong_schema.json").write_text(
+        json.dumps({"schema": "awf305_tpsl_sensitivity_v1"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with _serve_handler_connection() as conn:
+        conn.request("GET", "/pilot-history.json")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+    assert response.status == 200
+    assert payload["total"] == 1
+    assert payload["rows"][0]["filename"] == "pilot_analysis_valid.json"
 
 
 def test_resolve_static_path_and_traversal_guard(tmp_path, monkeypatch):

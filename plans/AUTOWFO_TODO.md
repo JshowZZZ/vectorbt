@@ -16,6 +16,10 @@
     Add a new strategy mode that supports a long-horizon state filter, short-horizon trigger, and state-reversal exit without changing the existing combo-entry mode.
   - `todo` `AWF-304` Execute and compare the first hierarchical pilot.
     Run the minimal state-trigger pilot against the frozen `drop SOL/BTC` current-mode micro-cohort baseline and decide whether the new mode deserves continued investment.
+  - `todo` `AWF-305` Exit-parameter sensitivity test on the 10-symbol breadth cohort.
+    Run a bounded TP/SL grid (`tp=[1.0,1.5,2.0]` × `sl=[0.75,1.0,1.25]`, 9 combos) on the full 10-symbol cohort with the fixed indicator family to determine whether symbol dragger/supporter roles are exit-parameter-specific or symbol-intrinsic. Protocol: `plans/AUTOWFO_TPSL_SENSITIVITY_PROTOCOL.md`.
+  - `done` `AWF-306` Pilot history sortable table in the control panel.
+    Added `/pilot-history.json` plus a Results-page "Pilot History" `DataTable` under the leaderboard. The endpoint only accepts pilot-analysis JSON files that satisfy the paired-report schema contract, skips malformed/non-contract files safely, and exposes sortable summary rows for operator review. Protocol: `plans/AUTOWFO_PILOT_HISTORY_UI_PROTOCOL.md`.
 
 ## Backlog
 
@@ -27,6 +31,12 @@
 
 - `todo` `AWF-304` Execute and compare the first hierarchical pilot.
   Run the minimal state-trigger pilot and compare it against the frozen `drop SOL/BTC` current-mode micro-cohort baseline.
+
+- `todo` `AWF-305` Exit-parameter sensitivity test on the 10-symbol breadth cohort.
+  Run a bounded TP/SL grid (`tp=[1.0,1.5,2.0]` × `sl=[0.75,1.0,1.25]`, 9 combos × paired WFO = 18 runs) on the full 10-symbol cohort with the fixed `obv_roc/keltner_pos/ad/cmf/dpo/chop` family. Extract per-symbol worst-return data from `param_sweep_symbol_oos_summary.csv` to build a symbol × TP/SL heatmap. Decision criteria: symbol worst in ≥7/9 combos = intrinsic dragger; ≤3/9 = exit-parameter-specific. Protocol: `plans/AUTOWFO_TPSL_SENSITIVITY_PROTOCOL.md`.
+
+- `done` `AWF-306` Pilot history sortable table in the control panel.
+  Added `/pilot-history.json` in `autowfo/control_panel/results.py` with schema-guarded report scanning, then rendered the new "Pilot History" `DataTable` in the Results page without changing the shared `DataTable` component. Validation: `python -m pytest tests/test_control_panel.py -q` and `node --check autowfo/control_panel/static/js/results.js autowfo/control_panel/static/js/i18n.js`.
 
 - `done` `AWF-299` Freeze the SOL-drop micro-cohort refinement protocol.
   Wrote `plans/AUTOWFO_SOL_DROP_MICRO_COHORT_PROTOCOL.md` and froze one final current-mode branch: anchored `2h / 180d`, `drop SOL/BTC` as the working 8-symbol cohort, promoted 9-symbol as the comparison baseline, and a narrowed pair-lift neighborhood around `obv_roc`, `keltner_pos`, `ad`, `cmf`, and `chop`.
