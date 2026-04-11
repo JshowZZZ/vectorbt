@@ -47,6 +47,9 @@ DEFAULT_CONFIG = {
     "state_exit_policy": "state_reversal",
     "regime_preset": "full",
     "regime_name_filter": None,
+    "enable_htf_trend_gate": False,
+    "htf_trend_timeframes": None,
+    "htf_trend_windows": None,
     "pilot_fixed_indicator_params": False,
     "pilot_single_trend_mom": False,
     "capital_mode": "shared",
@@ -525,6 +528,44 @@ def _normalize_regime_name_filter(value):
     return normalized
 
 
+def _normalize_htf_trend_timeframes(value):
+    values = value
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [item.strip() for item in values.split(",") if item.strip()]
+    normalized = []
+    alias_map = {
+        "8h": "8h",
+        "1d": "1d",
+        "daily": "1d",
+    }
+    for item in values:
+        key = alias_map.get(str(item or "").strip().lower())
+        if not key or key in normalized:
+            continue
+        normalized.append(key)
+    return normalized
+
+
+def _normalize_positive_int_list(value):
+    values = value
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [item.strip() for item in values.split(",") if item.strip()]
+    normalized = []
+    for item in values:
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError):
+            continue
+        if parsed <= 0 or parsed in normalized:
+            continue
+        normalized.append(parsed)
+    return normalized
+
+
 def _normalize_risk_mode(value):
     risk_mode = str(value or "fixed_pct").strip().lower()
     if risk_mode not in {"fixed_pct", "atr_multiple"}:
@@ -537,6 +578,28 @@ def _normalize_state_exit_policy(value):
     if policy not in {"state_reversal"}:
         return "state_reversal"
     return policy
+
+
+def _build_filter_variants(
+    *,
+    enable_htf_trend_gate=False,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
+):
+    variants = [{"kind": "none", "name": None}]
+    if not enable_htf_trend_gate:
+        return variants
+    for timeframe in _normalize_htf_trend_timeframes(htf_trend_timeframes):
+        for window in _normalize_positive_int_list(htf_trend_windows):
+            variants.append(
+                {
+                    "kind": "htf_trend",
+                    "timeframe": timeframe,
+                    "window": int(window),
+                    "name": f"htf_trend:{timeframe}:{int(window)}",
+                }
+            )
+    return variants
 
 
 def _has_all_config_fields(values, strict_fields):
@@ -645,6 +708,21 @@ def _resolve_runtime_settings(
     )
     regime_preset = _normalize_regime_preset(default_config.get("regime_preset", "full"))
     regime_name_filter = _normalize_regime_name_filter(default_config.get("regime_name_filter"))
+    enable_htf_trend_gate = _safe_bool(
+        default_config.get("enable_htf_trend_gate", False),
+        False,
+    )
+    htf_trend_timeframes = _normalize_htf_trend_timeframes(
+        default_config.get("htf_trend_timeframes", ["8h", "1d"])
+    )
+    htf_trend_windows = _normalize_positive_int_list(
+        default_config.get("htf_trend_windows", [10, 20])
+    )
+    filter_variants = _build_filter_variants(
+        enable_htf_trend_gate=enable_htf_trend_gate,
+        htf_trend_timeframes=htf_trend_timeframes,
+        htf_trend_windows=htf_trend_windows,
+    )
     pilot_fixed_indicator_params = _safe_bool(
         default_config.get("pilot_fixed_indicator_params", False),
         False,
@@ -709,6 +787,10 @@ def _resolve_runtime_settings(
         "state_exit_policy": state_exit_policy,
         "regime_preset": regime_preset,
         "regime_name_filter": regime_name_filter,
+        "enable_htf_trend_gate": enable_htf_trend_gate,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
+        "filter_variants": filter_variants,
         "pilot_fixed_indicator_params": pilot_fixed_indicator_params,
         "pilot_single_trend_mom": pilot_single_trend_mom,
         "wf_train_days": wf_train_days,
@@ -806,6 +888,7 @@ def _build_regime_variants(rsi_revert_pairs, preset="full", regime_name_filter=N
 
 def _count_coarse_combos(
     regime_variants,
+    filter_variants,
     indicator_param_options,
     combo_keys_all,
     mom_lookbacks,
@@ -817,6 +900,7 @@ def _count_coarse_combos(
     max_holds,
 ):
     count = 0
+    filter_count = max(len(filter_variants or []), 1)
     indicator_param_counts = {
         combo: int(np.prod([len(indicator_param_options.get(key, [{}])) for key in combo]))
         for combo in combo_keys_all
@@ -832,10 +916,10 @@ def _count_coarse_combos(
                 for mom_lookback in mom_iter:
                     for trade_mom_lookback in trade_mom_lookbacks:
                         for tp_stop in tp_stops:
-                            for sl_stop in sl_stops:
-                                for max_hold in max_holds:
-                                    for combo in combo_keys_all:
-                                        count += indicator_param_counts.get(combo, 1)
+                                for sl_stop in sl_stops:
+                                    for max_hold in max_holds:
+                                        for combo in combo_keys_all:
+                                            count += indicator_param_counts.get(combo, 1) * filter_count
     return count
 
 

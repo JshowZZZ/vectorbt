@@ -47,6 +47,8 @@ def _prepare_timeframe_runtime(
     chop_lookbacks,
     init_cash_usdt,
     capital_mode,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     wf_train_days,
     wf_test_days,
     wf_step_days,
@@ -108,6 +110,8 @@ def _prepare_timeframe_runtime(
         chop_lookbacks=chop_lookbacks,
         init_cash_usdt=init_cash_usdt,
         capital_mode=capital_mode,
+        htf_trend_timeframes=htf_trend_timeframes,
+        htf_trend_windows=htf_trend_windows,
     )
     trade_symbols_tf = ctx["trade_symbols"]
     timeframe_range = f"{timeframe} ({data_days}d): {ctx['data_range']}"
@@ -184,6 +188,81 @@ def _prepare_timeframe_runtime(
         "wf_slices": wf_slices,
         "runtime_eval": runtime_eval,
     }
+
+
+def _format_overlay_filter_name(filter_spec):
+    if not isinstance(filter_spec, dict):
+        return None
+    if str(filter_spec.get("kind") or "").strip().lower() != "htf_trend":
+        return None
+    timeframe = str(filter_spec.get("timeframe") or "").strip().lower()
+    window = filter_spec.get("window")
+    if not timeframe or window in (None, ""):
+        return None
+    try:
+        window_value = int(window)
+    except (TypeError, ValueError):
+        return None
+    return f"htf_trend:{timeframe}:{window_value}"
+
+
+def _parse_overlay_filter_name(filter_name):
+    text = str(filter_name or "").strip()
+    if not text:
+        return {"kind": "none", "name": None}
+    overlay_text = text.rsplit("|", 1)[-1].strip()
+    if not overlay_text.startswith("htf_trend:"):
+        return {"kind": "none", "name": None}
+    parts = overlay_text.split(":")
+    if len(parts) != 3:
+        return {"kind": "none", "name": None}
+    try:
+        window = int(parts[2])
+    except (TypeError, ValueError):
+        return {"kind": "none", "name": None}
+    return {
+        "kind": "htf_trend",
+        "timeframe": parts[1].strip().lower(),
+        "window": window,
+        "name": overlay_text,
+    }
+
+
+def _compose_filter_name(indicator_label, filter_spec=None):
+    base_label = str(indicator_label or "").strip()
+    overlay_name = _format_overlay_filter_name(filter_spec)
+    if not overlay_name:
+        return base_label
+    if not base_label:
+        return overlay_name
+    return f"{base_label}|{overlay_name}"
+
+
+def _build_overlay_filters(ctx, filter_spec, template):
+    if isinstance(template, pd.DataFrame):
+        def _broadcast(series):
+            aligned = pd.Series(series, index=template.index).fillna(False).astype(bool)
+            return pd.DataFrame(
+                {column: aligned for column in template.columns},
+                index=template.index,
+            )
+        all_true = pd.DataFrame(True, index=template.index, columns=template.columns)
+    else:
+        def _broadcast(series):
+            return pd.Series(series, index=template.index).fillna(False).astype(bool)
+        all_true = pd.Series(True, index=template.index)
+
+    if not isinstance(filter_spec, dict):
+        return all_true, all_true
+    if str(filter_spec.get("kind") or "").strip().lower() != "htf_trend":
+        return all_true, all_true
+
+    filter_name = _format_overlay_filter_name(filter_spec)
+    htf_filters = (ctx or {}).get("htf_trend_filters") or {}
+    selected = htf_filters.get(filter_name)
+    if not isinstance(selected, dict):
+        raise RuntimeError(f"missing overlay filter context for {filter_name}")
+    return _broadcast(selected.get("long")), _broadcast(selected.get("short"))
 
 
 def _build_combo_key_values(
@@ -314,6 +393,7 @@ def _build_combo_task_payload(
     regime,
     indicator_combo,
     combo_params,
+    filter_spec=None,
     vol_lookback,
     vol_z,
     mom_lookback,
@@ -330,7 +410,10 @@ def _build_combo_task_payload(
     indicator_combo = tuple(indicator_combo)
     combo_params = dict(combo_params)
     indicator_list = ",".join(indicator_combo)
-    filter_name = indicator_combo_label_fn(indicator_combo)
+    filter_name = _compose_filter_name(
+        indicator_combo_label_fn(indicator_combo),
+        filter_spec=filter_spec,
+    )
     param_payload = {field: combo_params.get(field) for field in indicator_param_fields}
     combo_key_values = _build_combo_key_values(
         timeframe=timeframe,
@@ -374,6 +457,7 @@ def _build_combo_task_payload(
         "regime": regime,
         "indicator_combo": indicator_combo,
         "combo_params": combo_params,
+        "filter_spec": dict(filter_spec or {"kind": "none", "name": None}),
         "filter_name": filter_name,
         "indicator_list": indicator_list,
         "vol_lookback": vol_lookback,

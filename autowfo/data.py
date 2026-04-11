@@ -246,6 +246,44 @@ def _format_request_timestamp(ts):
     return stamp.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def _normalize_htf_resample_rule(value):
+    key = str(value or "").strip().lower()
+    if key == "8h":
+        return "8h"
+    if key in {"1d", "daily"}:
+        return "1d"
+    raise ValueError(f"unsupported HTF timeframe: {value}")
+
+
+def _build_htf_trend_filters(close_series, base_index, htf_timeframes=None, htf_windows=None):
+    timeframe_values = list(htf_timeframes or [])
+    window_values = [int(value) for value in (htf_windows or []) if int(value) > 0]
+    if close_series is None or close_series.empty or not timeframe_values or not window_values:
+        return {}
+
+    filters = {}
+    for timeframe in timeframe_values:
+        rule = _normalize_htf_resample_rule(timeframe)
+        resampled_close = close_series.resample(rule).last().dropna()
+        if resampled_close.empty:
+            continue
+        for window in window_values:
+            ema = resampled_close.ewm(span=int(window), adjust=False).mean()
+            long_gate = (resampled_close > ema).shift(1).astype("boolean")
+            short_gate = (resampled_close < ema).shift(1).astype("boolean")
+            long_gate = (
+                long_gate.reindex(base_index, method="ffill").fillna(False).astype(bool)
+            )
+            short_gate = (
+                short_gate.reindex(base_index, method="ffill").fillna(False).astype(bool)
+            )
+            filters[f"htf_trend:{str(timeframe).lower()}:{int(window)}"] = {
+                "long": long_gate,
+                "short": short_gate,
+            }
+    return filters
+
+
 def _resolve_requested_window(data_days, *, data_start=None, data_end=None):
     end_ts = _coerce_utc_timestamp(
         data_end,
@@ -413,6 +451,8 @@ def _prepare_timeframe_context(
     chop_lookbacks,
     init_cash_usdt,
     capital_mode,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     data_start=None,
     data_end=None,
     load_or_update_symbol_fn=None,
@@ -703,6 +743,13 @@ def _prepare_timeframe_context(
         chop_range = (chop_high - chop_low).replace(0, np.nan)
         chop_by_lb[lb] = 100 * np.log10(chop_atr_sum / chop_range) / np.log10(lb)
 
+    htf_trend_filters = _build_htf_trend_filters(
+        btc_close,
+        trade_close.index,
+        htf_timeframes=htf_trend_timeframes,
+        htf_windows=htf_trend_windows,
+    )
+
     data_range = f"{trade_close.index[0]} -> {trade_close.index[-1]}"
     overlap_diagnostics = {
         "requested_data_days": int(data_days),
@@ -765,6 +812,7 @@ def _prepare_timeframe_context(
         "donchian_pos_by_lb": donchian_pos_by_lb,
         "ppo_hist_series": ppo_hist_series,
         "chop_by_lb": chop_by_lb,
+        "htf_trend_filters": htf_trend_filters,
         "data_range": data_range,
         "overlap_diagnostics": overlap_diagnostics,
     }

@@ -26,8 +26,12 @@
   - `todo` `AWF-308` Open Interest signal indicator sidecar (Track B).
     Run `oi_roc` as a combo member in the bounded family neighborhood to test whether derivatives open-interest rate-of-change adds gate-passed density that price/volume misses.
     Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
-  - `todo` `AWF-309` Cross-timeframe HTF confirmation filter sidecar (Track C).
-    Run `htf_trend` as an overlay gate (resampled from existing `2h` data, zero new data cost) on the full 10-symbol cohort. Execute before Tracks A and B due to lowest implementation risk.
+  - `done` `AWF-309` Cross-timeframe HTF confirmation filter sidecar (Track C).
+    Completed the bounded HTF overlay pilot after fixing a runtime wiring bug that initially dropped `filter_variants` from the execution kwargs. Valid rerun pair:
+    - `20260411_awf309_htf_main_rerun`
+    - `20260411_awf309_htf_sens_rerun`
+    Decision memo: `plans/AUTOWFO_HTF_TREND_SIDECAR_DECISION_20260411.md`.
+    Result: `300` compared / `66` stable-positive / `3` gate-passed. The pass is bounded: daily HTF confirmation (`1d:10`, `1d:20`) adds two new gate-passed variants around the existing `obv_roc + keltner_pos + ad` family, while `8h` confirmation is rejected. This promotes `htf_trend` into the Phase 60 candidate pool as an optional daily state-alignment gate only; it does not displace `AWF-303`.
     Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
   - `done` `AWF-310` Historical anchored replay sidecar.
     Re-ran the frozen full 10-symbol bounded-family current-mode baseline on a one-year-earlier anchored `180d` window (`end = 2025-04-09T14:00:00Z`) as runs `20260411_awf310_hist180_main` and `20260411_awf310_hist180_sens`, then wrote `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`. Result: full `181d` overlap is reproducible on the older slice, but the current canonical family does not survive there. The older window is best classified as `directional-only`, with `21` stable-positive rows, `0` gate-passed rows, and `SOL/BTC` replacing `BNB/BTC` as the dominant blocker.
@@ -45,10 +49,13 @@
   Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track B.
   Expected artifacts: `pilot_analysis_awf308_oi_roc.json`.
 
-- `todo` `AWF-309` Execute and analyze the cross-timeframe HTF confirmation filter sidecar.
-  Run the bounded Track C pilot (`htf_trend` as entry overlay gate, resampled from existing `2h` data) on the full 10-symbol cohort. This is the lowest-cost new factor test as it requires no new data source. Determine whether multi-timeframe alignment improves `BNB/BTC` min-symbol return or stable-positive density.
-  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track C.
-  Expected artifacts: `pilot_analysis_awf309_htf_trend.json`.
+- `done` `AWF-309` Execute and analyze the cross-timeframe HTF confirmation filter sidecar.
+  Completed the valid rerun pair:
+  - `20260411_awf309_htf_main_rerun`
+  - `20260411_awf309_htf_sens_rerun`
+  Report: `artifacts/reports/pilot_analysis_awf309_htf_trend.json`.
+  Decision memo: `plans/AUTOWFO_HTF_TREND_SIDECAR_DECISION_20260411.md`.
+  Outcome: Track C is a bounded pass. Daily HTF confirmation (`1d:10`, `1d:20`) adds two new canonical gate-passed rows around the existing `obv_roc + keltner_pos + ad` family, while `8h` HTF confirmation adds no gate-passed rows and is rejected. The result feeds the Phase 60 candidate pool but does not displace `AWF-303`.
 
 - `done` `AWF-310` Execute and analyze the historical anchored replay sidecar.
   Completed the older anchored pair:
@@ -427,3 +434,4 @@
 - 2026-03-15: Phase 46 opened. Baseline workflow gap, rescore CLI, leaderboard dedup, and coverage retest identified during Phase 45 verification.
 - 2026-03-15: Phase 46 closed. Baseline workflow VBT_RUN_ID migration, `storage rescore`, leaderboard `is_latest`, and coverage force-retest shipped.
 - AWF-113~AWF-238 completed items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
+

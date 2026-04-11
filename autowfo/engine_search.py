@@ -12,6 +12,7 @@ from .engine_runtime import (
     _build_combo_row,
     _build_combo_task_payload,
     _build_oos_symbol_row,
+    _parse_overlay_filter_name,
     _build_symbol_row,
     _prepare_timeframe_runtime,
 )
@@ -29,36 +30,40 @@ def _iter_coarse_plan(
     combo_keys_all,
     iter_indicator_param_combos_fn,
     indicator_param_options,
+    filter_variants=None,
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     for regime in regime_variants:
-        mom_iter = mom_lookbacks if regime["regime_type"] == "trend" else [mom_lookbacks[0]]
-        for vol_lookback in vol_lookbacks:
-            for vol_z in vol_zs:
-                if regime["vol_mode"] == "any" and (
-                    vol_lookback != vol_lookbacks[0] or vol_z != vol_zs[0]
-                ):
-                    continue
-                for mom_lookback in mom_iter:
-                    for trade_mom_lookback in trade_mom_lookbacks:
-                        for tp_stop in tp_stops:
-                            for sl_stop in sl_stops:
-                                for max_hold in max_holds:
-                                    for combo_keys in combo_keys_all:
-                                        for combo_params in iter_indicator_param_combos_fn(
-                                            combo_keys, indicator_param_options
-                                        ):
-                                            yield (
-                                                regime,
-                                                combo_keys,
-                                                combo_params,
-                                                vol_lookback,
-                                                vol_z,
-                                                mom_lookback,
-                                                trade_mom_lookback,
-                                                tp_stop,
-                                                sl_stop,
-                                                max_hold,
-                                            )
+        for filter_spec in filter_variants:
+            mom_iter = mom_lookbacks if regime["regime_type"] == "trend" else [mom_lookbacks[0]]
+            for vol_lookback in vol_lookbacks:
+                for vol_z in vol_zs:
+                    if regime["vol_mode"] == "any" and (
+                        vol_lookback != vol_lookbacks[0] or vol_z != vol_zs[0]
+                    ):
+                        continue
+                    for mom_lookback in mom_iter:
+                        for trade_mom_lookback in trade_mom_lookbacks:
+                            for tp_stop in tp_stops:
+                                for sl_stop in sl_stops:
+                                    for max_hold in max_holds:
+                                        for combo_keys in combo_keys_all:
+                                            for combo_params in iter_indicator_param_combos_fn(
+                                                combo_keys, indicator_param_options
+                                            ):
+                                                yield (
+                                                    regime,
+                                                    filter_spec,
+                                                    combo_keys,
+                                                    combo_params,
+                                                    vol_lookback,
+                                                    vol_z,
+                                                    mom_lookback,
+                                                    trade_mom_lookback,
+                                                    tp_stop,
+                                                    sl_stop,
+                                                    max_hold,
+                                                )
 
 
 def _default_refine_steps():
@@ -155,11 +160,14 @@ def _run_search_for_timeframe(
     safe_float_fn,
     refine_indicator_params_fn,
     safe_int_fn,
+    filter_variants=None,
     on_refine_plan_fn=None,
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     if search_mode == "combo":
         for (
             regime,
+            filter_spec,
             combo_keys,
             combo_params,
             vol_lookback,
@@ -171,6 +179,7 @@ def _run_search_for_timeframe(
             max_hold,
         ) in _iter_coarse_plan(
             regime_variants=regime_variants,
+            filter_variants=filter_variants,
             mom_lookbacks=mom_lookbacks,
             vol_lookbacks=vol_lookbacks,
             vol_zs=vol_zs,
@@ -184,6 +193,7 @@ def _run_search_for_timeframe(
         ):
             eval_combo_fn(
                 regime,
+                filter_spec,
                 combo_keys,
                 combo_params,
                 vol_lookback,
@@ -235,6 +245,7 @@ def _run_search_for_timeframe(
 
     for row, indicator_combo, tp_candidates, sl_candidates, param_options in fine_targets:
         regime = regime_lookup.get(row.get("regime_name"), regime_variants[0])
+        filter_spec = _parse_overlay_filter_name(row.get("filter_name"))
         vol_lookback = safe_int_fn(row.get("vol_lookback"), vol_lookbacks[0])
         vol_z = safe_float_fn(row.get("vol_z"), vol_zs[0])
         mom_lookback = safe_int_fn(row.get("mom_lookback"), mom_lookbacks[0])
@@ -246,6 +257,7 @@ def _run_search_for_timeframe(
                 for combo_params in iter_indicator_param_combos_fn(indicator_combo, param_options):
                     eval_combo_fn(
                         regime,
+                        filter_spec,
                         indicator_combo,
                         combo_params,
                         vol_lookback,
@@ -283,9 +295,11 @@ def _run_parallel_combo_search_for_timeframe(
     append_eval_result_fn,
     emit_progress_fn,
     checkpoint_fn,
+    filter_variants=None,
     on_progress_tick_fn=None,
     pruning_tracker=None,
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     done = 0
     skipped = 0
     planned_keys = set()
@@ -294,6 +308,7 @@ def _run_parallel_combo_search_for_timeframe(
 
     for (
         regime,
+        filter_spec,
         combo_keys,
         combo_params,
         vol_lookback,
@@ -305,6 +320,7 @@ def _run_parallel_combo_search_for_timeframe(
         max_hold,
     ) in _iter_coarse_plan(
         regime_variants=regime_variants,
+        filter_variants=filter_variants,
         mom_lookbacks=mom_lookbacks,
         vol_lookbacks=vol_lookbacks,
         vol_zs=vol_zs,
@@ -316,18 +332,26 @@ def _run_parallel_combo_search_for_timeframe(
         iter_indicator_param_combos_fn=iter_indicator_param_combos_fn,
         indicator_param_options=indicator_param_options,
     ):
-        combo_key, task_payload = build_combo_task_fn(
-            regime=regime,
-            indicator_combo=combo_keys,
-            combo_params=combo_params,
-            vol_lookback=vol_lookback,
-            vol_z=vol_z,
-            mom_lookback=mom_lookback,
-            trade_mom_lookback=trade_mom_lookback,
-            tp_stop=tp_stop,
-            sl_stop=sl_stop,
-            max_hold=max_hold,
-        )
+        build_kwargs = {
+            "regime": regime,
+            "filter_spec": filter_spec,
+            "indicator_combo": combo_keys,
+            "combo_params": combo_params,
+            "vol_lookback": vol_lookback,
+            "vol_z": vol_z,
+            "mom_lookback": mom_lookback,
+            "trade_mom_lookback": trade_mom_lookback,
+            "tp_stop": tp_stop,
+            "sl_stop": sl_stop,
+            "max_hold": max_hold,
+        }
+        try:
+            combo_key, task_payload = build_combo_task_fn(**build_kwargs)
+        except TypeError as exc:
+            if "filter_spec" not in str(exc):
+                raise
+            build_kwargs.pop("filter_spec", None)
+            combo_key, task_payload = build_combo_task_fn(**build_kwargs)
         stripped_key = _strip_data_range_from_combo_key(combo_key)
         if stripped_key in seen_keys or stripped_key in planned_keys:
             skipped += 1
@@ -406,6 +430,7 @@ def _run_parallel_combo_search_for_timeframe(
 def _run_combo_eval_step(
     *,
     regime,
+    filter_spec=None,
     indicator_combo,
     combo_params,
     vol_lookback,
@@ -428,18 +453,27 @@ def _run_combo_eval_step(
     pruning_tracker=None,
 ):
     wait_if_paused_fn(stage)
-    combo_key, task_payload = build_combo_task_fn(
-        regime=regime,
-        indicator_combo=indicator_combo,
-        combo_params=combo_params,
-        vol_lookback=vol_lookback,
-        vol_z=vol_z,
-        mom_lookback=mom_lookback,
-        trade_mom_lookback=trade_mom_lookback,
-        tp_stop=tp_stop,
-        sl_stop=sl_stop,
-        max_hold=max_hold,
-    )
+    filter_spec = dict(filter_spec or {"kind": "none", "name": None})
+    build_kwargs = {
+        "regime": regime,
+        "filter_spec": filter_spec,
+        "indicator_combo": indicator_combo,
+        "combo_params": combo_params,
+        "vol_lookback": vol_lookback,
+        "vol_z": vol_z,
+        "mom_lookback": mom_lookback,
+        "trade_mom_lookback": trade_mom_lookback,
+        "tp_stop": tp_stop,
+        "sl_stop": sl_stop,
+        "max_hold": max_hold,
+    }
+    try:
+        combo_key, task_payload = build_combo_task_fn(**build_kwargs)
+    except TypeError as exc:
+        if "filter_spec" not in str(exc):
+            raise
+        build_kwargs.pop("filter_spec", None)
+        combo_key, task_payload = build_combo_task_fn(**build_kwargs)
     stripped_key = _strip_data_range_from_combo_key(combo_key)
     if stripped_key in seen_keys:
         if on_progress_tick_fn is not None:
@@ -570,6 +604,8 @@ def _build_prepare_timeframe_runtime_kwargs(
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
     risk_mode="fixed_pct",
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
 ):
     return {
         "timeframe": timeframe,
@@ -612,6 +648,8 @@ def _build_prepare_timeframe_runtime_kwargs(
         "chop_lookbacks": chop_lookbacks,
         "init_cash_usdt": init_cash_usdt,
         "capital_mode": capital_mode,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -686,6 +724,8 @@ def _build_prepare_timeframe_runtime_context(
     build_walk_forward_windows_fn,
     compute_data_fingerprint_fn,
     risk_mode="fixed_pct",
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
 ):
     return {
         "base_symbol": base_symbol,
@@ -724,6 +764,8 @@ def _build_prepare_timeframe_runtime_context(
         "chop_lookbacks": chop_lookbacks,
         "init_cash_usdt": init_cash_usdt,
         "capital_mode": capital_mode,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -795,9 +837,15 @@ def _build_shared_pipeline_runtime_context(
     order_size_pct,
     max_concurrent_positions,
     config_sha256,
+    filter_variants=None,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     combo_seed=None,
     risk_mode="fixed_pct",
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
+    htf_trend_timeframes = list(htf_trend_timeframes or [])
+    htf_trend_windows = list(htf_trend_windows or [])
     return {
         "base_symbol": base_symbol,
         "trade_symbols": trade_symbols,
@@ -846,6 +894,9 @@ def _build_shared_pipeline_runtime_context(
         "slippage_bps": slippage_bps,
         "spread_bps": spread_bps,
         "funding_rate_daily": funding_rate_daily,
+        "filter_variants": filter_variants,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
         "risk_mode": risk_mode,
         "order_size_pct": order_size_pct,
         "max_concurrent_positions": max_concurrent_positions,
@@ -899,6 +950,8 @@ def _build_prepare_timeframe_runtime_context_from_shared(
         chop_lookbacks=shared["chop_lookbacks"],
         init_cash_usdt=shared["init_cash_usdt"],
         capital_mode=shared["capital_mode"],
+        htf_trend_timeframes=shared["htf_trend_timeframes"],
+        htf_trend_windows=shared["htf_trend_windows"],
         wf_train_days=shared["wf_train_days"],
         wf_test_days=shared["wf_test_days"],
         wf_step_days=shared["wf_step_days"],
@@ -948,6 +1001,7 @@ def _build_timeframe_ready_search_kwargs(
     max_workers,
     regime_variants,
     regime_lookup,
+    filter_variants=None,
     mom_lookbacks,
     vol_lookbacks,
     vol_zs,
@@ -1003,6 +1057,7 @@ def _build_timeframe_ready_search_kwargs(
     pruning_config=None,
     risk_mode="fixed_pct",
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     return {
         "timeframe": timeframe,
         "data_days": data_days,
@@ -1012,6 +1067,7 @@ def _build_timeframe_ready_search_kwargs(
         "max_workers": max_workers,
         "regime_variants": regime_variants,
         "regime_lookup": regime_lookup,
+        "filter_variants": filter_variants,
         "mom_lookbacks": mom_lookbacks,
         "vol_lookbacks": vol_lookbacks,
         "vol_zs": vol_zs,
@@ -1130,14 +1186,17 @@ def _build_timeframe_ready_search_context(
     safe_float_fn,
     refine_indicator_params_fn,
     safe_int_fn,
+    filter_variants=None,
     pruning_config=None,
     risk_mode="fixed_pct",
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     return {
         "search_mode": search_mode,
         "max_workers": max_workers,
         "regime_variants": regime_variants,
         "regime_lookup": regime_lookup,
+        "filter_variants": filter_variants,
         "mom_lookbacks": mom_lookbacks,
         "vol_lookbacks": vol_lookbacks,
         "vol_zs": vol_zs,
@@ -1240,6 +1299,7 @@ def _build_timeframe_ready_search_context_from_shared(
         max_workers=max_workers,
         regime_variants=regime_variants,
         regime_lookup=regime_lookup,
+        filter_variants=shared["filter_variants"],
         mom_lookbacks=shared["mom_lookbacks"],
         vol_lookbacks=shared["vol_lookbacks"],
         vol_zs=shared["vol_zs"],
@@ -1542,9 +1602,11 @@ def _run_timeframe_ready_search(
     safe_float_fn,
     refine_indicator_params_fn,
     safe_int_fn,
+    filter_variants=None,
     pruning_config=None,
     risk_mode="fixed_pct",
 ):
+    filter_variants = list(filter_variants or [{"kind": "none", "name": None}])
     ctx = timeframe_runtime["ctx"]
     trade_symbols_tf = timeframe_runtime["trade_symbols_tf"]
     timeframe_data_fingerprint = timeframe_runtime["timeframe_data_fingerprint"]
@@ -1559,6 +1621,7 @@ def _run_timeframe_ready_search(
 
     def _build_combo_task(
         regime,
+        filter_spec,
         indicator_combo,
         combo_params,
         vol_lookback,
@@ -1592,6 +1655,7 @@ def _run_timeframe_ready_search(
             data_start=ctx["trade_close"].index[0],
             data_end=ctx["trade_close"].index[-1],
             regime=regime,
+            filter_spec=filter_spec,
             indicator_combo=indicator_combo,
             combo_params=combo_params,
             vol_lookback=vol_lookback,
@@ -1645,6 +1709,7 @@ def _run_timeframe_ready_search(
 
     def _eval_combo(
         regime,
+        filter_spec,
         indicator_combo,
         combo_params,
         vol_lookback,
@@ -1658,6 +1723,7 @@ def _run_timeframe_ready_search(
     ):
         _run_combo_eval_step(
             regime=regime,
+            filter_spec=filter_spec,
             indicator_combo=indicator_combo,
             combo_params=combo_params,
             vol_lookback=vol_lookback,
@@ -1685,6 +1751,7 @@ def _run_timeframe_ready_search(
         _run_parallel_combo_search_for_timeframe(
             stage=stage,
             regime_variants=regime_variants,
+            filter_variants=filter_variants,
             mom_lookbacks=mom_lookbacks,
             vol_lookbacks=vol_lookbacks,
             vol_zs=vol_zs,
@@ -1717,6 +1784,7 @@ def _run_timeframe_ready_search(
         timeframe=timeframe,
         regime_variants=regime_variants,
         regime_lookup=regime_lookup,
+        filter_variants=filter_variants,
         mom_lookbacks=mom_lookbacks,
         vol_lookbacks=vol_lookbacks,
         vol_zs=vol_zs,

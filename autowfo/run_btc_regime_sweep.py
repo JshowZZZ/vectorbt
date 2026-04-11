@@ -200,6 +200,10 @@ def main():
     indicator_keys = runtime_settings["indicator_subset"]
     regime_preset = runtime_settings["regime_preset"]
     regime_name_filter = runtime_settings["regime_name_filter"]
+    filter_variants = runtime_settings["filter_variants"]
+    enable_htf_trend_gate = runtime_settings["enable_htf_trend_gate"]
+    htf_trend_timeframes = runtime_settings["htf_trend_timeframes"]
+    htf_trend_windows = runtime_settings["htf_trend_windows"]
     pilot_fixed_indicator_params = runtime_settings["pilot_fixed_indicator_params"]
     pilot_single_trend_mom = runtime_settings["pilot_single_trend_mom"]
     wf_train_days = runtime_settings["wf_train_days"]
@@ -355,6 +359,7 @@ def main():
 
     count_coarse_combos = lambda: engine_helpers._count_coarse_combos(
         regime_variants=regime_variants,
+        filter_variants=filter_variants,
         indicator_param_options=indicator_param_options,
         combo_keys_all=combo_keys_all,
         mom_lookbacks=mom_lookbacks,
@@ -497,6 +502,9 @@ def main():
         slippage_bps=slippage_bps,
         spread_bps=spread_bps,
         funding_rate_daily=funding_rate_daily,
+        filter_variants=filter_variants,
+        htf_trend_timeframes=htf_trend_timeframes if enable_htf_trend_gate else [],
+        htf_trend_windows=htf_trend_windows if enable_htf_trend_gate else [],
         risk_mode=risk_mode,
         order_size_pct=order_size_pct,
         max_concurrent_positions=max_concurrent_positions,

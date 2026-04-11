@@ -169,6 +169,173 @@ def test_evaluator_coerces_missing_indicator_lookback(monkeypatch):
     assert result["variant_params"]["volume_lookback"] == 28
 
 
+def test_evaluator_applies_overlay_filters_to_main_pf(monkeypatch):
+    idx = pd.date_range("2026-01-01", periods=4, freq="h")
+    symbols = ["ETH/USDT"]
+    true_mask = pd.Series(True, index=idx)
+    trade_close = pd.DataFrame({"ETH/USDT": [100.0, 101.0, 102.0, 103.0]}, index=idx)
+    trade_mom = pd.DataFrame({"ETH/USDT": [0.2, 0.2, 0.2, 0.2]}, index=idx)
+    overlay_long = pd.DataFrame({"ETH/USDT": [True, False, True, False]}, index=idx)
+    overlay_short = pd.DataFrame({"ETH/USDT": [False, False, False, False]}, index=idx)
+
+    ctx = {
+        "vol_zscore_by_lb": {24: pd.Series(0.2, index=idx)},
+        "trade_mom_by_lb": {3: trade_mom},
+        "trade_close": trade_close,
+        "init_cash_btc": 1.0,
+        "htf_trend_filters": {
+            "htf_trend:8h:10": {
+                "long": overlay_long["ETH/USDT"],
+                "short": overlay_short["ETH/USDT"],
+            }
+        },
+    }
+    runtime = {
+        "ctx": ctx,
+        "trade_symbols_tf": symbols,
+        "timeframe": "1h",
+        "data_days": 30,
+        "exchange": "binance",
+        "base_symbol": "BTC/USDT",
+        "capital_mode": "shared",
+        "fees": 0.001,
+        "slippage_bps": 0.0,
+        "spread_bps": 0.0,
+        "funding_rate_daily": 0.0,
+        "order_size_pct": 0.5,
+        "max_concurrent_positions": 1,
+        "init_cash_usdt": 1000.0,
+        "wf_train_days": 120,
+        "wf_test_days": 30,
+        "wf_step_days": 30,
+        "rsi_window": 14,
+        "bar_hours": 1.0,
+        "wf_slices": [],
+        "config_sha256": "cfg",
+        "data_fingerprint": "fp",
+    }
+    task = {
+        "regime": {
+            "regime_name": "trend_high",
+            "regime_type": "trend",
+            "vol_mode": "high",
+            "rsi_pair": None,
+        },
+        "indicator_combo": tuple(),
+        "combo_params": {},
+        "vol_lookback": 24,
+        "vol_z": 0.1,
+        "mom_lookback": 6,
+        "trade_mom_lookback": 3,
+        "tp_stop": 0.003,
+        "sl_stop": 0.006,
+        "max_hold": 2,
+        "filter_name": "none|htf_trend:8h:10",
+        "filter_spec": {"kind": "htf_trend", "timeframe": "8h", "window": 10},
+        "indicator_list": "",
+    }
+
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_engine,
+        "_resolve_regime_signals",
+        lambda **kwargs: (true_mask, ~true_mask, None, None),
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_engine,
+        "_compute_effective_costs",
+        lambda **kwargs: (0.0, 0.0),
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_engine,
+        "_build_trade_mom_filters",
+        lambda trade_mom: (
+            pd.DataFrame(True, index=trade_mom.index, columns=trade_mom.columns),
+            pd.DataFrame(False, index=trade_mom.index, columns=trade_mom.columns),
+        ),
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_strategy,
+        "_apply_indicator_combo",
+        lambda long_regime, short_regime, combo_keys, combo_params, combo_ctx: (
+            long_regime,
+            short_regime,
+            combo_params,
+        ),
+    )
+
+    captured = {}
+
+    def _fake_run_pf(*args, **kwargs):
+        if "long_filter" in kwargs and "short_filter" in kwargs and "captured_main" not in captured:
+            captured["captured_main"] = True
+            captured["long_filter"] = kwargs["long_filter"].copy()
+            captured["short_filter"] = kwargs["short_filter"].copy()
+        return object()
+
+    monkeypatch.setattr(autowfo_evaluator.autowfo_portfolio, "_run_pf", _fake_run_pf)
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_metrics,
+        "_calc_pf_series",
+        lambda pf, tf_symbols, bar_hours: {
+            "total_return_pct": pd.Series([1.0], index=tf_symbols),
+            "total_profit": pd.Series([1.0], index=tf_symbols),
+            "total_trades": pd.Series([10.0], index=tf_symbols),
+            "win_rate_pct": pd.Series([50.0], index=tf_symbols),
+            "avg_trade_pct": pd.Series([0.1], index=tf_symbols),
+            "max_drawdown_pct": pd.Series([-5.0], index=tf_symbols),
+            "position_coverage_pct": pd.Series([20.0], index=tf_symbols),
+            "avg_hold_hours": pd.Series([2.0], index=tf_symbols),
+        },
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_metrics,
+        "_aggregate_metrics",
+        lambda metrics: {
+            "avg_total_return_pct": 1.0,
+            "avg_total_trades": 10.0,
+            "avg_win_rate_pct": 50.0,
+            "avg_avg_trade_pct": 0.1,
+            "avg_max_drawdown_pct": -5.0,
+            "avg_position_coverage_pct": 20.0,
+            "avg_hold_hours": 2.0,
+        },
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_metrics,
+        "_calc_pf_combo_metrics",
+        lambda pf, bar_hours: {
+            "total_return_pct": 1.0,
+            "total_profit": 1.0,
+            "total_trades": 10.0,
+            "win_rate_pct": 50.0,
+            "avg_trade_pct": 0.1,
+            "max_drawdown_pct": -5.0,
+            "position_coverage_pct": 20.0,
+            "avg_hold_hours": 2.0,
+        },
+    )
+    monkeypatch.setattr(
+        autowfo_evaluator.autowfo_metrics,
+        "_aggregate_oos_metrics",
+        lambda rows: {
+            "oos_avg_total_return_pct": 0.0,
+            "oos_avg_win_rate_pct": 0.0,
+            "oos_avg_avg_trade_pct": 0.0,
+            "oos_avg_max_drawdown_pct": 0.0,
+            "oos_avg_position_coverage_pct": 0.0,
+            "oos_avg_total_trades": 0.0,
+            "oos_min_total_trades": 0.0,
+            "oos_avg_daily_trades": 0.0,
+            "oos_avg_hold_hours": 0.0,
+            "oos_segments": 0,
+        },
+    )
+
+    autowfo_evaluator.evaluate_combo_task(task, runtime)
+    pd.testing.assert_frame_equal(captured["long_filter"], overlay_long)
+    pd.testing.assert_frame_equal(captured["short_filter"], overlay_short)
+
+
 def test_evaluator_rolling_mode_reoptimizes_filter_policy_per_window(monkeypatch):
     idx = pd.date_range("2026-01-01", periods=9, freq="D")
     symbols = ["ETH/USDT"]

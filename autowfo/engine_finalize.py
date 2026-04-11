@@ -108,6 +108,8 @@ def _build_finalize_pipeline_kwargs(
     combine_data_fingerprints_fn,
     write_run_metadata_fn,
     update_run_registry_fn,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -167,6 +169,8 @@ def _build_finalize_pipeline_kwargs(
         "chop_lookbacks": chop_lookbacks,
         "init_cash_usdt": init_cash_usdt,
         "capital_mode": capital_mode,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -294,6 +298,8 @@ def _build_finalize_pipeline_context(
     combine_data_fingerprints_fn,
     write_run_metadata_fn,
     update_run_registry_fn,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -347,6 +353,8 @@ def _build_finalize_pipeline_context(
         "chop_lookbacks": chop_lookbacks,
         "init_cash_usdt": init_cash_usdt,
         "capital_mode": capital_mode,
+        "htf_trend_timeframes": htf_trend_timeframes,
+        "htf_trend_windows": htf_trend_windows,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -477,6 +485,8 @@ def _build_finalize_pipeline_context_from_shared(
         chop_lookbacks=shared["chop_lookbacks"],
         init_cash_usdt=shared["init_cash_usdt"],
         capital_mode=shared["capital_mode"],
+        htf_trend_timeframes=shared["htf_trend_timeframes"],
+        htf_trend_windows=shared["htf_trend_windows"],
         wf_train_days=shared["wf_train_days"],
         wf_test_days=shared["wf_test_days"],
         wf_step_days=shared["wf_step_days"],
@@ -790,6 +800,8 @@ def _prepare_best_timeframe_context(
     init_cash_usdt,
     capital_mode,
     prepare_timeframe_context_fn,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
 ):
     try:
         ctx = prepare_timeframe_context_fn(
@@ -831,6 +843,8 @@ def _prepare_best_timeframe_context(
             chop_lookbacks=chop_lookbacks,
             init_cash_usdt=init_cash_usdt,
             capital_mode=capital_mode,
+            htf_trend_timeframes=htf_trend_timeframes,
+            htf_trend_windows=htf_trend_windows,
         )
         return {"ctx": ctx, "error": None}
     except Exception as exc:
@@ -1019,6 +1033,8 @@ def _run_finalize_pipeline(
     combine_data_fingerprints_fn=None,
     write_run_metadata_fn=None,
     update_run_registry_fn=None,
+    htf_trend_timeframes=None,
+    htf_trend_windows=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -1093,6 +1109,8 @@ def _run_finalize_pipeline(
         chop_lookbacks=chop_lookbacks,
         init_cash_usdt=init_cash_usdt,
         capital_mode=capital_mode,
+        htf_trend_timeframes=htf_trend_timeframes,
+        htf_trend_windows=htf_trend_windows,
         prepare_timeframe_context_fn=prepare_timeframe_context_fn,
     )
     best_ctx = best_ctx_result["ctx"]

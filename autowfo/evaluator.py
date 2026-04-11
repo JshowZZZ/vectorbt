@@ -141,6 +141,7 @@ def evaluate_combo_task(task, runtime):
     max_hold = task["max_hold"]
     risk_mode = task.get("risk_mode", runtime.get("risk_mode", "fixed_pct"))
     filter_name = task["filter_name"]
+    filter_spec = task.get("filter_spec") or engine_runtime._parse_overlay_filter_name(filter_name)
     indicator_list = task["indicator_list"]
 
     ctx = runtime["ctx"]
@@ -193,7 +194,14 @@ def evaluate_combo_task(task, runtime):
     )
 
     trade_mom = ctx["trade_mom_by_lb"][trade_mom_lookback]
-    long_filter, short_filter = engine_runtime._build_trade_mom_filters(trade_mom)
+    base_long_filter, base_short_filter = engine_runtime._build_trade_mom_filters(trade_mom)
+    overlay_long_filter, overlay_short_filter = engine_runtime._build_overlay_filters(
+        ctx,
+        filter_spec,
+        trade_mom,
+    )
+    long_filter = base_long_filter & overlay_long_filter
+    short_filter = base_short_filter & overlay_short_filter
     effective_fees, effective_slippage = engine_runtime._compute_effective_costs(
         fees=fees,
         slippage_bps=slippage_bps,
@@ -265,7 +273,12 @@ def evaluate_combo_task(task, runtime):
         segment_long = long_regime_final.loc[segment_close.index]
         segment_short = short_regime_final.loc[segment_close.index]
         segment_trade_mom = trade_mom.loc[segment_close.index]
-        base_long_filter, base_short_filter = engine_runtime._build_trade_mom_filters(
+        segment_overlay_long, segment_overlay_short = engine_runtime._build_overlay_filters(
+            ctx,
+            filter_spec,
+            segment_trade_mom,
+        )
+        segment_base_long_filter, segment_base_short_filter = engine_runtime._build_trade_mom_filters(
             segment_trade_mom
         )
         selected_policy = "filtered"
@@ -287,13 +300,21 @@ def evaluate_combo_task(task, runtime):
                 policy_long = long_regime_final.loc[policy_close.index]
                 policy_short = short_regime_final.loc[policy_close.index]
                 policy_trade_mom = trade_mom.loc[policy_close.index]
+                policy_overlay_long, policy_overlay_short = engine_runtime._build_overlay_filters(
+                    ctx,
+                    filter_spec,
+                    policy_trade_mom,
+                )
                 policy_base_long_filter, policy_base_short_filter = engine_runtime._build_trade_mom_filters(
                     policy_trade_mom
                 )
-                policy_all_true = _all_true_filter(policy_trade_mom)
                 candidate_filters = (
-                    ("filtered", policy_base_long_filter, policy_base_short_filter),
-                    ("unfiltered", policy_all_true, policy_all_true),
+                    (
+                        "filtered",
+                        policy_base_long_filter & policy_overlay_long,
+                        policy_base_short_filter & policy_overlay_short,
+                    ),
+                    ("unfiltered", policy_overlay_long, policy_overlay_short),
                 )
                 policy_sl_stop = _slice_stop_value(pf_sl_stop, policy_close.index)
                 policy_tp_stop = _slice_stop_value(pf_tp_stop, policy_close.index)
@@ -326,10 +347,11 @@ def evaluate_combo_task(task, runtime):
                         best_score = score
                         selected_policy = policy_name
         if selected_policy == "unfiltered":
-            seg_long_filter = _all_true_filter(segment_trade_mom)
-            seg_short_filter = _all_true_filter(segment_trade_mom)
+            seg_long_filter = segment_overlay_long
+            seg_short_filter = segment_overlay_short
         else:
-            seg_long_filter, seg_short_filter = base_long_filter, base_short_filter
+            seg_long_filter = segment_base_long_filter & segment_overlay_long
+            seg_short_filter = segment_base_short_filter & segment_overlay_short
         segment_sl_stop = _slice_stop_value(pf_sl_stop, segment_close.index)
         segment_tp_stop = _slice_stop_value(pf_tp_stop, segment_close.index)
 

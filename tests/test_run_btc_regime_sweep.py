@@ -155,6 +155,29 @@ def test_prepare_timeframe_context_success():
     assert "ETH/BTC" in ctx["overlap_diagnostics"]["symbol_data_ranges"]
 
 
+def test_prepare_timeframe_context_builds_htf_trend_filters():
+    index = pd.date_range("2024-01-01", periods=24 * 14, freq="h")
+    base_df = _make_ohlcv(index, base=100.0)
+    trade_df = _make_ohlcv(index, base=1.0)
+
+    def loader(symbol, *_args, **_kwargs):
+        return base_df if symbol == "BTC/USDT" else trade_df
+
+    ctx = autowfo_data._prepare_timeframe_context(
+        **_common_ctx_kwargs(),
+        htf_trend_timeframes=["8h", "1d"],
+        htf_trend_windows=[3],
+        load_or_update_symbol_fn=loader,
+    )
+
+    htf_filters = ctx["htf_trend_filters"]
+    assert sorted(htf_filters) == ["htf_trend:1d:3", "htf_trend:8h:3"]
+    for value in htf_filters.values():
+        assert list(value) == ["long", "short"]
+        assert value["long"].index.equals(ctx["trade_close"].index)
+        assert value["short"].index.equals(ctx["trade_close"].index)
+
+
 def test_resolve_pf_stops_atr_multiple_uses_trade_atr_ratio():
     index = pd.date_range("2024-01-01", periods=3, freq="h")
     trade_atr_ratio = pd.DataFrame(

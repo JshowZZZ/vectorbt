@@ -5,7 +5,12 @@ import os
 import numpy as np
 import pandas as pd
 
-from .engine_runtime import _compute_effective_costs, _resolve_regime_signals
+from .engine_runtime import (
+    _build_overlay_filters,
+    _compute_effective_costs,
+    _parse_overlay_filter_name,
+    _resolve_regime_signals,
+)
 
 
 def _build_report_file_paths(out_dir, plot_symbol, run_id):
@@ -191,6 +196,7 @@ def _prepare_best_replay_payload(
         tuple([v for v in str(indicator_list).split(",") if v]) if indicator_list else tuple()
     )
     best_filter_name = best.get("filter_name") or indicator_combo_label_fn(best_indicator_combo)
+    best_filter_spec = _parse_overlay_filter_name(best_filter_name)
 
     best_params = {}
     for field in indicator_param_fields:
@@ -237,6 +243,11 @@ def _prepare_best_replay_payload(
         best_trade_mom_lookback,
         trade_mom_lookbacks[0] if trade_mom_lookbacks else None,
     )
+    overlay_long_filter, overlay_short_filter = _build_overlay_filters(
+        best_ctx,
+        best_filter_spec,
+        trade_mom,
+    )
     long_regime, short_regime, best_params = apply_indicator_combo_fn(
         long_regime,
         short_regime,
@@ -264,8 +275,8 @@ def _prepare_best_replay_payload(
         best_sl_stop,
         best_tp_stop,
         freq=best_timeframe,
-        long_filter=trade_mom > 0,
-        short_filter=trade_mom < 0,
+        long_filter=(trade_mom > 0) & overlay_long_filter,
+        short_filter=(trade_mom < 0) & overlay_short_filter,
         init_cash=best_ctx["init_cash_btc"],
         size=order_size_pct,
         size_type="percent",
@@ -594,6 +605,5 @@ def _build_leaderboard_views(lb_df, history_rows, top_by_score_fn):
     lb_recent = lb_view.sort_values("timestamp_utc", ascending=False).head(history_rows)
     lb_best, _ = top_by_score_fn(lb_view, top_n=history_rows, tie_break_avg_hold=False)
     return lb_view, lb_recent, lb_best
-
 
 

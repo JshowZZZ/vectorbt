@@ -194,6 +194,9 @@ def test_resolve_runtime_settings_normalizes_fields():
         "state_exit_policy": "state_reversal",
         "regime_preset": "pilot_trend_3",
         "regime_name_filter": "trend_high,trend_high,trend_low",
+        "enable_htf_trend_gate": "true",
+        "htf_trend_timeframes": "8h,1d,8h",
+        "htf_trend_windows": [10, "20", -1, 10],
         "pilot_fixed_indicator_params": "true",
         "pilot_single_trend_mom": "yes",
         "wf_train_days": 7,
@@ -245,6 +248,16 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["state_exit_policy"] == "state_reversal"
     assert got["regime_preset"] == "pilot_trend_3"
     assert got["regime_name_filter"] == ["trend_high", "trend_low"]
+    assert got["enable_htf_trend_gate"] is True
+    assert got["htf_trend_timeframes"] == ["8h", "1d"]
+    assert got["htf_trend_windows"] == [10, 20]
+    assert got["filter_variants"] == [
+        {"kind": "none", "name": None},
+        {"kind": "htf_trend", "timeframe": "8h", "window": 10, "name": "htf_trend:8h:10"},
+        {"kind": "htf_trend", "timeframe": "8h", "window": 20, "name": "htf_trend:8h:20"},
+        {"kind": "htf_trend", "timeframe": "1d", "window": 10, "name": "htf_trend:1d:10"},
+        {"kind": "htf_trend", "timeframe": "1d", "window": 20, "name": "htf_trend:1d:20"},
+    ]
     assert got["pilot_fixed_indicator_params"] is True
     assert got["pilot_single_trend_mom"] is True
     assert got["wf_train_days"] == 7
@@ -316,6 +329,7 @@ def test_count_coarse_combos_small_case():
     combo_keys_all = [("a",)]
     count = e._count_coarse_combos(
         regime_variants=regime_variants,
+        filter_variants=[{"kind": "none", "name": None}, {"kind": "htf_trend", "name": "htf_trend:8h:10"}],
         indicator_param_options=indicator_param_options,
         combo_keys_all=combo_keys_all,
         mom_lookbacks=[6],
@@ -326,7 +340,19 @@ def test_count_coarse_combos_small_case():
         sl_stops=[0.006],
         max_holds=[2],
     )
-    assert count == 2
+    assert count == 4
+
+
+def test_overlay_filter_helpers_round_trip():
+    spec = {"kind": "htf_trend", "timeframe": "1d", "window": 20}
+    filter_name = e._compose_filter_name("obv_roc,keltner_pos", spec)
+    assert filter_name == "obv_roc,keltner_pos|htf_trend:1d:20"
+    assert e._parse_overlay_filter_name(filter_name) == {
+        "kind": "htf_trend",
+        "timeframe": "1d",
+        "window": 20,
+        "name": "htf_trend:1d:20",
+    }
 
 
 def test_apply_quality_filters():
@@ -2218,6 +2244,10 @@ def test_prepare_timeframe_runtime_context_from_shared_builder():
 
 def test_build_timeframe_ready_search_kwargs_maps_inputs_and_sort_wiring():
     sort_calls = []
+    filter_variants = [
+        {"kind": "none", "name": None},
+        {"kind": "htf_trend", "timeframe": "8h", "window": 10, "name": "htf_trend:8h:10"},
+    ]
 
     def _sort_impl(df, tie_break_avg_hold=True, ranking_config=None):
         sort_calls.append(
@@ -2238,6 +2268,7 @@ def test_build_timeframe_ready_search_kwargs_maps_inputs_and_sort_wiring():
         max_workers=2,
         regime_variants=[{"regime_name": "trend_high"}],
         regime_lookup={"trend_high": {"regime_name": "trend_high"}},
+        filter_variants=filter_variants,
         mom_lookbacks=[6],
         vol_lookbacks=[24],
         vol_zs=[0.8],
@@ -2297,6 +2328,7 @@ def test_build_timeframe_ready_search_kwargs_maps_inputs_and_sort_wiring():
     assert got["wf_mode"] == "rolling"
     assert got["config_sha256"] == "cfg123"
     assert got["seen_keys"] == {"k1"}
+    assert got["filter_variants"] == filter_variants
     assert "on_refine_plan_fn" not in got
 
     sort_result = got["sort_by_score_fn"](
@@ -2315,6 +2347,10 @@ def test_build_timeframe_ready_search_kwargs_maps_inputs_and_sort_wiring():
 
 def test_timeframe_ready_search_context_and_from_context_builder():
     sort_calls = []
+    filter_variants = [
+        {"kind": "none", "name": None},
+        {"kind": "htf_trend", "timeframe": "8h", "window": 10, "name": "htf_trend:8h:10"},
+    ]
 
     def _sort_impl(df, tie_break_avg_hold=True, ranking_config=None):
         sort_calls.append((tie_break_avg_hold, ranking_config))
@@ -2325,6 +2361,7 @@ def test_timeframe_ready_search_context_and_from_context_builder():
         max_workers=2,
         regime_variants=[{"regime_name": "trend_high"}],
         regime_lookup={"trend_high": {"regime_name": "trend_high"}},
+        filter_variants=filter_variants,
         mom_lookbacks=[6],
         vol_lookbacks=[24],
         vol_zs=[0.8],
@@ -2388,6 +2425,7 @@ def test_timeframe_ready_search_context_and_from_context_builder():
     assert got["timeframe_runtime"] == {"ctx": "runtime"}
     assert got["search_mode"] == "combo"
     assert got["seen_keys"] == {"k1"}
+    assert got["filter_variants"] == filter_variants
     _ = got["sort_by_score_fn"](pd.DataFrame([{"score": 1.0}]), tie_break_avg_hold=False)
     assert sort_calls == [(False, {"mode": "composite"})]
 
@@ -2447,6 +2485,7 @@ def test_timeframe_ready_search_context_from_shared_builder():
     assert got["base_symbol"] == "BTC/USDT"
     assert got["exchange"] == "binance"
     assert got["indicator_param_fields"] == ["rsi_long"]
+    assert got["filter_variants"] == shared["filter_variants"]
     assert got["vol_zs"] == [0.8]
     _ = got["sort_by_score_fn"](pd.DataFrame([{"score": 1.0}]), tie_break_avg_hold=False)
     assert sort_calls == [(False, {"mode": "composite"})]

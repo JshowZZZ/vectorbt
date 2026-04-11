@@ -1,4 +1,4 @@
-﻿# AUTOWFO Master Plan
+# AUTOWFO Master Plan
 
 ## Objective
 Build a long-term, reproducible, and automation-first **platform** for systematically
@@ -81,6 +81,21 @@ indicators, symbols, and time windows to discover robust combinations.
     with Phase 60, do not block it; results feed into Phase 60 state/trigger candidate pool
   - historical anchored replay sidecar (`AWF-310`) completed first as the lowest-risk
     temporal robustness check before funding/OI tracks
+  - HTF confirmation sidecar (`AWF-309`) is now complete as a bounded pass:
+    - valid rerun pair:
+      - `20260411_awf309_htf_main_rerun`
+      - `20260411_awf309_htf_sens_rerun`
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf309_htf_trend.json`
+    - decision memo:
+      - `plans/AUTOWFO_HTF_TREND_SIDECAR_DECISION_20260411.md`
+    - outcome:
+      - `300` compared / `66` stable-positive / `3` gate-passed
+      - daily HTF overlays (`1d:10`, `1d:20`) add two new gate-passed variants around
+        the existing `obv_roc + keltner_pos + ad` family
+      - `8h` HTF overlays add no gate-passed rows and are rejected
+      - the sidecar improves the candidate pool, but does not justify reopening broad
+        current-mode work or changing the active Phase 60 priority
 
 ### New-Factor Sidecar Tracks (AWF-307/308/309) [Active, parallel to Phase 60]
 - Explore three candidate factors absent from the existing 25-indicator library,
@@ -97,6 +112,14 @@ indicators, symbols, and time windows to discover robust combinations.
   - **Track C (AWF-309)**: Cross-timeframe HTF confirmation filter (`htf_trend`)
     - daily-trend alignment gate derived by resampling existing 2h data; zero new data cost
     - execution order: 1st (lowest implementation risk)
+    - status: complete
+      - bounded pass on the valid rerun pair:
+        - `20260411_awf309_htf_main_rerun`
+        - `20260411_awf309_htf_sens_rerun`
+      - daily-only promotion:
+        - keep `1d:10`
+        - keep `1d:20`
+        - reject `8h` variants
 - Exit criteria per track: pass/fail against the success criteria in the protocol
 - If any track passes: promote the factor as a Phase 60 state or trigger candidate
 - If all tracks fail: proceed with existing six-indicator family only
@@ -1043,3 +1066,4 @@ Each experiment should record:
 - 2026-03-13: Phase 43 完成交付（AWF-211~216）：新增 `autowfo.storage_ops` 作為 storage validation / migration / analytics rebuild 核心；CLI 新增 `doctor` 與 `storage validate|migrate|rebuild-analytics`；control panel Overview 新增 storage health 摘要並暴露 `/ops/storage-health.json`；README、RUNBOOK、MASTER_PLAN、TODO、archive 與 AWF 報告同步完成收尾。
 - 2026-03-14: Evidence-integrity risk formally escalated into Phase 44（AWF-217~224）。新結論：root-level `artifacts/` 共享工作區會破壞單 run provenance，run-specific 檔名不足以保證單 run 真相；後續方向改為 run isolation、shared-view derivation、legacy purge，以及只在新制度下重跑決策相關 campaign。MASTER_PLAN、TODO、PHASE44_SPEC、RUNBOOK 先行完成文件凍結。
 - 2026-03-28: Post-Phase-48 operator hardening completed. Rebuilt local shared views from run-local artifacts (8 trusted runs restored to Coverage/Results/Dashboard), fixed a control-panel batch queue integrity bug by reserving historical `job_name` values from `artifacts/batch_state.json`, and launched Wave 1 coverage seeding from the browser workflow. Validation: `python -m pytest tests/test_control_panel.py -q` (`84 passed`).
+
