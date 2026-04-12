@@ -117,6 +117,28 @@
     - `20260412_142030` (sensitivity)
     Report: `artifacts/reports/pilot_analysis_awf322_temporal_replay_state_trigger_funding_overlay.json`.
     Result under `--min-avg-symbol-trades 1.0`: `6` compared / `0` stable-positive / `0` gate-passed. The entire exact lane fails on the older anchor. The least-bad row is still the old `htf_trend:1d:20` overlay (`-1.8387% / -2.7905%`), while the new funding-only winner is worse than the no-filter baseline (`-4.1292% / -4.2782%` versus `-3.2539% / -3.9905%`). The HTF+funding composites soften that damage but remain negative (`-2.8070% / -3.1140%` or `-2.2892% / -2.6538%`). Classification: `time-local`.
+  - `done` `AWF-323` Freeze the OI-enhanced hierarchical state repair follow-up.
+    Frozen configs:
+    - `plans/protocols/awf323_state_trigger_oi_state_repair_main.json`
+    - `plans/protocols/awf323_state_trigger_oi_state_repair_sensitivity.json`
+    Contract: keep the exact validated hierarchical lane (`trigger=ad`, `trend_any`, optional `htf_trend:1d:20`, 8-symbol cohort) and compare the validated baseline state `obv_roc+keltner_pos` against an OI-augmented state `obv_roc+keltner_pos+oi_roc` with explicit Bybit OI provenance.
+  - `done` `AWF-324` Execute and analyze the OI-enhanced hierarchical state repair pilot.
+    Completed paired runs:
+    - `20260412_145632` (main)
+    - `20260412_145816` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf324_state_trigger_oi_state_repair.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `4` compared / `4` stable-positive / `3` gate-passed / `3` canonical. The original no-filter baseline remains positive but fails the all-symbols-nonnegative gate because one symbol stays slightly negative in both runs. Adding `oi_roc` as a state co-member repairs that weakness and lifts both canonical OI rows above the old HTF-only baseline. Best row: `obv_roc+keltner_pos+oi_roc` with `htf_trend:1d:20`, returning `0.2819% / 0.3075%` OOS with all 8 symbols positive and mean per-symbol OOS trades `1.25 / 1.00`. The OI no-filter row also passes strongly at `0.2633% / 0.2890%` with mean per-symbol OOS trades `1.5938 / 1.3438`. Classification: `bounded pass` on the current window.
+  - `done` `AWF-325` Freeze the temporal replay of the OI-enhanced hierarchical winners.
+    Frozen configs:
+    - `plans/protocols/awf325_temporal_replay_state_trigger_oi_state_repair_main.json`
+    - `plans/protocols/awf325_temporal_replay_state_trigger_oi_state_repair_sensitivity.json`
+    Contract: older-anchor replay of the exact `AWF-324` winner family with fixed 8-symbol cohort, state `obv_roc+keltner_pos+oi_roc`, trigger `ad`, regime `trend_any`, candidate filters `{none, htf_trend:1d:20}`, and explicit Bybit OI provenance.
+  - `done` `AWF-326` Execute and analyze the temporal replay of the OI-enhanced hierarchical winners.
+    Completed paired runs:
+    - `20260412_150221` (main)
+    - `20260412_150400` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf326_temporal_replay_state_trigger_oi_state_repair.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `2` compared / `0` stable-positive / `0` gate-passed. Both exact OI-augmented rows fail decisively on the older anchor. The no-filter replay lands at `-3.9526% / -4.1162%`, while the HTF replay is also negative at `-2.9737% / -3.6107%`. Classification: `time-local`; keep the `AWF-324` modern-window OI improvement as a bounded candidate only, not replay-confirmed evidence.
 
 ## Backlog
 

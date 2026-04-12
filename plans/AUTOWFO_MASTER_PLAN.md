@@ -242,6 +242,52 @@ indicators, symbols, and time windows to discover robust combinations.
         soften the damage and remain clearly negative
       - classify the funding-enhanced hierarchical lane as `time-local`; keep it as a
         modern-window bounded candidate only, not as replay-confirmed evidence
+  - OI-enhanced hierarchical state repair (`AWF-323/324`) is now complete as the
+    next bounded Phase 60 mainline branch:
+    - frozen contract:
+      - stay on the exact validated hierarchical lane instead of reopening the full
+        state-trigger matrix
+      - treat `oi_roc` as a bounded state co-member candidate, consistent with
+        `AWF-308`/`AWF-316`, not as a replacement for `obv_roc`
+      - compare the validated baseline state `obv_roc + keltner_pos` against an
+        OI-augmented state `obv_roc + keltner_pos + oi_roc`
+      - keep `ad` as the only trigger, `trend_any/any` as the only regime lane,
+        and `htf_trend:1d:20` as the only HTF repair overlay
+    - completed runs:
+      - main `20260412_145632`
+      - sensitivity `20260412_145816`
+      - paired report:
+        - `artifacts/reports/pilot_analysis_awf324_state_trigger_oi_state_repair.json`
+    - interpretation:
+      - `4` compared / `4` stable-positive / `3` gate-passed / `3` canonical under
+        `--min-avg-symbol-trades 1.0`
+      - the original no-filter baseline becomes stable-positive on this window but
+        still fails the all-symbols-nonnegative gate because one symbol remains
+        mildly negative in both runs
+      - adding `oi_roc` as a state co-member repairs that weakness and produces two
+        gate-passed canonical winners
+      - best row is the OI-augmented state with `htf_trend:1d:20`, improving the
+        old HTF-only baseline from `0.1691% / 0.1957%` to `0.2819% / 0.3075%`
+        while keeping all 8 symbols positive in both runs
+      - the OI no-filter row also passes strongly at `0.2633% / 0.2890%`, so OI is
+        validated as a bounded co-member inside the exact hierarchical lane on the
+        current window
+  - Temporal replay of the OI-enhanced hierarchical winners (`AWF-325/326`) is now
+    complete as the immediate robustness check:
+    - completed runs:
+      - main `20260412_150221`
+      - sensitivity `20260412_150400`
+      - paired report:
+        - `artifacts/reports/pilot_analysis_awf326_temporal_replay_state_trigger_oi_state_repair.json`
+    - interpretation:
+      - `2` compared / `0` stable-positive / `0` gate-passed under
+        `--min-avg-symbol-trades 1.0`
+      - both exact OI-augmented rows fail decisively on the older anchor
+      - the no-filter replay lands at `-3.9526% / -4.1162%`, and the HTF replay is
+        only less bad at `-2.9737% / -3.6107%`
+      - classify the `AWF-324` OI-enhanced hierarchical lane as `time-local`: it is
+        a real current-window improvement over the old HTF-only baseline, but it is
+        not replay-confirmed across the older epoch
 
 ### New-Factor Sidecar Tracks (AWF-307/308/309) [Active, parallel to Phase 60]
 - Explore three candidate factors absent from the existing 25-indicator library,
