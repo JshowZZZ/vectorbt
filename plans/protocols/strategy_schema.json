@@ -41,6 +41,11 @@
       "category": "volume"
     },
     {
+      "key": "oi_roc",
+      "label": "OI \u8da8\u52e2",
+      "category": "volume"
+    },
+    {
       "key": "cmf",
       "label": "\u8cc7\u91d1\u6d41\u5411(CMF)",
       "category": "volume"

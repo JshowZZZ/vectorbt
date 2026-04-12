@@ -209,6 +209,9 @@ def main():
     enable_htf_trend_gate = runtime_settings["enable_htf_trend_gate"]
     htf_trend_timeframes = runtime_settings["htf_trend_timeframes"]
     htf_trend_windows = runtime_settings["htf_trend_windows"]
+    funding_gate_long_thresholds = runtime_settings["funding_gate_long_thresholds"]
+    funding_gate_short_thresholds = runtime_settings["funding_gate_short_thresholds"]
+    open_interest_provider = runtime_settings["open_interest_provider"]
     pilot_fixed_indicator_params = runtime_settings["pilot_fixed_indicator_params"]
     pilot_single_trend_mom = runtime_settings["pilot_single_trend_mom"]
     wf_train_days = runtime_settings["wf_train_days"]
@@ -238,6 +241,12 @@ def main():
     ma_pairs = engine_helpers._build_ma_pairs(base_ma_pairs)
     lookback_refine_step = 4
     obv_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
+    oi_selected_keys = set(indicator_keys)
+    for combo in list(state_indicator_sets or []) + list(trigger_indicator_sets or []):
+        oi_selected_keys.update(combo)
+    oi_lookbacks = []
+    if "oi_roc" in oi_selected_keys:
+        oi_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
     volume_lookbacks = autowfo_strategy._expand_lookback_list([12, 24], lookback_refine_step)
     roc_lookbacks = autowfo_strategy._expand_lookback_list([6, 12], lookback_refine_step)
     cmf_lookbacks = autowfo_strategy._expand_lookback_list([20, 30], lookback_refine_step)
@@ -508,6 +517,8 @@ def main():
         atr_window=atr_window,
         ma_pairs=ma_pairs,
         obv_lookbacks=obv_lookbacks,
+        oi_lookbacks=oi_lookbacks,
+        open_interest_provider=open_interest_provider,
         volume_lookbacks=volume_lookbacks,
         roc_lookbacks=roc_lookbacks,
         cmf_lookbacks=cmf_lookbacks,
@@ -545,6 +556,8 @@ def main():
         filter_variants=filter_variants,
         htf_trend_timeframes=htf_trend_timeframes if enable_htf_trend_gate else [],
         htf_trend_windows=htf_trend_windows if enable_htf_trend_gate else [],
+        funding_gate_long_thresholds=funding_gate_long_thresholds,
+        funding_gate_short_thresholds=funding_gate_short_thresholds,
         risk_mode=risk_mode,
         order_size_pct=order_size_pct,
         max_concurrent_positions=max_concurrent_positions,

@@ -49,6 +49,7 @@ INDICATOR_PARAM_FIELDS = [
     "stoch_long",
     "stoch_short",
     "obv_lookback",
+    "oi_lookback",
     "volume_lookback",
     "volume_z",
     "roc_lookback",

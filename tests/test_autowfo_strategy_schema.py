@@ -9,11 +9,12 @@ from autowfo import strategy_schema as ss
 def test_default_strategy_schema_contains_expected_inventory():
     schema = ss.load_strategy_schema()
     assert schema["schema_version"] == "1.0.0"
-    assert len(schema["indicators"]) == 25
+    assert len(schema["indicators"]) == 26
     assert len(schema["regimes"]) == 8
     assert any(item["key"] == "ma_trend" for item in schema["indicators"])
     assert any(item["key"] == "cci" for item in schema["indicators"])
     assert any(item["key"] == "chop" for item in schema["indicators"])
+    assert any(item["key"] == "oi_roc" for item in schema["indicators"])
     assert any(item["name"] == "trend_high" for item in schema["regimes"])
 
 

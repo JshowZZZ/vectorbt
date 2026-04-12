@@ -50,6 +50,10 @@ DEFAULT_CONFIG = {
     "enable_htf_trend_gate": False,
     "htf_trend_timeframes": None,
     "htf_trend_windows": None,
+    "enable_funding_gate": False,
+    "funding_gate_long_thresholds": None,
+    "funding_gate_short_thresholds": None,
+    "open_interest_provider": "bybit",
     "pilot_fixed_indicator_params": False,
     "pilot_single_trend_mom": False,
     "capital_mode": "shared",
@@ -146,6 +150,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "stoch_long",
         "stoch_short",
         "obv_lookback",
+        "oi_lookback",
         "volume_lookback",
         "volume_z",
         "roc_lookback",
@@ -247,6 +252,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "stoch_long",
         "stoch_short",
         "obv_lookback",
+        "oi_lookback",
         "volume_lookback",
         "volume_z",
         "roc_lookback",
@@ -320,6 +326,7 @@ def _build_sweep_schema_fields(*, artifact_row_metadata_fields):
         "stoch_long",
         "stoch_short",
         "obv_lookback",
+        "oi_lookback",
         "volume_lookback",
         "volume_z",
         "roc_lookback",
@@ -582,6 +589,50 @@ def _normalize_positive_int_list(value):
     return normalized
 
 
+def _normalize_float_list(value):
+    values = value
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [item.strip() for item in values.split(",") if item.strip()]
+    normalized = []
+    for item in values:
+        try:
+            parsed = float(item)
+        except (TypeError, ValueError):
+            continue
+        if parsed in normalized:
+            continue
+        normalized.append(parsed)
+    return normalized
+
+
+def _normalize_funding_gate_thresholds(value, *, positive):
+    normalized = []
+    for item in _normalize_float_list(value):
+        if positive and item > 0 and item not in normalized:
+            normalized.append(item)
+        if not positive and item < 0 and item not in normalized:
+            normalized.append(item)
+    return normalized
+
+
+def _normalize_open_interest_provider(value):
+    provider = str(value or "bybit").strip().lower()
+    if provider in {"binance", "binanceusdm"}:
+        return "binanceusdm"
+    if provider == "bybit":
+        return "bybit"
+    return "bybit"
+
+
+def _format_overlay_threshold(value):
+    text = f"{float(value):.6f}".rstrip("0").rstrip(".")
+    if text in {"", "-0"}:
+        return "0"
+    return text
+
+
 def _normalize_risk_mode(value):
     risk_mode = str(value or "fixed_pct").strip().lower()
     if risk_mode not in {"fixed_pct", "atr_multiple"}:
@@ -601,18 +652,51 @@ def _build_filter_variants(
     enable_htf_trend_gate=False,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    enable_funding_gate=False,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
 ):
     variants = [{"kind": "none", "name": None}]
-    if not enable_htf_trend_gate:
-        return variants
-    for timeframe in _normalize_htf_trend_timeframes(htf_trend_timeframes):
-        for window in _normalize_positive_int_list(htf_trend_windows):
+    htf_variants = []
+    if enable_htf_trend_gate:
+        for timeframe in _normalize_htf_trend_timeframes(htf_trend_timeframes):
+            for window in _normalize_positive_int_list(htf_trend_windows):
+                htf_variants.append(
+                    {
+                        "kind": "htf_trend",
+                        "timeframe": timeframe,
+                        "window": int(window),
+                        "name": f"htf_trend:{timeframe}:{int(window)}",
+                    }
+                )
+
+    funding_variants = []
+    if enable_funding_gate:
+        long_values = _normalize_funding_gate_thresholds(funding_gate_long_thresholds, positive=True)
+        short_values = _normalize_funding_gate_thresholds(funding_gate_short_thresholds, positive=False)
+        for long_threshold in long_values:
+            for short_threshold in short_values:
+                funding_variants.append(
+                    {
+                        "kind": "funding_gate",
+                        "long_threshold": float(long_threshold),
+                        "short_threshold": float(short_threshold),
+                        "name": (
+                            f"funding_gate:{_format_overlay_threshold(long_threshold)}:"
+                            f"{_format_overlay_threshold(short_threshold)}"
+                        ),
+                    }
+                )
+
+    variants.extend(htf_variants)
+    variants.extend(funding_variants)
+    for htf_spec in htf_variants:
+        for funding_spec in funding_variants:
             variants.append(
                 {
-                    "kind": "htf_trend",
-                    "timeframe": timeframe,
-                    "window": int(window),
-                    "name": f"htf_trend:{timeframe}:{int(window)}",
+                    "kind": "composite",
+                    "filters": [dict(htf_spec), dict(funding_spec)],
+                    "name": f"{htf_spec['name']}&{funding_spec['name']}",
                 }
             )
     return variants
@@ -703,9 +787,12 @@ def _resolve_runtime_settings(
         base_symbol=base_symbol,
         default_trade_symbols=default_trade_symbols,
     )
+    indicator_available_keys = list(available_indicator_keys or [])
+    if default_config.get("indicator_subset") in (None, ""):
+        indicator_available_keys = [key for key in indicator_available_keys if key != "oi_roc"]
     indicator_subset = _normalize_indicator_subset(
         default_config.get("indicator_subset"),
-        available_indicator_keys or [],
+        indicator_available_keys,
     )
     state_indicator_sets = _normalize_indicator_sets(
         default_config.get("state_indicator_sets"),
@@ -734,10 +821,28 @@ def _resolve_runtime_settings(
     htf_trend_windows = _normalize_positive_int_list(
         default_config.get("htf_trend_windows", [10, 20])
     )
+    enable_funding_gate = _safe_bool(
+        default_config.get("enable_funding_gate", False),
+        False,
+    )
+    funding_gate_long_thresholds = _normalize_funding_gate_thresholds(
+        default_config.get("funding_gate_long_thresholds", [0.0001, 0.0002]),
+        positive=True,
+    )
+    funding_gate_short_thresholds = _normalize_funding_gate_thresholds(
+        default_config.get("funding_gate_short_thresholds", [-0.0001, -0.0002]),
+        positive=False,
+    )
+    open_interest_provider = _normalize_open_interest_provider(
+        default_config.get("open_interest_provider", "bybit")
+    )
     filter_variants = _build_filter_variants(
         enable_htf_trend_gate=enable_htf_trend_gate,
         htf_trend_timeframes=htf_trend_timeframes,
         htf_trend_windows=htf_trend_windows,
+        enable_funding_gate=enable_funding_gate,
+        funding_gate_long_thresholds=funding_gate_long_thresholds,
+        funding_gate_short_thresholds=funding_gate_short_thresholds,
     )
     pilot_fixed_indicator_params = _safe_bool(
         default_config.get("pilot_fixed_indicator_params", False),
@@ -806,6 +911,10 @@ def _resolve_runtime_settings(
         "enable_htf_trend_gate": enable_htf_trend_gate,
         "htf_trend_timeframes": htf_trend_timeframes,
         "htf_trend_windows": htf_trend_windows,
+        "enable_funding_gate": enable_funding_gate,
+        "funding_gate_long_thresholds": funding_gate_long_thresholds,
+        "funding_gate_short_thresholds": funding_gate_short_thresholds,
+        "open_interest_provider": open_interest_provider,
         "filter_variants": filter_variants,
         "pilot_fixed_indicator_params": pilot_fixed_indicator_params,
         "pilot_single_trend_mom": pilot_single_trend_mom,

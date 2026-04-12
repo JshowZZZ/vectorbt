@@ -156,6 +156,47 @@ indicators, symbols, and time windows to discover robust combinations.
       - `8h` HTF overlays add no gate-passed rows and are rejected
       - the sidecar improves the candidate pool, but does not justify reopening broad
         current-mode work or changing the active Phase 60 priority
+  - Funding-rate sidecar (`AWF-307`) is now complete as a bounded pass:
+    - runs:
+      - `20260412_064133` (main)
+      - `20260412_064647` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf307_funding_gate.json`
+    - outcome:
+      - `900` compared / `241` stable-positive / `15` gate-passed / `9` canonical
+      - best canonical row is the funding-only overlay on the existing
+        `obv_roc + keltner_pos + ad` family: `funding_gate:0.0001:-0.0001`
+      - funding-bearing variants account for `194` stable-positive rows and `6/9`
+        canonical gate-passed rows
+      - all gate-passed rows already keep mean per-symbol OOS trades >= `1.0`
+      - `BNB/BTC` remains the worst-support symbol and is not materially repaired;
+        the uplift comes mainly from `AVAX/BTC` and `XRP/BTC`, while `SOL/BTC`,
+        `DOT/BTC`, and `ETH/BTC` soften
+      - promote `funding_gate` as an optional overlay candidate only; do not treat
+        it as a resolved dragger fix
+  - Dense OI + daily HTF follow-up (`AWF-315/316`) is now complete as a bounded
+    repair pass:
+    - frozen configs:
+      - `plans/protocols/awf315_dense_oi_htf_repair_main.json`
+      - `plans/protocols/awf315_dense_oi_htf_repair_sensitivity.json`
+    - paired runs:
+      - `20260412_122443` (main)
+      - `20260412_122657` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf316_dense_oi_htf_repair.json`
+    - outcome:
+      - `24` compared / `16` stable-positive / `1` gate-passed / `1` canonical
+        under `--min-avg-symbol-trades 1.0`
+      - the canonical repaired row is `obv_roc + keltner_pos + oi_roc |
+        htf_trend:1d:10` in `trend_any/any`
+      - the daily `1d:10` overlay raises the paired worst-run combo OOS average
+        return from `0.4403%` to `0.5201%`
+      - the previous sensitivity blocker `AVAX/BTC` improves from `-0.0513%` to
+        `+0.2059%`, producing all-symbols-nonnegative support in both runs
+      - mean per-symbol OOS trades falls to `1.675`, but remains safely above the
+        `1.0` density floor; `1d:20` remains near-pass only
+      - promote this repaired OI+HTF family as a bounded candidate, not as a broad
+        reopening of OI family search
 
 ### New-Factor Sidecar Tracks (AWF-307/308/309) [Active, parallel to Phase 60]
 - Explore three candidate factors absent from the existing 25-indicator library,
@@ -166,9 +207,31 @@ indicators, symbols, and time windows to discover robust combinations.
   - **Track A (AWF-307)**: Funding Rate as signal indicator (`funding_gate`)
     - perpetual-market crowding signal; addresses BNB Launchpool event-driven entries
     - execution order: 2nd (requires Binance funding-rate data pipeline)
+    - status: complete
+      - bounded pass on runs `20260412_064133` / `20260412_064647`
+      - paired report: `artifacts/reports/pilot_analysis_awf307_funding_gate.json`
+      - promotes `funding_gate` into the Phase 60 candidate pool as an optional
+        overlay, but does not materially repair `BNB/BTC`
   - **Track B (AWF-308)**: Open Interest rate-of-change (`oi_roc`)
     - derivatives-market accumulation confirmation; complementary to `OBV_ROC`
     - execution order: 3rd (requires Binance OI data pipeline)
+    - status: complete, bounded pass
+      - `oi_roc` is wired through schema, strategy, runtime, reporting, and finalize replay
+      - long-history OI source added via Bybit (`1h` fetch -> `2h` resample) while
+        preserving the Binance latest-1-month guard for the legacy path
+      - frozen configs executed as paired runs:
+        - `20260412_120551` (main)
+        - `20260412_120803` (sensitivity)
+      - paired report: `artifacts/reports/pilot_analysis_awf308_oi_roc.json`
+      - outcome:
+        - `105` compared / `22` stable-positive / `2` gate-passed / `2` canonical
+        - `oi_roc` appears in `5` stable-positive rows, satisfying the track's
+          co-member success criterion
+        - the only `oi_roc` gate-passed row (`obv_roc + keltner_pos + oi_roc` in
+          `trend_high/high`) averages only `0.4` OOS trades per symbol in both runs
+          and disappears under `--min-avg-symbol-trades 1.0`
+        - treat `oi_roc` as a bounded candidate co-member, not a promoted canonical
+          replacement and not a direct `BNB/BTC` repair
   - **Track C (AWF-309)**: Cross-timeframe HTF confirmation filter (`htf_trend`)
     - daily-trend alignment gate derived by resampling existing 2h data; zero new data cost
     - execution order: 1st (lowest implementation risk)
@@ -185,6 +248,66 @@ indicators, symbols, and time windows to discover robust combinations.
 - If all tracks fail: proceed with existing six-indicator family only
 - These tracks are sidecar evidence; they do not displace Phase 60 as the active
   implementation milestone
+
+### Post-Sidecar Bounded Follow-Up (AWF-315/316) [Complete]
+- Purpose:
+  - combine the densest `AWF-308` OI evidence with the bounded-pass daily `AWF-309`
+    HTF overlay, rather than rerunning OI alone
+  - ask a narrower question than the original sidecars: can daily HTF repair the
+    remaining negative-symbol pressure inside the dense OI families?
+- Frozen contract:
+  - anchored `2h / 180d` paired WFO on the full 10-symbol BTC-cross cohort
+  - indicator subset limited to `obv_roc`, `keltner_pos`, `cmf`, `oi_roc`
+  - combo size fixed to `3`
+  - regimes limited to `trend_any` and `trend_low`
+  - daily HTF overlay only (`1d:10`, `1d:20`)
+  - Bybit-backed long-history OI provider fixed in config
+- Exit criteria:
+  - paired runs complete
+  - pilot-analysis report evaluated with `--min-avg-symbol-trades 1.0`
+  - outcome classified as `repair pass`, `bounded fail`, or `artifact only`
+- Outcome:
+  - paired runs `20260412_122443` / `20260412_122657` completed successfully
+  - paired report: `artifacts/reports/pilot_analysis_awf316_dense_oi_htf_repair.json`
+  - classification: `bounded repair pass`
+  - the promoted repaired row is `obv_roc + keltner_pos + oi_roc | htf_trend:1d:10`
+    on `trend_any/any`
+  - the `1d:10` overlay repairs the prior sensitivity-only negative symbol and keeps
+    mean per-symbol OOS trades at `1.675` in both runs; `1d:20` remains near-pass
+
+### Repaired OI+HTF Temporal Replay (AWF-317/318) [Complete]
+- Purpose:
+  - test whether the repaired `AWF-316` OI+HTF winner survives on the same older
+    anchored window already used by `AWF-310` and `AWF-313`
+  - answer a narrower follow-up question than `AWF-315/316`: is the repaired
+    `obv_roc + keltner_pos + oi_roc | htf_trend:1d:10` family temporally robust,
+    or is it still a modern-window-only repair?
+- Frozen contract:
+  - anchored `2h / 180d` paired WFO
+  - older anchor end: `2025-04-09T14:00:00Z`
+  - full 10-symbol BTC-cross cohort
+  - exact indicator family: `obv_roc`, `keltner_pos`, `oi_roc`
+  - combo size fixed to `3`
+  - regime limited to `trend_any`
+  - daily HTF window limited to `1d:10`
+  - include both the no-HTF baseline and the repaired `1d:10` overlay in the same replay
+  - Bybit-backed OI provenance fixed in config
+- Exit criteria:
+  - paired replay completed
+  - pilot-analysis report evaluated with `--min-avg-symbol-trades 1.0`
+  - outcome classified as `replay-confirmed`, `directional-only`, or `time-local`
+- Outcome:
+  - paired runs `20260412_125735` / `20260412_125954` completed successfully
+  - paired report: `artifacts/reports/pilot_analysis_awf318_temporal_replay_dense_oi_htf.json`
+  - classification: `time-local`
+  - both replayed rows fail on the older anchor: `2` compared / `0` stable-positive /
+    `0` gate-passed
+  - the ungated base row degrades to `-3.2139%` / `-3.6345%` paired combo OOS avg
+    return, while the repaired `htf_trend:1d:10` row degrades further to `-3.8948%` /
+    `-4.6770%`
+  - on this earlier epoch, the daily HTF overlay is not a repair mechanism; it cuts
+    trades and makes the signal worse, so the modern OI+HTF repair is explicitly
+    time-local
 
 ### Temporal Sidecar Replay (AWF-310) [Active, parallel to Phase 60]
 - Re-run the frozen full 10-symbol current-mode baseline on a one-year-earlier

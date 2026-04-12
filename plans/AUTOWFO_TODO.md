@@ -25,11 +25,19 @@
     Completed the bounded TP/SL grid (`9` paired cells / `18` runs) on the full 10-symbol current-mode cohort and wrote `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`. Conclusion: `BNB/BTC` remains the clear symbol-intrinsic dragger across the whole exit grid, while `ADA/BTC`, `DOGE/BTC`, and `DOT/BTC` remain the lowest-pressure supporters. This is a sidecar evidence task only; it does not displace Phase 60 as the active implementation track.
   - `done` `AWF-306` Pilot history sortable table in the control panel.
     Added `/pilot-history.json` plus a Results-page "Pilot History" `DataTable` under the leaderboard. The endpoint only accepts pilot-analysis JSON files that satisfy the paired-report schema contract, skips malformed/non-contract files safely, and exposes sortable summary rows for operator review. Protocol: `plans/AUTOWFO_PILOT_HISTORY_UI_PROTOCOL.md`.
-  - `todo` `AWF-307` Funding Rate signal indicator sidecar (Track A).
-    Run `funding_gate` as entry overlay on the full 10-symbol cohort under the same anchored contract, to test whether perpetual-market funding data reduces `BNB/BTC`'s dragger frequency.
+  - `done` `AWF-307` Funding Rate signal indicator sidecar (Track A).
+    Completed the bounded funding-overlay pilot on the full 10-symbol cohort.
+    Runs: `20260412_064133` (main), `20260412_064647` (sensitivity).
+    Report: `artifacts/reports/pilot_analysis_awf307_funding_gate.json`.
+    Result: `900` compared / `241` stable-positive / `15` gate-passed / `9` canonical. The best canonical row is `obv_roc + keltner_pos + ad | funding_gate:0.0001:-0.0001`, improving the paired worst-run combo OOS average return from `0.6711%` (baseline) to `0.7148%`. Funding-bearing variants account for `194` stable-positive rows and `6/9` canonical gate-passed rows. However, `BNB/BTC` remains the worst-support symbol and is essentially unchanged; the uplift comes mainly from `AVAX/BTC` and `XRP/BTC`, while `SOL/BTC`, `DOT/BTC`, and `ETH/BTC` soften. All `15` gate-passed rows already keep mean per-symbol OOS trades >= `1.0` in both runs. Classification: `bounded pass` as an optional overlay candidate, not a direct `BNB/BTC` repair.
     Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
-  - `todo` `AWF-308` Open Interest signal indicator sidecar (Track B).
-    Run `oi_roc` as a combo member in the bounded family neighborhood to test whether derivatives open-interest rate-of-change adds gate-passed density that price/volume misses.
+  - `done` `AWF-308` Open Interest signal indicator sidecar (Track B).
+    Integrated a long-history Bybit OI provider for Track B by fetching raw `1h` open-interest history and resampling it to the frozen `2h` contract, while keeping `oi_roc` opt-in and preserving the existing Binance guard for the latest-1-month path. Validation: `110` focused data/engine tests passed, `15` focused sweep-entry tests passed, and a live Bybit smoke fetch reproduced the full `180d` window (`2161` rows).
+    Completed paired frozen runs:
+    - `20260412_120551` (main)
+    - `20260412_120803` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf308_oi_roc.json`.
+    Result: `105` compared / `22` stable-positive / `2` gate-passed / `2` canonical under the current flat pilot gate. `oi_roc` appears in `5` stable-positive rows, satisfying the track's co-member success criterion. However, the only `oi_roc` gate-passed row (`obv_roc + keltner_pos + oi_roc` in `trend_high/high`) averages only `0.4` OOS trades per symbol in both runs and drops out under `--min-avg-symbol-trades 1.0`, so that gate lift should be treated as a low-density artifact rather than a promotable canonical winner. The denser OI evidence sits in stable-positive rows such as `obv_roc + cmf + oi_roc` and `obv_roc + keltner_pos + oi_roc | trend_any/any`, but `BNB/BTC` is not robustly repaired. Classification: `bounded pass` as a candidate co-member, not a direct dragger fix.
     Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md`.
   - `done` `AWF-309` Cross-timeframe HTF confirmation filter sidecar (Track C).
     Completed the bounded HTF overlay pilot after fixing a runtime wiring bug that initially dropped `filter_variants` from the execution kwargs. Valid rerun pair:
@@ -65,6 +73,28 @@
   - `done` `AWF-314` Add per-symbol trade-density floor to pilot analysis gate.
     Implemented `--min-avg-symbol-trades` (default `0.0`) in pilot analysis. Rejects rows where mean per-symbol OOS trades in either run falls below the floor. Confirmed: AWF-312 with `--min-avg-symbol-trades 1.0` drops from `4` to `2` gate-passed (correctly rejecting the `cmf`/`chop` near-zero-trade artifacts).
     Validation: `276` tests passed.
+  - `done` `AWF-315` Freeze the dense OI + daily HTF repair pilot.
+    Freeze a bounded follow-up around the denser `oi_roc` stable-positive families from `AWF-308` plus the daily `htf_trend` overlay from `AWF-309`. Contract: anchored `2h / 180d`, full 10-symbol BTC-cross cohort, indicator subset `obv_roc / keltner_pos / cmf / oi_roc`, combo size fixed to `3`, regimes limited to `trend_any` and `trend_low` to exclude the known low-density `trend_high/high` artifact, daily HTF windows `1d:10` and `1d:20`, and explicit Bybit OI provider provenance.
+    Frozen configs:
+    - `plans/protocols/awf315_dense_oi_htf_repair_main.json`
+    - `plans/protocols/awf315_dense_oi_htf_repair_sensitivity.json`
+  - `done` `AWF-316` Execute and analyze the dense OI + daily HTF repair pilot.
+    Completed paired runs:
+    - `20260412_122443` (main)
+    - `20260412_122657` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf316_dense_oi_htf_repair.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `24` compared / `16` stable-positive / `1` gate-passed / `1` canonical. The repaired winner is `obv_roc + keltner_pos + oi_roc | htf_trend:1d:10` in `trend_any/any`, which lifts the paired worst-run combo OOS average return from `0.4403%` (the ungated dense OI row from `AWF-308`) to `0.5201%` while converting the remaining sensitivity blocker from `AVAX/BTC -0.0513%` to `+0.2059%` and keeping mean per-symbol OOS trades at `1.675` in both runs. `htf_trend:1d:20` remains a near-pass but still leaves one main-run symbol slightly negative. Classification: `bounded repair pass`.
+  - `done` `AWF-317` Freeze the temporal replay of the repaired OI + HTF row.
+    Freeze a minimal temporal replay for the exact `AWF-316` repaired winner on the older anchored window (`end = 2025-04-09T14:00:00Z`). Contract: full 10-symbol BTC-cross cohort, exact indicator family `obv_roc / keltner_pos / oi_roc`, combo size `3`, regime limited to `trend_any`, daily HTF window limited to `1d:10`, keep the no-HTF baseline in the same replay, and preserve Bybit OI provenance.
+    Frozen configs:
+    - `plans/protocols/awf317_temporal_replay_dense_oi_htf_main.json`
+    - `plans/protocols/awf317_temporal_replay_dense_oi_htf_sensitivity.json`
+  - `done` `AWF-318` Execute and analyze the temporal replay of the repaired OI + HTF row.
+    Completed paired runs:
+    - `20260412_125735` (main)
+    - `20260412_125954` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf318_temporal_replay_dense_oi_htf.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `2` compared / `0` stable-positive / `0` gate-passed. Both the ungated row and the repaired `htf_trend:1d:10` row fail on the older anchor, and the daily HTF overlay actually worsens the paired combo OOS average return from `-3.2139% / -3.6345%` to `-3.8948% / -4.6770%` while cutting trades from about `17.6/18.6` to `11.4/11.9`. Classification: `time-local`.
 
 ## Backlog
 
@@ -76,15 +106,32 @@
 - `done` `AWF-314` Add per-symbol trade-density floor to pilot analysis gate.
   Implemented `--min-avg-symbol-trades` CLI arg and `min_avg_symbol_trades` param in `compare_pilot_runs`. Default `0.0` preserves backward compatibility. Setting `1.0` correctly rejects near-zero-trade gate artifacts.
 
-- `todo` `AWF-307` Execute and analyze the Funding Rate signal indicator sidecar.
-  Run the bounded Track A pilot (`funding_gate` as entry overlay) against the Phase 53 10-symbol baseline under the same anchored `2h / 180d` contract. Determine whether `funding_gate` reduces `BNB/BTC` worst-presence or unlocks new gate-passed rows.
-  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track A.
-  Expected artifacts: `pilot_analysis_awf307_funding_gate.json`.
+- `done` `AWF-315` Freeze the dense OI + daily HTF repair pilot.
+  Froze the bounded post-sidecar follow-up focused on the dense `oi_roc` rows from `AWF-308` plus the bounded-pass daily `htf_trend` overlay from `AWF-309`: full 10-symbol anchored `2h / 180d`, indicator subset `obv_roc / keltner_pos / cmf / oi_roc`, combo size `3`, regimes `trend_any` and `trend_low` only, daily HTF windows `1d:10` and `1d:20`, Bybit OI provider.
+  Frozen configs: `plans/protocols/awf315_dense_oi_htf_repair_main.json`, `plans/protocols/awf315_dense_oi_htf_repair_sensitivity.json`.
 
-- `todo` `AWF-308` Execute and analyze the Open Interest signal indicator sidecar.
-  Run the bounded Track B pilot (`oi_roc` as combo member) within the six-indicator family neighborhood on the full 10-symbol cohort. Determine whether OI rate-of-change adds stable-positive density or gate-passed rows that price/volume indicators miss.
+- `done` `AWF-316` Execute and analyze the dense OI + daily HTF repair pilot.
+  Completed paired runs `20260412_122443` / `20260412_122657` and wrote `artifacts/reports/pilot_analysis_awf316_dense_oi_htf_repair.json`.
+  Outcome under `--min-avg-symbol-trades 1.0`: `24` compared / `16` stable-positive / `1` gate-passed / `1` canonical. The winning repaired row is `obv_roc + keltner_pos + oi_roc | htf_trend:1d:10` in `trend_any/any`: daily HTF confirmation repairs the remaining sensitivity blocker (`AVAX/BTC`) and raises the paired worst-run combo OOS average return from `0.4403%` to `0.5201%` while keeping mean per-symbol OOS trades at `1.675` in both runs. `htf_trend:1d:20` remains near-pass only. Classification: `bounded repair pass`.
+
+- `done` `AWF-317` Freeze the temporal replay of the repaired OI + HTF row.
+  Froze a minimal older-anchor replay for the exact `AWF-316` repaired winner: full 10-symbol anchored `2h / 180d`, `end = 2025-04-09T14:00:00Z`, exact indicator family `obv_roc / keltner_pos / oi_roc`, regime `trend_any`, daily HTF window `1d:10`, plus the no-HTF baseline for direct comparison.
+  Frozen configs: `plans/protocols/awf317_temporal_replay_dense_oi_htf_main.json`, `plans/protocols/awf317_temporal_replay_dense_oi_htf_sensitivity.json`.
+
+- `done` `AWF-318` Execute and analyze the temporal replay of the repaired OI + HTF row.
+  Completed paired runs `20260412_125735` / `20260412_125954` and wrote `artifacts/reports/pilot_analysis_awf318_temporal_replay_dense_oi_htf.json`.
+  Outcome under `--min-avg-symbol-trades 1.0`: `2` compared / `0` stable-positive / `0` gate-passed. The exact repaired row from `AWF-316` is confirmed as `time-local` on the older anchor, and the daily `1d:10` overlay is actually harmful there, worsening the paired combo OOS average return while also reducing trades.
+
+- `done` `AWF-307` Execute and analyze the Funding Rate signal indicator sidecar.
+  Completed the paired Track A pilot as runs `20260412_064133` and `20260412_064647`, then wrote `artifacts/reports/pilot_analysis_awf307_funding_gate.json`.
+  Outcome: `900` compared / `241` stable-positive / `15` gate-passed / `9` canonical. `funding_gate` is a bounded pass and should stay in the Phase 60 candidate pool as an optional overlay, but it does not materially repair `BNB/BTC`; the gain comes mostly from `AVAX/BTC` and `XRP/BTC`.
+  Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track A.
+
+- `done` `AWF-308` Execute and analyze the Open Interest signal indicator sidecar.
+  Added Bybit-backed long-history OI support (`1h` fetch -> `2h` resample) so the frozen `2h / 180d` Track B contract can run despite Binance's latest-1-month retention limit. Completed paired runs `20260412_120551` / `20260412_120803` and wrote `artifacts/reports/pilot_analysis_awf308_oi_roc.json`.
+  Outcome: `105` compared / `22` stable-positive / `2` gate-passed / `2` canonical under the default flat pilot gate. `oi_roc` appears in `5` stable-positive rows, so the sidecar clears the protocol's co-member success bar. The only `oi_roc` gate-passed row is low-density (`0.4` mean per-symbol OOS trades in both runs) and disappears under `--min-avg-symbol-trades 1.0`, so treat the gate lift as a bounded artifact rather than a promoted canonical replacement. `BNB/BTC` is not robustly repaired.
   Protocol: `plans/AUTOWFO_NEW_FACTOR_EXPLORATION_PROTOCOL.md` Track B.
-  Expected artifacts: `pilot_analysis_awf308_oi_roc.json`.
+  Frozen configs: `plans/protocols/awf308_oi_roc_main.json`, `plans/protocols/awf308_oi_roc_sensitivity.json`.
 
 - `done` `AWF-309` Execute and analyze the cross-timeframe HTF confirmation filter sidecar.
   Completed the valid rerun pair:

@@ -25,6 +25,8 @@ def _prepare_timeframe_runtime(
     atr_window,
     ma_pairs,
     obv_lookbacks,
+    oi_lookbacks=None,
+    open_interest_provider="bybit",
     volume_lookbacks,
     roc_lookbacks,
     cmf_lookbacks,
@@ -49,6 +51,8 @@ def _prepare_timeframe_runtime(
     capital_mode,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
     wf_train_days,
     wf_test_days,
     wf_step_days,
@@ -88,6 +92,8 @@ def _prepare_timeframe_runtime(
         atr_window=atr_window,
         ma_pairs=ma_pairs,
         obv_lookbacks=obv_lookbacks,
+        oi_lookbacks=oi_lookbacks,
+        open_interest_provider=open_interest_provider,
         volume_lookbacks=volume_lookbacks,
         roc_lookbacks=roc_lookbacks,
         cmf_lookbacks=cmf_lookbacks,
@@ -112,6 +118,8 @@ def _prepare_timeframe_runtime(
         capital_mode=capital_mode,
         htf_trend_timeframes=htf_trend_timeframes,
         htf_trend_windows=htf_trend_windows,
+        funding_gate_long_thresholds=funding_gate_long_thresholds,
+        funding_gate_short_thresholds=funding_gate_short_thresholds,
     )
     trade_symbols_tf = ctx["trade_symbols"]
     timeframe_range = f"{timeframe} ({data_days}d): {ctx['data_range']}"
@@ -124,6 +132,7 @@ def _prepare_timeframe_runtime(
             "data_days": data_days,
             "data_start_requested": str(data_start or ""),
             "data_end_requested": str(data_end or ""),
+            "open_interest_provider": open_interest_provider if oi_lookbacks else "",
             "data_start": str(ctx["trade_close"].index[0]),
             "data_end": str(ctx["trade_close"].index[-1]),
         }
@@ -193,17 +202,35 @@ def _prepare_timeframe_runtime(
 def _format_overlay_filter_name(filter_spec):
     if not isinstance(filter_spec, dict):
         return None
-    if str(filter_spec.get("kind") or "").strip().lower() != "htf_trend":
-        return None
-    timeframe = str(filter_spec.get("timeframe") or "").strip().lower()
-    window = filter_spec.get("window")
-    if not timeframe or window in (None, ""):
-        return None
-    try:
-        window_value = int(window)
-    except (TypeError, ValueError):
-        return None
-    return f"htf_trend:{timeframe}:{window_value}"
+    kind = str(filter_spec.get("kind") or "").strip().lower()
+    if kind == "composite":
+        parts = [_format_overlay_filter_name(part) for part in filter_spec.get("filters") or []]
+        parts = [part for part in parts if part]
+        if not parts:
+            return None
+        return "&".join(parts)
+    if kind == "htf_trend":
+        timeframe = str(filter_spec.get("timeframe") or "").strip().lower()
+        window = filter_spec.get("window")
+        if not timeframe or window in (None, ""):
+            return None
+        try:
+            window_value = int(window)
+        except (TypeError, ValueError):
+            return None
+        return f"htf_trend:{timeframe}:{window_value}"
+    if kind == "funding_gate":
+        long_threshold = filter_spec.get("long_threshold")
+        short_threshold = filter_spec.get("short_threshold")
+        try:
+            long_value = float(long_threshold)
+            short_value = float(short_threshold)
+        except (TypeError, ValueError):
+            return None
+        long_text = f"{long_value:.6f}".rstrip("0").rstrip(".") or "0"
+        short_text = f"{short_value:.6f}".rstrip("0").rstrip(".") or "0"
+        return f"funding_gate:{long_text}:{short_text}"
+    return None
 
 
 def _parse_overlay_filter_name(filter_name):
@@ -211,19 +238,49 @@ def _parse_overlay_filter_name(filter_name):
     if not text:
         return {"kind": "none", "name": None}
     overlay_text = text.rsplit("|", 1)[-1].strip()
-    if not overlay_text.startswith("htf_trend:"):
+    def _parse_single(part_text):
+        if part_text.startswith("htf_trend:"):
+            parts = part_text.split(":")
+            if len(parts) != 3:
+                return {"kind": "none", "name": None}
+            try:
+                window = int(parts[2])
+            except (TypeError, ValueError):
+                return {"kind": "none", "name": None}
+            return {
+                "kind": "htf_trend",
+                "timeframe": parts[1].strip().lower(),
+                "window": window,
+                "name": part_text,
+            }
+        if part_text.startswith("funding_gate:"):
+            parts = part_text.split(":")
+            if len(parts) != 3:
+                return {"kind": "none", "name": None}
+            try:
+                long_threshold = float(parts[1])
+                short_threshold = float(parts[2])
+            except (TypeError, ValueError):
+                return {"kind": "none", "name": None}
+            return {
+                "kind": "funding_gate",
+                "long_threshold": long_threshold,
+                "short_threshold": short_threshold,
+                "name": part_text,
+            }
         return {"kind": "none", "name": None}
-    parts = overlay_text.split(":")
-    if len(parts) != 3:
+
+    parts = [part.strip() for part in overlay_text.split("&") if part.strip()]
+    if not parts:
         return {"kind": "none", "name": None}
-    try:
-        window = int(parts[2])
-    except (TypeError, ValueError):
+    parsed_parts = [_parse_single(part) for part in parts]
+    if any(part.get("kind") == "none" for part in parsed_parts):
         return {"kind": "none", "name": None}
+    if len(parsed_parts) == 1:
+        return parsed_parts[0]
     return {
-        "kind": "htf_trend",
-        "timeframe": parts[1].strip().lower(),
-        "window": window,
+        "kind": "composite",
+        "filters": parsed_parts,
         "name": overlay_text,
     }
 
@@ -241,25 +298,42 @@ def _compose_filter_name(indicator_label, filter_spec=None):
 def _build_overlay_filters(ctx, filter_spec, template):
     if isinstance(template, pd.DataFrame):
         def _broadcast(series):
+            if isinstance(series, pd.DataFrame):
+                aligned = series.reindex(index=template.index, columns=template.columns)
+                return aligned.fillna(False).astype(bool)
             aligned = pd.Series(series, index=template.index).fillna(False).astype(bool)
-            return pd.DataFrame(
-                {column: aligned for column in template.columns},
-                index=template.index,
-            )
+            return pd.DataFrame({column: aligned for column in template.columns}, index=template.index)
         all_true = pd.DataFrame(True, index=template.index, columns=template.columns)
     else:
         def _broadcast(series):
+            if isinstance(series, pd.DataFrame):
+                if template.name in series.columns:
+                    return series[template.name].reindex(template.index).fillna(False).astype(bool)
+                return series.iloc[:, 0].reindex(template.index).fillna(False).astype(bool)
             return pd.Series(series, index=template.index).fillna(False).astype(bool)
         all_true = pd.Series(True, index=template.index)
 
     if not isinstance(filter_spec, dict):
         return all_true, all_true
-    if str(filter_spec.get("kind") or "").strip().lower() != "htf_trend":
+    kind = str(filter_spec.get("kind") or "").strip().lower()
+    if kind == "none" or not kind:
         return all_true, all_true
 
+    if kind == "composite":
+        long_filter = all_true.copy()
+        short_filter = all_true.copy()
+        for part in filter_spec.get("filters") or []:
+            part_long, part_short = _build_overlay_filters(ctx, part, template)
+            long_filter = long_filter & part_long
+            short_filter = short_filter & part_short
+        return long_filter, short_filter
+
     filter_name = _format_overlay_filter_name(filter_spec)
-    htf_filters = (ctx or {}).get("htf_trend_filters") or {}
-    selected = htf_filters.get(filter_name)
+    filter_map_key = {
+        "htf_trend": "htf_trend_filters",
+        "funding_gate": "funding_gate_filters",
+    }.get(kind)
+    selected = ((ctx or {}).get(filter_map_key) or {}).get(filter_name) if filter_map_key else None
     if not isinstance(selected, dict):
         raise RuntimeError(f"missing overlay filter context for {filter_name}")
     return _broadcast(selected.get("long")), _broadcast(selected.get("short"))
@@ -365,6 +439,7 @@ def _build_combo_key_values(
         "stoch_long": param_payload["stoch_long"],
         "stoch_short": param_payload["stoch_short"],
         "obv_lookback": param_payload["obv_lookback"],
+        "oi_lookback": param_payload.get("oi_lookback"),
         "volume_lookback": param_payload["volume_lookback"],
         "volume_z": param_payload["volume_z"],
         "roc_lookback": param_payload["roc_lookback"],
@@ -629,6 +704,7 @@ def _build_symbol_row(
         "stoch_long": variant_params["stoch_long"],
         "stoch_short": variant_params["stoch_short"],
         "obv_lookback": variant_params["obv_lookback"],
+        "oi_lookback": variant_params.get("oi_lookback"),
         "volume_lookback": variant_params["volume_lookback"],
         "volume_z": variant_params["volume_z"],
         "roc_lookback": variant_params["roc_lookback"],
@@ -749,6 +825,7 @@ def _build_oos_symbol_row(
         "stoch_long": variant_params["stoch_long"],
         "stoch_short": variant_params["stoch_short"],
         "obv_lookback": variant_params["obv_lookback"],
+        "oi_lookback": variant_params.get("oi_lookback"),
         "volume_lookback": variant_params["volume_lookback"],
         "volume_z": variant_params["volume_z"],
         "roc_lookback": variant_params["roc_lookback"],
@@ -884,6 +961,7 @@ def _build_combo_row(
         "stoch_long": variant_params["stoch_long"],
         "stoch_short": variant_params["stoch_short"],
         "obv_lookback": variant_params["obv_lookback"],
+        "oi_lookback": variant_params.get("oi_lookback"),
         "volume_lookback": variant_params["volume_lookback"],
         "volume_z": variant_params["volume_z"],
         "roc_lookback": variant_params["roc_lookback"],

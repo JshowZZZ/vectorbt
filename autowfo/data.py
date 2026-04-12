@@ -13,6 +13,34 @@ import pandas as pd
 import vectorbt as vbt
 
 
+_OPEN_INTEREST_HISTORY_TIMEFRAMES = {
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "2h",
+    "4h",
+    "6h",
+    "12h",
+    "1d",
+}
+
+_OPEN_INTEREST_PROVIDER_ALIASES = {
+    "binance": "binanceusdm",
+    "binanceusdm": "binanceusdm",
+    "bybit": "bybit",
+}
+
+_BYBIT_OPEN_INTEREST_INTERVALS = {
+    "5m": "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h": "1h",
+    "4h": "4h",
+    "1d": "1d",
+}
+
+
 def _normalize_index(df):
     view = df.copy()
     view.index = pd.to_datetime(view.index, utc=True).tz_convert(None)
@@ -284,6 +312,451 @@ def _build_htf_trend_filters(close_series, base_index, htf_timeframes=None, htf_
     return filters
 
 
+def _format_overlay_threshold(value):
+    text = f"{float(value):.6f}".rstrip("0").rstrip(".")
+    if text in {"", "-0"}:
+        return "0"
+    return text
+
+
+def _normalize_open_interest_provider(value):
+    key = str(value or "").strip().lower()
+    return _OPEN_INTEREST_PROVIDER_ALIASES.get(key, "bybit")
+
+
+def _perpetual_proxy_symbol(symbol, exchange="binanceusdm"):
+    base = str(symbol or "").split("/", 1)[0].strip().upper()
+    if not base:
+        raise ValueError(f"invalid trade symbol for perpetual proxy: {symbol}")
+    normalized_exchange = _OPEN_INTEREST_PROVIDER_ALIASES.get(
+        str(exchange or "binanceusdm").strip().lower(),
+        str(exchange or "binanceusdm").strip().lower(),
+    )
+    return normalized_exchange, f"{base}/USDT:USDT"
+
+
+def _funding_proxy_symbol(symbol):
+    return _perpetual_proxy_symbol(symbol)
+
+
+def _normalize_open_interest_history_timeframe(value):
+    key = str(value or "").strip().lower()
+    if key in _OPEN_INTEREST_HISTORY_TIMEFRAMES:
+        return key
+    return "5m"
+
+
+def _resolve_open_interest_history_request(provider, timeframe):
+    normalized_provider = _normalize_open_interest_provider(provider)
+    history_timeframe = _normalize_open_interest_history_timeframe(timeframe)
+    if normalized_provider == "binanceusdm":
+        return {
+            "provider": normalized_provider,
+            "download_timeframe": history_timeframe,
+            "resample_rule": None,
+        }
+    if normalized_provider == "bybit":
+        if history_timeframe in _BYBIT_OPEN_INTEREST_INTERVALS:
+            return {
+                "provider": normalized_provider,
+                "download_timeframe": history_timeframe,
+                "resample_rule": None,
+            }
+        target_delta = pd.Timedelta(history_timeframe)
+        if (
+            target_delta < pd.Timedelta("1d")
+            and target_delta % pd.Timedelta("1h") == pd.Timedelta(0)
+        ):
+            return {
+                "provider": normalized_provider,
+                "download_timeframe": "1h",
+                "resample_rule": history_timeframe,
+            }
+    raise ValueError(
+        f"unsupported open interest provider/timeframe combination: {provider!r} / {timeframe!r}"
+    )
+
+
+def _resample_open_interest_history(history_df, rule):
+    if history_df.empty or not rule:
+        return history_df
+    view = history_df.copy()
+    view = view[~view.index.duplicated(keep="last")].sort_index()
+    for column in ("openInterestAmount", "openInterestValue"):
+        if column in view.columns:
+            view[column] = pd.to_numeric(view[column], errors="coerce")
+    resampled = view.resample(rule).last()
+    if "openInterestAmount" in resampled.columns:
+        resampled = resampled.dropna(subset=["openInterestAmount"])
+    else:
+        resampled = resampled.dropna(how="all")
+    return resampled
+
+
+def _download_funding_history(proxy_symbol, exchange, start_ts, end_ts):
+    import ccxt  # type: ignore
+
+    exchange_cls = getattr(ccxt, exchange, None)
+    if exchange_cls is None:
+        raise ValueError(f"unsupported funding exchange: {exchange!r}")
+
+    ex = exchange_cls({"enableRateLimit": True})
+    since_ms = int(start_ts.tz_localize("UTC").timestamp() * 1000)
+    end_ms = int(end_ts.tz_localize("UTC").timestamp() * 1000)
+
+    rows = []
+    limit = 1000
+    while True:
+        batch = ex.fetch_funding_rate_history(proxy_symbol, since=since_ms, limit=limit)
+        if not batch:
+            break
+        rows.extend(batch)
+        last_ms = int(batch[-1].get("timestamp") or 0)
+        next_since = last_ms + 1
+        if next_since <= since_ms or next_since > end_ms:
+            break
+        since_ms = next_since
+        if len(batch) < limit and last_ms >= end_ms:
+            break
+
+    if not rows:
+        return pd.DataFrame(columns=["fundingRate"], index=pd.DatetimeIndex([]))
+
+    out = pd.DataFrame(
+        {
+            "timestamp": [row.get("timestamp") for row in rows],
+            "fundingRate": [row.get("fundingRate") for row in rows],
+        }
+    )
+    out = out.dropna(subset=["timestamp"])
+    timestamps = pd.to_datetime(
+        pd.to_numeric(out.pop("timestamp"), errors="coerce"),
+        unit="ms",
+        utc=True,
+    )
+    out.index = pd.DatetimeIndex(timestamps).tz_convert(None)
+    out = out[~out.index.duplicated(keep="last")].sort_index()
+    out["fundingRate"] = pd.to_numeric(out["fundingRate"], errors="coerce")
+    out = out.dropna(subset=["fundingRate"])
+    return out.loc[(out.index >= start_ts) & (out.index <= end_ts)]
+
+
+def _load_or_update_funding_history(symbol, start_ts, end_ts, cache_dir, cache_format):
+    exchange, proxy_symbol = _perpetual_proxy_symbol(symbol)
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_name = f"{exchange}_{proxy_symbol.replace('/', '-').replace(':', '-')}_funding.{cache_format}"
+    cache_path = os.path.join(cache_dir, cache_name)
+
+    cached = pd.DataFrame(columns=["fundingRate"], index=pd.DatetimeIndex([]))
+    if os.path.exists(cache_path):
+        cached = _read_cache(cache_path, cache_format)
+        cached.index = pd.to_datetime(cached.index, utc=True).tz_convert(None)
+        cached = cached[[col for col in cached.columns if col == "fundingRate"]]
+        if "fundingRate" not in cached.columns:
+            cached["fundingRate"] = np.nan
+        cached = cached[~cached.index.duplicated(keep="last")].sort_index()
+
+    if not cached.empty and cached.index.min() <= start_ts and cached.index.max() >= end_ts:
+        return cached.loc[(cached.index >= start_ts) & (cached.index <= end_ts)]
+
+    fetched = _download_funding_history(proxy_symbol, exchange, start_ts, end_ts)
+    merged = fetched if cached.empty else pd.concat([cached, fetched], axis=0)
+    merged = merged[~merged.index.duplicated(keep="last")].sort_index()
+    _write_cache(merged, cache_path, cache_format)
+    return merged.loc[(merged.index >= start_ts) & (merged.index <= end_ts)]
+
+
+def _download_binance_open_interest_history(proxy_symbol, exchange, timeframe, start_ts, end_ts):
+    import ccxt  # type: ignore
+
+    exchange_cls = getattr(ccxt, exchange, None)
+    if exchange_cls is None:
+        raise ValueError(f"unsupported open interest exchange: {exchange!r}")
+
+    history_timeframe = _normalize_open_interest_history_timeframe(timeframe)
+    latest_available_start = pd.Timestamp.now(tz="UTC").tz_convert(None) - pd.Timedelta(days=31)
+    if start_ts < latest_available_start:
+        raise ValueError(
+            "Binance open interest history only exposes the latest 1 month; "
+            f"requested start {start_ts} is older than supported window {latest_available_start}"
+        )
+    ex = exchange_cls({"enableRateLimit": True})
+    since_ms = int(start_ts.tz_localize("UTC").timestamp() * 1000)
+    end_ms = int(end_ts.tz_localize("UTC").timestamp() * 1000)
+    try:
+        step_ms = max(int(pd.Timedelta(history_timeframe).total_seconds() * 1000), 1)
+    except ValueError:
+        step_ms = int(pd.Timedelta("5m").total_seconds() * 1000)
+
+    rows = []
+    limit = 500
+    while True:
+        batch = ex.fetch_open_interest_history(
+            proxy_symbol,
+            timeframe=history_timeframe,
+            since=since_ms,
+            limit=limit,
+            params={"until": end_ms},
+        )
+        if not batch:
+            break
+        rows.extend(batch)
+        last_ms = int(batch[-1].get("timestamp") or 0)
+        next_since = last_ms + step_ms
+        if next_since <= since_ms or next_since > end_ms:
+            break
+        since_ms = next_since
+        if len(batch) < limit and last_ms >= end_ms:
+            break
+
+    if not rows:
+        return pd.DataFrame(
+            columns=["openInterestAmount", "openInterestValue"],
+            index=pd.DatetimeIndex([]),
+        )
+
+    out = pd.DataFrame(
+        {
+            "timestamp": [row.get("timestamp") for row in rows],
+            "openInterestAmount": [
+                row.get("openInterestAmount", row.get("sumOpenInterest"))
+                for row in rows
+            ],
+            "openInterestValue": [
+                row.get("openInterestValue", row.get("sumOpenInterestValue"))
+                for row in rows
+            ],
+        }
+    )
+    out = out.dropna(subset=["timestamp"])
+    timestamps = pd.to_datetime(
+        pd.to_numeric(out.pop("timestamp"), errors="coerce"),
+        unit="ms",
+        utc=True,
+    )
+    out.index = pd.DatetimeIndex(timestamps).tz_convert(None)
+    out = out[~out.index.duplicated(keep="last")].sort_index()
+    out["openInterestAmount"] = pd.to_numeric(out["openInterestAmount"], errors="coerce")
+    out["openInterestValue"] = pd.to_numeric(out["openInterestValue"], errors="coerce")
+    out = out.dropna(subset=["openInterestAmount"])
+    return out.loc[(out.index >= start_ts) & (out.index <= end_ts)]
+
+
+def _download_bybit_open_interest_history(proxy_symbol, exchange, timeframe, start_ts, end_ts):
+    import ccxt  # type: ignore
+
+    exchange_cls = getattr(ccxt, exchange, None)
+    if exchange_cls is None:
+        raise ValueError(f"unsupported open interest exchange: {exchange!r}")
+
+    interval = _BYBIT_OPEN_INTEREST_INTERVALS.get(timeframe)
+    if interval is None:
+        raise ValueError(f"unsupported Bybit open interest timeframe: {timeframe!r}")
+
+    ex = exchange_cls({"enableRateLimit": True})
+    ex.load_markets()
+    market = ex.market(proxy_symbol)
+    request_method = getattr(ex, "publicGetV5MarketOpenInterest", None)
+    if request_method is None:
+        raise ValueError("Bybit exchange client is missing publicGetV5MarketOpenInterest")
+
+    start_ms = int(start_ts.tz_localize("UTC").timestamp() * 1000)
+    end_ms = int(end_ts.tz_localize("UTC").timestamp() * 1000)
+    step_ms = max(int(pd.Timedelta(timeframe).total_seconds() * 1000), 1)
+    batch_span_ms = step_ms * 199
+
+    rows = []
+    window_start_ms = start_ms
+    while window_start_ms <= end_ms:
+        window_end_ms = min(window_start_ms + batch_span_ms, end_ms)
+        response = request_method(
+            {
+                "category": "linear" if market.get("linear") else "inverse",
+                "symbol": market["id"],
+                "intervalTime": interval,
+                "startTime": str(window_start_ms),
+                "endTime": str(window_end_ms),
+                "limit": "200",
+            }
+        )
+        batch = ((response or {}).get("result") or {}).get("list") or []
+        if batch:
+            rows.extend(batch)
+        if window_end_ms >= end_ms:
+            break
+        next_window_start_ms = window_end_ms + step_ms
+        if next_window_start_ms <= window_start_ms:
+            break
+        window_start_ms = next_window_start_ms
+
+    if not rows:
+        return pd.DataFrame(
+            columns=["openInterestAmount", "openInterestValue"],
+            index=pd.DatetimeIndex([]),
+        )
+
+    out = pd.DataFrame(
+        {
+            "timestamp": [row.get("timestamp") for row in rows],
+            "openInterestAmount": [row.get("openInterest") for row in rows],
+            "openInterestValue": [np.nan] * len(rows),
+        }
+    )
+    out = out.dropna(subset=["timestamp"])
+    timestamps = pd.to_datetime(
+        pd.to_numeric(out.pop("timestamp"), errors="coerce"),
+        unit="ms",
+        utc=True,
+    )
+    out.index = pd.DatetimeIndex(timestamps).tz_convert(None)
+    out = out[~out.index.duplicated(keep="last")].sort_index()
+    out["openInterestAmount"] = pd.to_numeric(out["openInterestAmount"], errors="coerce")
+    out["openInterestValue"] = pd.to_numeric(out["openInterestValue"], errors="coerce")
+    out = out.dropna(subset=["openInterestAmount"])
+    return out.loc[(out.index >= start_ts) & (out.index <= end_ts)]
+
+
+def _download_open_interest_history(symbol, open_interest_provider, timeframe, start_ts, end_ts):
+    request = _resolve_open_interest_history_request(open_interest_provider, timeframe)
+    exchange, proxy_symbol = _perpetual_proxy_symbol(
+        symbol,
+        exchange=request["provider"],
+    )
+    download_timeframe = request["download_timeframe"]
+    if exchange == "bybit":
+        out = _download_bybit_open_interest_history(
+            proxy_symbol,
+            exchange,
+            download_timeframe,
+            start_ts,
+            end_ts,
+        )
+    else:
+        out = _download_binance_open_interest_history(
+            proxy_symbol,
+            exchange,
+            download_timeframe,
+            start_ts,
+            end_ts,
+        )
+    resample_rule = request.get("resample_rule")
+    if resample_rule:
+        out = _resample_open_interest_history(out, resample_rule)
+    return out.loc[(out.index >= start_ts) & (out.index <= end_ts)]
+
+
+def _load_or_update_open_interest_history(
+    symbol,
+    timeframe,
+    start_ts,
+    end_ts,
+    cache_dir,
+    cache_format,
+    open_interest_provider="bybit",
+    read_cache_fn=None,
+    write_cache_fn=None,
+    download_open_interest_history_fn=None,
+):
+    if read_cache_fn is None:
+        read_cache_fn = _read_cache
+    if write_cache_fn is None:
+        write_cache_fn = _write_cache
+    if download_open_interest_history_fn is None:
+        download_open_interest_history_fn = _download_open_interest_history
+
+    provider = _normalize_open_interest_provider(open_interest_provider)
+    exchange, proxy_symbol = _perpetual_proxy_symbol(symbol, exchange=provider)
+    history_timeframe = _normalize_open_interest_history_timeframe(timeframe)
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_name = (
+        f"{exchange}_{proxy_symbol.replace('/', '-').replace(':', '-')}_"
+        f"oi_{history_timeframe}.{cache_format}"
+    )
+    cache_path = os.path.join(cache_dir, cache_name)
+
+    cached = pd.DataFrame(
+        columns=["openInterestAmount", "openInterestValue"],
+        index=pd.DatetimeIndex([]),
+    )
+    if os.path.exists(cache_path):
+        cached = read_cache_fn(cache_path, cache_format)
+        cached.index = pd.to_datetime(cached.index, utc=True).tz_convert(None)
+        keep_cols = [
+            col
+            for col in cached.columns
+            if col in {"openInterestAmount", "openInterestValue"}
+        ]
+        cached = cached[keep_cols]
+        if "openInterestAmount" not in cached.columns:
+            cached["openInterestAmount"] = np.nan
+        if "openInterestValue" not in cached.columns:
+            cached["openInterestValue"] = np.nan
+        cached = cached[~cached.index.duplicated(keep="last")].sort_index()
+
+    if not cached.empty and cached.index.min() <= start_ts and cached.index.max() >= end_ts:
+        return cached.loc[(cached.index >= start_ts) & (cached.index <= end_ts)]
+
+    fetched = download_open_interest_history_fn(
+        symbol,
+        provider,
+        history_timeframe,
+        start_ts,
+        end_ts,
+    )
+    merged = fetched if cached.empty else pd.concat([cached, fetched], axis=0)
+    merged = merged[~merged.index.duplicated(keep="last")].sort_index()
+    write_cache_fn(merged, cache_path, cache_format)
+    return merged.loc[(merged.index >= start_ts) & (merged.index <= end_ts)]
+
+
+def _build_funding_gate_filters(
+    trade_symbols,
+    base_index,
+    start_ts,
+    end_ts,
+    cache_dir,
+    cache_format,
+    long_thresholds=None,
+    short_thresholds=None,
+    load_funding_history_fn=None,
+):
+    long_values = [float(value) for value in (long_thresholds or []) if float(value) > 0]
+    short_values = [float(value) for value in (short_thresholds or []) if float(value) < 0]
+    if not trade_symbols or not long_values or not short_values:
+        return {}
+    if load_funding_history_fn is None:
+        load_funding_history_fn = _load_or_update_funding_history
+
+    funding_frame = pd.DataFrame(index=base_index)
+    funding_cache_dir = os.path.join(cache_dir, "funding")
+    for symbol in trade_symbols:
+        funding_df = load_funding_history_fn(
+            symbol,
+            start_ts,
+            end_ts,
+            funding_cache_dir,
+            cache_format,
+        )
+        if funding_df.empty or "fundingRate" not in funding_df.columns:
+            raise RuntimeError(f"missing funding history for {symbol}")
+        settled = funding_df["fundingRate"].shift(1)
+        aligned = settled.reindex(base_index, method="ffill").fillna(0.0)
+        funding_frame[symbol] = aligned.astype(float)
+
+    filters = {}
+    for long_threshold in sorted(set(long_values)):
+        for short_threshold in sorted(set(short_values)):
+            name = (
+                f"funding_gate:{_format_overlay_threshold(long_threshold)}:"
+                f"{_format_overlay_threshold(short_threshold)}"
+            )
+            filters[name] = {
+                "long": (funding_frame <= float(long_threshold)).fillna(False),
+                "short": (funding_frame >= float(short_threshold)).fillna(False),
+            }
+    return filters
+
+
 def _resolve_requested_window(data_days, *, data_start=None, data_end=None):
     end_ts = _coerce_utc_timestamp(
         data_end,
@@ -453,12 +926,48 @@ def _prepare_timeframe_context(
     capital_mode,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
+    oi_lookbacks=None,
+    open_interest_provider="bybit",
     data_start=None,
     data_end=None,
     load_or_update_symbol_fn=None,
+    load_funding_history_fn=None,
+    load_open_interest_history_fn=None,
 ):
     if load_or_update_symbol_fn is None:
         load_or_update_symbol_fn = _load_or_update_symbol
+
+    normalized_oi_lookbacks = []
+    for value in oi_lookbacks or []:
+        try:
+            lookback = int(value)
+        except (TypeError, ValueError):
+            continue
+        if lookback > 0:
+            normalized_oi_lookbacks.append(lookback)
+    oi_lookbacks = sorted(set(normalized_oi_lookbacks))
+    if oi_lookbacks and load_open_interest_history_fn is None:
+        normalized_open_interest_provider = _normalize_open_interest_provider(open_interest_provider)
+
+        def load_open_interest_history_fn(
+            symbol,
+            timeframe,
+            start_ts,
+            end_ts,
+            cache_dir,
+            cache_format,
+        ):
+            return _load_or_update_open_interest_history(
+                symbol,
+                timeframe,
+                start_ts,
+                end_ts,
+                cache_dir,
+                cache_format,
+                open_interest_provider=normalized_open_interest_provider,
+            )
 
     use_explicit_window = data_start not in (None, "") or data_end not in (None, "")
     if use_explicit_window:
@@ -600,6 +1109,24 @@ def _prepare_timeframe_context(
 
     obv = vbt.OBV.run(btc_close, btc_volume).obv
     obv_roc_by_lb = {lb: obv.pct_change(lb) for lb in obv_lookbacks}
+
+    oi_roc_by_lb = {}
+    if oi_lookbacks:
+        oi_history_df = load_open_interest_history_fn(
+            base_symbol,
+            timeframe,
+            requested_window_start or trade_close.index.min(),
+            requested_window_end or trade_close.index.max(),
+            os.path.join(cache_dir, "open_interest"),
+            cache_format,
+        )
+        if oi_history_df.empty or "openInterestAmount" not in oi_history_df.columns:
+            raise RuntimeError(f"missing open interest history for {base_symbol}")
+        oi_amount = pd.to_numeric(oi_history_df["openInterestAmount"], errors="coerce")
+        oi_amount = oi_amount.replace([np.inf, -np.inf], np.nan)
+        oi_amount = oi_amount[~oi_amount.index.duplicated(keep="last")].sort_index()
+        oi_amount = oi_amount.reindex(trade_close.index, method="ffill")
+        oi_roc_by_lb = {lb: oi_amount.pct_change(lb) for lb in oi_lookbacks}
 
     volume_zscore_by_lb = {}
     vol_ret = btc_volume.pct_change()
@@ -749,6 +1276,17 @@ def _prepare_timeframe_context(
         htf_timeframes=htf_trend_timeframes,
         htf_windows=htf_trend_windows,
     )
+    funding_gate_filters = _build_funding_gate_filters(
+        trade_symbols,
+        trade_close.index,
+        requested_window_start or trade_close.index.min(),
+        requested_window_end or trade_close.index.max(),
+        cache_dir,
+        cache_format,
+        long_thresholds=funding_gate_long_thresholds,
+        short_thresholds=funding_gate_short_thresholds,
+        load_funding_history_fn=load_funding_history_fn,
+    )
 
     data_range = f"{trade_close.index[0]} -> {trade_close.index[-1]}"
     overlap_diagnostics = {
@@ -761,6 +1299,9 @@ def _prepare_timeframe_context(
         "requested_symbol_count": len(all_symbols) - 1,
         "available_trade_symbol_count": len(trade_symbols),
         "base_symbol": base_symbol,
+        "open_interest_provider": (
+            _normalize_open_interest_provider(open_interest_provider) if oi_lookbacks else None
+        ),
         "trade_symbols": list(trade_symbols),
         "symbol_data_ranges": symbol_data_ranges,
     }
@@ -793,6 +1334,10 @@ def _prepare_timeframe_context(
         "macd_hist_ratio_series": macd_hist_ratio_series,
         "stoch_k": stoch_k,
         "obv_roc_by_lb": obv_roc_by_lb,
+        "oi_roc_by_lb": oi_roc_by_lb,
+        "open_interest_provider": (
+            _normalize_open_interest_provider(open_interest_provider) if oi_lookbacks else None
+        ),
         "volume_zscore_by_lb": volume_zscore_by_lb,
         "roc_by_lb": roc_by_lb,
         "cmf_by_window": cmf_by_window,
@@ -813,6 +1358,7 @@ def _prepare_timeframe_context(
         "ppo_hist_series": ppo_hist_series,
         "chop_by_lb": chop_by_lb,
         "htf_trend_filters": htf_trend_filters,
+        "funding_gate_filters": funding_gate_filters,
         "data_range": data_range,
         "overlap_diagnostics": overlap_diagnostics,
     }

@@ -89,6 +89,65 @@ def test_prepare_timeframe_context_characterization(tmp_path):
     assert ctx["init_cash_btc"] > 0
 
 
+def test_prepare_timeframe_context_builds_oi_roc_context(tmp_path):
+    index = pd.date_range("2024-01-01", periods=50, freq="h")
+    base_df = _make_ohlcv(index, base=100.0)
+    trade_df = _make_ohlcv(index, base=1.0)
+    captured = {}
+
+    def loader(symbol, *_args, **_kwargs):
+        return base_df if symbol == "BTC/USDT" else trade_df
+
+    def open_interest_loader(symbol, timeframe, start_ts, end_ts, cache_dir, cache_format):
+        _ = (timeframe, start_ts, end_ts, cache_dir, cache_format)
+        captured["symbol"] = symbol
+        oi_amount = pd.Series(100.0 + np.arange(len(index), dtype=float), index=index)
+        return pd.DataFrame(
+            {
+                "openInterestAmount": oi_amount,
+                "openInterestValue": oi_amount * 1000.0,
+            },
+            index=index,
+        )
+
+    kwargs = _common_ctx_kwargs(str(tmp_path / "cache"))
+    ctx = d._prepare_timeframe_context(
+        **kwargs,
+        oi_lookbacks=[3],
+        load_or_update_symbol_fn=loader,
+        load_open_interest_history_fn=open_interest_loader,
+    )
+
+    assert captured["symbol"] == "BTC/USDT"
+    assert 3 in ctx["oi_roc_by_lb"]
+    assert ctx["oi_roc_by_lb"][3].dropna().iloc[-1] > 0
+
+
+def test_resolve_open_interest_history_request_resamples_bybit_2h_to_1h():
+    got = d._resolve_open_interest_history_request("bybit", "2h")
+
+    assert got["provider"] == "bybit"
+    assert got["download_timeframe"] == "1h"
+    assert got["resample_rule"] == "2h"
+
+
+def test_resample_open_interest_history_uses_last_value_per_bucket():
+    index = pd.date_range("2024-01-01", periods=6, freq="h")
+    raw = pd.DataFrame(
+        {
+            "openInterestAmount": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            "openInterestValue": [100.0, 110.0, 120.0, 130.0, 140.0, 150.0],
+        },
+        index=index,
+    )
+
+    got = d._resample_open_interest_history(raw, "2h")
+
+    assert list(got.index) == list(pd.date_range("2024-01-01", periods=3, freq="2h"))
+    assert list(got["openInterestAmount"]) == [11.0, 13.0, 15.0]
+    assert list(got["openInterestValue"]) == [110.0, 130.0, 150.0]
+
+
 def test_resolve_requested_window_uses_explicit_end():
     window = d._resolve_requested_window(
         10,

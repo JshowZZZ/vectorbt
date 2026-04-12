@@ -236,6 +236,7 @@ def test_resolve_runtime_settings_normalizes_fields():
         "enable_htf_trend_gate": "true",
         "htf_trend_timeframes": "8h,1d,8h",
         "htf_trend_windows": [10, "20", -1, 10],
+        "open_interest_provider": "ByBit",
         "pilot_fixed_indicator_params": "true",
         "pilot_single_trend_mom": "yes",
         "wf_train_days": 7,
@@ -290,6 +291,7 @@ def test_resolve_runtime_settings_normalizes_fields():
     assert got["enable_htf_trend_gate"] is True
     assert got["htf_trend_timeframes"] == ["8h", "1d"]
     assert got["htf_trend_windows"] == [10, 20]
+    assert got["open_interest_provider"] == "bybit"
     assert got["filter_variants"] == [
         {"kind": "none", "name": None},
         {"kind": "htf_trend", "timeframe": "8h", "window": 10, "name": "htf_trend:8h:10"},
@@ -337,6 +339,25 @@ def test_resolve_runtime_settings_uses_default_trade_symbols_when_empty():
     assert got["strategy_mode"] == "combo_entry"
     assert got["state_indicator_sets"] == []
     assert got["trigger_indicator_sets"] == []
+
+
+def test_resolve_runtime_settings_keeps_oi_roc_opt_in_by_default():
+    config = {
+        "timeframes": [{"timeframe": "1h", "days": 30}],
+        "combo_sizes": [2],
+    }
+
+    got = e._resolve_runtime_settings(
+        config,
+        base_symbol="BTC/USDT",
+        default_trade_symbols=["BNB/BTC"],
+        available_indicator_keys=["mfi", "obv_roc", "oi_roc"],
+        normalize_split_mode_fn=lambda mode: "anchored",
+        resolve_ranking_config_fn=lambda ranking: {"mode": "composite"},
+    )
+
+    assert got["indicator_subset"] == ["mfi", "obv_roc"]
+    assert got["open_interest_provider"] == "bybit"
 
 
 def test_build_regime_variants_characterization():
@@ -392,6 +413,77 @@ def test_overlay_filter_helpers_round_trip():
         "window": 20,
         "name": "htf_trend:1d:20",
     }
+
+
+def test_overlay_filter_helpers_round_trip_funding_and_composite():
+    funding_spec = {"kind": "funding_gate", "long_threshold": 0.0001, "short_threshold": -0.0002}
+    filter_name = e._compose_filter_name("obv_roc,keltner_pos", funding_spec)
+    assert filter_name == "obv_roc,keltner_pos|funding_gate:0.0001:-0.0002"
+    assert e._parse_overlay_filter_name(filter_name) == {
+        "kind": "funding_gate",
+        "long_threshold": 0.0001,
+        "short_threshold": -0.0002,
+        "name": "funding_gate:0.0001:-0.0002",
+    }
+
+    composite_spec = {
+        "kind": "composite",
+        "filters": [
+            {"kind": "htf_trend", "timeframe": "1d", "window": 20},
+            {"kind": "funding_gate", "long_threshold": 0.0001, "short_threshold": -0.0002},
+        ],
+    }
+    composite_name = e._compose_filter_name("obv_roc,keltner_pos", composite_spec)
+    assert composite_name == "obv_roc,keltner_pos|htf_trend:1d:20&funding_gate:0.0001:-0.0002"
+    assert e._parse_overlay_filter_name(composite_name) == {
+        "kind": "composite",
+        "filters": [
+            {"kind": "htf_trend", "timeframe": "1d", "window": 20, "name": "htf_trend:1d:20"},
+            {"kind": "funding_gate", "long_threshold": 0.0001, "short_threshold": -0.0002, "name": "funding_gate:0.0001:-0.0002"},
+        ],
+        "name": "htf_trend:1d:20&funding_gate:0.0001:-0.0002",
+    }
+
+
+def test_resolve_runtime_settings_builds_funding_and_composite_variants():
+    config = {
+        "combo_sizes": [2],
+        "timeframes": [{"timeframe": "1h", "days": 30}],
+        "trade_symbols": ["ETH/BTC", "BNB/BTC"],
+        "indicator_subset": ["obv_roc", "keltner_pos"],
+        "enable_htf_trend_gate": True,
+        "htf_trend_timeframes": ["1d"],
+        "htf_trend_windows": [20],
+        "enable_funding_gate": True,
+        "funding_gate_long_thresholds": [0.0001],
+        "funding_gate_short_thresholds": [-0.0002],
+    }
+
+    got = e._resolve_runtime_settings(
+        config,
+        base_symbol="BTC/USDT",
+        default_trade_symbols=["ETH/BTC"],
+        available_indicator_keys=["obv_roc", "keltner_pos"],
+        normalize_split_mode_fn=lambda mode: str(mode),
+        resolve_ranking_config_fn=lambda ranking: ranking,
+    )
+
+    assert got["enable_funding_gate"] is True
+    assert got["funding_gate_long_thresholds"] == [0.0001]
+    assert got["funding_gate_short_thresholds"] == [-0.0002]
+    assert got["filter_variants"] == [
+        {"kind": "none", "name": None},
+        {"kind": "htf_trend", "timeframe": "1d", "window": 20, "name": "htf_trend:1d:20"},
+        {"kind": "funding_gate", "long_threshold": 0.0001, "short_threshold": -0.0002, "name": "funding_gate:0.0001:-0.0002"},
+        {
+            "kind": "composite",
+            "filters": [
+                {"kind": "htf_trend", "timeframe": "1d", "window": 20, "name": "htf_trend:1d:20"},
+                {"kind": "funding_gate", "long_threshold": 0.0001, "short_threshold": -0.0002, "name": "funding_gate:0.0001:-0.0002"},
+            ],
+            "name": "htf_trend:1d:20&funding_gate:0.0001:-0.0002",
+        },
+    ]
 
 
 def test_apply_quality_filters():
@@ -2088,6 +2180,8 @@ def test_build_prepare_timeframe_runtime_kwargs_maps_runtime_inputs():
         atr_window=14,
         ma_pairs=[(10, 30)],
         obv_lookbacks=[12],
+        oi_lookbacks=[12],
+        open_interest_provider="bybit",
         volume_lookbacks=[12],
         roc_lookbacks=[6],
         cmf_lookbacks=[20],
@@ -2153,6 +2247,8 @@ def test_prepare_timeframe_runtime_context_and_from_context_builder():
         atr_window=14,
         ma_pairs=[(10, 30)],
         obv_lookbacks=[12],
+        oi_lookbacks=[12],
+        open_interest_provider="bybit",
         volume_lookbacks=[12],
         roc_lookbacks=[6],
         cmf_lookbacks=[20],
@@ -2220,6 +2316,8 @@ def _sample_shared_pipeline_runtime_context():
         atr_window=14,
         ma_pairs=[(10, 30)],
         obv_lookbacks=[12],
+        oi_lookbacks=[12],
+        open_interest_provider="bybit",
         volume_lookbacks=[12],
         roc_lookbacks=[6],
         cmf_lookbacks=[20],
@@ -3511,6 +3609,8 @@ def test_prepare_timeframe_runtime_builds_payload():
         atr_window=14,
         ma_pairs=[(10, 30)],
         obv_lookbacks=[12],
+        oi_lookbacks=[12],
+        open_interest_provider="bybit",
         volume_lookbacks=[12],
         roc_lookbacks=[6],
         cmf_lookbacks=[20],
@@ -3552,9 +3652,11 @@ def test_prepare_timeframe_runtime_builds_payload():
 
     assert seen["prepare_kwargs"]["timeframe"] == "1h"
     assert seen["prepare_kwargs"]["data_end"] == "2026-04-10T10:00:00Z"
+    assert seen["prepare_kwargs"]["open_interest_provider"] == "bybit"
     assert seen["wf_args"] == (6, 7, 2, 2, "rolling")
     assert seen["fingerprint_payload"]["timeframe"] == "1h"
     assert seen["fingerprint_payload"]["data_end_requested"] == "2026-04-10T10:00:00Z"
+    assert seen["fingerprint_payload"]["open_interest_provider"] == "bybit"
     assert got["timeframe_range"] == "1h (5d): 2024-01-01 to 2024-01-01"
     assert got["timeframe_data_fingerprint"] == "fp-123"
     assert len(got["wf_windows"]) == 1

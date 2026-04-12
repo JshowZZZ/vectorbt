@@ -178,6 +178,39 @@ def test_prepare_timeframe_context_builds_htf_trend_filters():
         assert value["short"].index.equals(ctx["trade_close"].index)
 
 
+def test_prepare_timeframe_context_builds_funding_gate_filters():
+    index = pd.date_range("2024-01-01", periods=24 * 14, freq="h")
+    base_df = _make_ohlcv(index, base=100.0)
+    trade_df = _make_ohlcv(index, base=1.0)
+    funding_index = pd.date_range("2023-12-31 16:00:00", periods=50, freq="8h")
+
+    def loader(symbol, *_args, **_kwargs):
+        return base_df if symbol == "BTC/USDT" else trade_df
+
+    def funding_loader(symbol, *_args, **_kwargs):
+        base_rate = 0.00005 if symbol == "ETH/BTC" else 0.00015
+        values = [base_rate if idx % 2 == 0 else -base_rate for idx in range(len(funding_index))]
+        return pd.DataFrame({"fundingRate": values}, index=funding_index)
+
+    ctx = autowfo_data._prepare_timeframe_context(
+        **_common_ctx_kwargs(),
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
+        load_or_update_symbol_fn=loader,
+        load_funding_history_fn=funding_loader,
+    )
+
+    funding_filters = ctx["funding_gate_filters"]
+    assert list(funding_filters) == ["funding_gate:0.0001:-0.0001"]
+    selected = funding_filters["funding_gate:0.0001:-0.0001"]
+    assert selected["long"].columns.tolist() == ["ETH/BTC", "BNB/BTC"]
+    assert selected["short"].columns.tolist() == ["ETH/BTC", "BNB/BTC"]
+    assert selected["long"].index.equals(ctx["trade_close"].index)
+    assert selected["short"].index.equals(ctx["trade_close"].index)
+    assert selected["long"]["ETH/BTC"].any()
+    assert (~selected["long"]["BNB/BTC"]).any()
+
+
 def test_resolve_pf_stops_atr_multiple_uses_trade_atr_ratio():
     index = pd.date_range("2024-01-01", periods=3, freq="h")
     trade_atr_ratio = pd.DataFrame(

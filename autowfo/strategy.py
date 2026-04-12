@@ -87,6 +87,8 @@ def _coerce_indicator_params(combo_keys, params, ctx):
 
     if "obv_roc" in combo_keys:
         _coerce_lb("obv_lookback", ctx.get("obv_roc_by_lb"))
+    if "oi_roc" in combo_keys:
+        _coerce_lb("oi_lookback", ctx.get("oi_roc_by_lb"))
     if "volume_z" in combo_keys:
         _coerce_lb("volume_lookback", ctx.get("volume_zscore_by_lb"))
     if "roc" in combo_keys:
@@ -144,6 +146,10 @@ def _build_indicator_param_options_coarse():
         "obv_roc": [
             {"obv_lookback": 12},
             {"obv_lookback": 24},
+        ],
+        "oi_roc": [
+            {"oi_lookback": 12},
+            {"oi_lookback": 24},
         ],
         "cmf": [
             {"cmf_lookback": 20, "cmf_threshold": 0.05},
@@ -341,6 +347,10 @@ def _refine_indicator_params(ind_key, base_row, steps, defaults):
         lb = _safe_int(base_row.get("obv_lookback"), base.get("obv_lookback"))
         lbs = _expand_int(lb, steps["lookback"], min_value=2)
         return [{"obv_lookback": l} for l in lbs] or [base]
+    if ind_key == "oi_roc":
+        lb = _safe_int(base_row.get("oi_lookback"), base.get("oi_lookback"))
+        lbs = _expand_int(lb, steps["lookback"], min_value=2)
+        return [{"oi_lookback": l} for l in lbs] or [base]
     if ind_key == "volume_z":
         lb = _safe_int(base_row.get("volume_lookback"), base.get("volume_lookback"))
         z = _safe_float(base_row.get("volume_z"), base.get("volume_z"))
@@ -500,6 +510,12 @@ def _apply_indicator_combo(long_regime, short_regime, combo_keys, combo_params, 
         obv_roc = ctx["obv_roc_by_lb"][obv_lookback]
         long_regime = long_regime & (obv_roc > 0)
         short_regime = short_regime & (obv_roc < 0)
+
+    if "oi_roc" in combo_keys:
+        oi_lookback = params_out["oi_lookback"]
+        oi_roc = ctx["oi_roc_by_lb"][oi_lookback]
+        long_regime = long_regime & (oi_roc > 0)
+        short_regime = short_regime & (oi_roc < 0)
 
     if "volume_z" in combo_keys:
         volume_lookback = params_out["volume_lookback"]
