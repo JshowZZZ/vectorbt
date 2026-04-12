@@ -95,6 +95,28 @@
     - `20260412_125954` (sensitivity)
     Report: `artifacts/reports/pilot_analysis_awf318_temporal_replay_dense_oi_htf.json`.
     Result under `--min-avg-symbol-trades 1.0`: `2` compared / `0` stable-positive / `0` gate-passed. Both the ungated row and the repaired `htf_trend:1d:10` row fail on the older anchor, and the daily HTF overlay actually worsens the paired combo OOS average return from `-3.2139% / -3.6345%` to `-3.8948% / -4.6770%` while cutting trades from about `17.6/18.6` to `11.4/11.9`. Classification: `time-local`.
+  - `done` `AWF-319` Freeze the hierarchical funding-overlay follow-up.
+    Freeze a minimal Phase 60 follow-up that reuses the exact `AWF-311` gate-passed hierarchical lane and injects the bounded-pass `funding_gate` overlay from `AWF-307` without reopening broad search. Contract: anchored `2h / 180d`, frozen 8-symbol state-trigger working cohort, exact state=`obv_roc+keltner_pos`, exact trigger=`ad`, regime limited to `trend_any`, daily HTF gate fixed to `1d:20`, and funding thresholds limited to `0.0001/0.0002` long and `-0.0001/-0.0002` short so the run keeps the no-filter baseline, the exact HTF winner, the funding-only overlay variants, and the HTF+funding composite variants in one bounded replay.
+    Frozen configs:
+    - `plans/protocols/awf319_state_trigger_funding_overlay_main.json`
+    - `plans/protocols/awf319_state_trigger_funding_overlay_sensitivity.json`
+  - `done` `AWF-320` Execute and analyze the hierarchical funding-overlay follow-up.
+    Completed paired runs:
+    - `20260412_141244` (main)
+    - `20260412_141433` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf320_state_trigger_funding_overlay.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `10` compared / `10` stable-positive / `7` gate-passed / `4` canonical. The best canonical row is the funding-only overlay `funding_gate:0.0001:-0.0001` on the exact `AWF-311` hierarchical lane, improving the prior HTF-only winner from `0.1691% / 0.1957%` to `0.2736% / 0.2978%` while also lifting mean per-symbol OOS trades from `1.84 / 1.59` to `2.44 / 2.22`. The HTF+funding composites remain gate-passed but weaker than the funding-only overlay, and the `0.0002` long threshold is evidence-equivalent to `0.0001`. Classification: `bounded pass`.
+  - `done` `AWF-321` Freeze the temporal replay of the hierarchical funding-overlay winners.
+    Freeze a minimal older-anchor replay for the exact canonical `AWF-320` lane on `end = 2025-04-09T14:00:00Z`. Contract: same 8-symbol Phase 60 cohort, exact state=`obv_roc+keltner_pos`, exact trigger=`ad`, regime limited to `trend_any`, daily HTF fixed to `1d:20`, funding thresholds narrowed to the canonical long `0.0001` plus short `-0.0001/-0.0002`, and keep the no-filter baseline so the replay covers the modern winners without re-opening the matrix.
+    Frozen configs:
+    - `plans/protocols/awf321_temporal_replay_state_trigger_funding_overlay_main.json`
+    - `plans/protocols/awf321_temporal_replay_state_trigger_funding_overlay_sensitivity.json`
+  - `done` `AWF-322` Execute and analyze the temporal replay of the hierarchical funding-overlay winners.
+    Completed paired runs:
+    - `20260412_141841` (main)
+    - `20260412_142030` (sensitivity)
+    Report: `artifacts/reports/pilot_analysis_awf322_temporal_replay_state_trigger_funding_overlay.json`.
+    Result under `--min-avg-symbol-trades 1.0`: `6` compared / `0` stable-positive / `0` gate-passed. The entire exact lane fails on the older anchor. The least-bad row is still the old `htf_trend:1d:20` overlay (`-1.8387% / -2.7905%`), while the new funding-only winner is worse than the no-filter baseline (`-4.1292% / -4.2782%` versus `-3.2539% / -3.9905%`). The HTF+funding composites soften that damage but remain negative (`-2.8070% / -3.1140%` or `-2.2892% / -2.6538%`). Classification: `time-local`.
 
 ## Backlog
 

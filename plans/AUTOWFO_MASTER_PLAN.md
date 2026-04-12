@@ -197,6 +197,51 @@ indicators, symbols, and time windows to discover robust combinations.
         `1.0` density floor; `1d:20` remains near-pass only
       - promote this repaired OI+HTF family as a bounded candidate, not as a broad
         reopening of OI family search
+  - Hierarchical funding-overlay follow-up (`AWF-319/320`) is now complete as a
+    bounded Phase 60 candidate-pool integration pass:
+    - frozen configs:
+      - `plans/protocols/awf319_state_trigger_funding_overlay_main.json`
+      - `plans/protocols/awf319_state_trigger_funding_overlay_sensitivity.json`
+    - paired runs:
+      - `20260412_141244` (main)
+      - `20260412_141433` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf320_state_trigger_funding_overlay.json`
+    - outcome:
+      - `10` compared / `10` stable-positive / `7` gate-passed / `4` canonical
+        under `--min-avg-symbol-trades 1.0`
+      - the exact `AWF-311` hierarchical winner remains valid, but the best new
+        canonical row is now the funding-only overlay
+        `funding_gate:0.0001:-0.0001`
+      - funding-only improves the paired combo OOS average return from
+        `0.1691% / 0.1957%` (`htf_trend:1d:20`) to `0.2736% / 0.2978%`, while also
+        increasing mean per-symbol OOS trades from `1.84 / 1.59` to `2.44 / 2.22`
+      - HTF+funding composites also gate-pass, but remain weaker than the funding-only
+        overlay; long threshold `0.0002` is evidence-equivalent to `0.0001`
+      - classify this as a bounded pass that strengthens the Phase 60 candidate pool,
+        not as evidence to reopen broader funding discovery
+  - Temporal replay of the hierarchical funding-overlay winners (`AWF-321/322`) is
+    now complete as a bounded robustness check:
+    - frozen configs:
+      - `plans/protocols/awf321_temporal_replay_state_trigger_funding_overlay_main.json`
+      - `plans/protocols/awf321_temporal_replay_state_trigger_funding_overlay_sensitivity.json`
+    - paired runs:
+      - `20260412_141841` (main)
+      - `20260412_142030` (sensitivity)
+    - paired report:
+      - `artifacts/reports/pilot_analysis_awf322_temporal_replay_state_trigger_funding_overlay.json`
+    - outcome:
+      - `6` compared / `0` stable-positive / `0` gate-passed under
+        `--min-avg-symbol-trades 1.0`
+      - the entire exact hierarchical funding-overlay lane fails on the older anchor;
+        no candidate remains nonnegative in both runs
+      - the least-bad row is still the older `htf_trend:1d:20` overlay
+        (`-1.8387% / -2.7905%`), so funding does not rescue the earlier epoch
+      - the modern funding-only winner is actively harmful there, performing worse
+        than the no-filter baseline, while HTF+funding composites only partially
+        soften the damage and remain clearly negative
+      - classify the funding-enhanced hierarchical lane as `time-local`; keep it as a
+        modern-window bounded candidate only, not as replay-confirmed evidence
 
 ### New-Factor Sidecar Tracks (AWF-307/308/309) [Active, parallel to Phase 60]
 - Explore three candidate factors absent from the existing 25-indicator library,

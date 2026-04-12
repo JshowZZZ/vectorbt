@@ -2204,6 +2204,10 @@ def test_build_prepare_timeframe_runtime_kwargs_maps_runtime_inputs():
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -2271,6 +2275,10 @@ def test_prepare_timeframe_runtime_context_and_from_context_builder():
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -2340,6 +2348,10 @@ def _sample_shared_pipeline_runtime_context():
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -2929,6 +2941,10 @@ def test_build_finalize_pipeline_kwargs_maps_inputs_and_top_score_wiring(tmp_pat
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -2974,6 +2990,8 @@ def test_build_finalize_pipeline_kwargs_maps_inputs_and_top_score_wiring(tmp_pat
     assert got["ranking_config"] == {"mode": "composite"}
     assert got["history_rows"] == 10
     assert got["search_mode"] == "combo"
+    assert got["funding_gate_long_thresholds"] == [0.0001]
+    assert got["funding_gate_short_thresholds"] == [-0.0001]
 
     top_df = pd.DataFrame([{"score": 1.0}, {"score": 2.0}])
     result_main = got["top_by_score_fn"](top_df, top_n=1, tie_break_avg_hold=False)
@@ -3053,6 +3071,10 @@ def test_finalize_pipeline_context_and_from_context_builder(tmp_path):
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         wf_train_days=7,
         wf_test_days=2,
         wf_step_days=2,
@@ -3096,6 +3118,8 @@ def test_finalize_pipeline_context_and_from_context_builder(tmp_path):
     assert got["run_id"] == "r1"
     assert got["history_rows"] == 10
     assert got["search_mode"] == "combo"
+    assert got["funding_gate_long_thresholds"] == [0.0001]
+    assert got["funding_gate_short_thresholds"] == [-0.0001]
     top_df = pd.DataFrame([{"score": 1.0}, {"score": 2.0}])
     _ = got["top_by_score_fn"](top_df, top_n=1, tie_break_avg_hold=False)
     _ = got["top_by_score_leaderboard_fn"](top_df, top_n=2, tie_break_avg_hold=True)
@@ -3108,6 +3132,8 @@ def test_finalize_pipeline_context_and_from_context_builder(tmp_path):
 def test_finalize_pipeline_context_from_shared_builder(tmp_path):
     top_score_calls = []
     shared = _sample_shared_pipeline_runtime_context()
+    shared["funding_gate_long_thresholds"] = [0.0001]
+    shared["funding_gate_short_thresholds"] = [-0.0001]
 
     def _top_by_score_impl(df, top_n, tie_break_avg_hold, ranking_config):
         top_score_calls.append((top_n, tie_break_avg_hold, ranking_config))
@@ -3161,6 +3187,8 @@ def test_finalize_pipeline_context_from_shared_builder(tmp_path):
     assert got["indicator_param_fields"] == ["rsi_long"]
     assert got["vol_zs"] == [0.8]
     assert got["combo_seed"] == 42
+    assert got["funding_gate_long_thresholds"] == [0.0001]
+    assert got["funding_gate_short_thresholds"] == [-0.0001]
     top_df = pd.DataFrame([{"score": 1.0}, {"score": 2.0}])
     _ = got["top_by_score_fn"](top_df, top_n=1, tie_break_avg_hold=False)
     _ = got["top_by_score_leaderboard_fn"](top_df, top_n=2, tie_break_avg_hold=True)
@@ -3790,12 +3818,20 @@ def test_prepare_best_timeframe_context_success_and_error():
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        htf_trend_timeframes=["1d"],
+        htf_trend_windows=[20],
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         prepare_timeframe_context_fn=_prepare,
     )
     assert ok["ctx"] == {"ctx": "ok"}
     assert ok["error"] is None
     assert seen["kwargs"]["timeframe"] == "1h"
     assert seen["kwargs"]["data_days"] == 30
+    assert seen["kwargs"]["htf_trend_timeframes"] == ["1d"]
+    assert seen["kwargs"]["htf_trend_windows"] == [20]
+    assert seen["kwargs"]["funding_gate_long_thresholds"] == [0.0001]
+    assert seen["kwargs"]["funding_gate_short_thresholds"] == [-0.0001]
 
     def _raise(**_kwargs):
         raise RuntimeError("boom")
@@ -3839,6 +3875,8 @@ def test_prepare_best_timeframe_context_success_and_error():
         chop_lookbacks=[14],
         init_cash_usdt=1000.0,
         capital_mode="shared",
+        funding_gate_long_thresholds=[0.0001],
+        funding_gate_short_thresholds=[-0.0001],
         prepare_timeframe_context_fn=_raise,
     )
     assert err["ctx"] is None

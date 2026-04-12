@@ -1,0 +1,57 @@
+{
+  "search_mode": "combo",
+  "strategy_mode": "state_trigger_entry",
+  "combo_seed": 42,
+  "combo_sizes": [2, 3],
+  "timeframes": [
+    {
+      "timeframe": "2h",
+      "days": 180,
+      "end": "2025-04-09T14:00:00Z"
+    }
+  ],
+  "wf_train_days": 60,
+  "wf_test_days": 30,
+  "wf_step_days": 30,
+  "wf_valid_days": 0,
+  "wf_mode": "anchored",
+  "trade_symbols": [
+    "LTC/BTC",
+    "LINK/BTC",
+    "AVAX/BTC",
+    "ETH/BTC",
+    "XRP/BTC",
+    "ADA/BTC",
+    "DOGE/BTC",
+    "DOT/BTC"
+  ],
+  "indicator_subset": ["obv_roc", "keltner_pos", "ad"],
+  "state_indicator_sets": [
+    ["obv_roc", "keltner_pos"]
+  ],
+  "trigger_indicator_sets": [["ad"]],
+  "allow_shared_indicator_roles": true,
+  "state_exit_policy": "state_reversal",
+  "regime_preset": "pilot_trend_3",
+  "regime_name_filter": ["trend_any"],
+  "pilot_fixed_indicator_params": true,
+  "pilot_single_trend_mom": true,
+  "enable_htf_trend_gate": true,
+  "htf_trend_timeframes": ["1d"],
+  "htf_trend_windows": [20],
+  "enable_funding_gate": true,
+  "funding_gate_long_thresholds": [0.0001],
+  "funding_gate_short_thresholds": [-0.0001, -0.0002],
+  "risk_mode": "atr_multiple",
+  "tp_atr_multipliers": [1.5],
+  "sl_atr_multipliers": [1.0],
+  "max_holds": [4],
+  "capital_mode": "per_symbol",
+  "init_cash_usdt": 1000.0,
+  "order_size_pct": 0.5,
+  "max_concurrent_positions": 0,
+  "slippage_bps": 2.0,
+  "spread_bps": 2.0,
+  "funding_rate_daily": 0.0,
+  "top_n_refine": 0
+}

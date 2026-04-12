@@ -112,6 +112,8 @@ def _build_finalize_pipeline_kwargs(
     update_run_registry_fn,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -175,6 +177,8 @@ def _build_finalize_pipeline_kwargs(
         "capital_mode": capital_mode,
         "htf_trend_timeframes": htf_trend_timeframes,
         "htf_trend_windows": htf_trend_windows,
+        "funding_gate_long_thresholds": funding_gate_long_thresholds,
+        "funding_gate_short_thresholds": funding_gate_short_thresholds,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -306,6 +310,8 @@ def _build_finalize_pipeline_context(
     update_run_registry_fn,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -363,6 +369,8 @@ def _build_finalize_pipeline_context(
         "capital_mode": capital_mode,
         "htf_trend_timeframes": htf_trend_timeframes,
         "htf_trend_windows": htf_trend_windows,
+        "funding_gate_long_thresholds": funding_gate_long_thresholds,
+        "funding_gate_short_thresholds": funding_gate_short_thresholds,
         "wf_train_days": wf_train_days,
         "wf_test_days": wf_test_days,
         "wf_step_days": wf_step_days,
@@ -497,6 +505,8 @@ def _build_finalize_pipeline_context_from_shared(
         capital_mode=shared["capital_mode"],
         htf_trend_timeframes=shared["htf_trend_timeframes"],
         htf_trend_windows=shared["htf_trend_windows"],
+        funding_gate_long_thresholds=shared["funding_gate_long_thresholds"],
+        funding_gate_short_thresholds=shared["funding_gate_short_thresholds"],
         wf_train_days=shared["wf_train_days"],
         wf_test_days=shared["wf_test_days"],
         wf_step_days=shared["wf_step_days"],
@@ -815,6 +825,8 @@ def _prepare_best_timeframe_context(
     prepare_timeframe_context_fn,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
 ):
     try:
         ctx = prepare_timeframe_context_fn(
@@ -860,6 +872,8 @@ def _prepare_best_timeframe_context(
             capital_mode=capital_mode,
             htf_trend_timeframes=htf_trend_timeframes,
             htf_trend_windows=htf_trend_windows,
+            funding_gate_long_thresholds=funding_gate_long_thresholds,
+            funding_gate_short_thresholds=funding_gate_short_thresholds,
         )
         return {"ctx": ctx, "error": None}
     except Exception as exc:
@@ -1052,6 +1066,8 @@ def _run_finalize_pipeline(
     update_run_registry_fn=None,
     htf_trend_timeframes=None,
     htf_trend_windows=None,
+    funding_gate_long_thresholds=None,
+    funding_gate_short_thresholds=None,
     combo_seed=None,
     workspace_paths=None,
 ):
@@ -1130,6 +1146,8 @@ def _run_finalize_pipeline(
         capital_mode=capital_mode,
         htf_trend_timeframes=htf_trend_timeframes,
         htf_trend_windows=htf_trend_windows,
+        funding_gate_long_thresholds=funding_gate_long_thresholds,
+        funding_gate_short_thresholds=funding_gate_short_thresholds,
         prepare_timeframe_context_fn=prepare_timeframe_context_fn,
     )
     best_ctx = best_ctx_result["ctx"]
