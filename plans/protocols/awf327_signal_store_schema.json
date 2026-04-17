@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "name": "autowfo_freqtrade_signal_store",
+  "required_signal_columns": [
+    "date",
+    "pair",
+    "close",
+    "signal_long",
+    "signal_short",
+    "enter_long",
+    "enter_short",
+    "exit_long",
+    "exit_short",
+    "explicit_exit_long",
+    "explicit_exit_short"
+  ],
+  "signal_columns": [
+    "signal_long",
+    "signal_short",
+    "enter_long",
+    "enter_short",
+    "exit_long",
+    "exit_short",
+    "explicit_exit_long",
+    "explicit_exit_short"
+  ],
+  "required_manifest_paths": [
+    "schema_version",
+    "signal_store_schema_version",
+    "analysis.selection",
+    "analysis.rank",
+    "analysis.main_run_id",
+    "analysis.selected_row",
+    "source.run_root",
+    "source.exchange",
+    "source.base_symbol",
+    "source.timeframe",
+    "source.data_days",
+    "source.pairs",
+    "signals.primary_format",
+    "signals.path",
+    "signals.csv_path",
+    "signals.columns",
+    "signals.has_short_signals",
+    "autowfo_replay.summary",
+    "autowfo_replay.trades_path",
+    "freqtrade.strategy_path",
+    "freqtrade.recommended_strategy",
+    "freqtrade.recommended_trading_mode"
+  ]
+}

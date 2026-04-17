@@ -40,6 +40,8 @@ ADVANCED_ANALYSIS_MAX_TRIALS = 50000
 ADVANCED_ANALYSIS_MAX_SAMPLE_SIZE = 10000
 MAX_ROWS = 5000
 
+_LARGE_CSV_THRESHOLD = 50_000_000  # 50 MB — use tail-seek above this
+
 
 _MUTABLE_GLOBALS = {
     "PROCESS",
@@ -239,10 +241,63 @@ def _get_timeframes(path):
     TIMEFRAME_CACHE["mtime"] = 0
     return result
 
+def _read_csv_rows_tail(path, limit, timeframe=None):
+    """Fast tail-read for large CSVs.
+
+    Seeks near the end of the file instead of scanning all rows,
+    reducing I/O from minutes to under a second for multi-GB files.
+    """
+    import io
+
+    file_size = path.stat().st_size
+    # Overshoot by ~3x to handle timeframe filtering and row-length variation
+    bytes_to_read = min(file_size, max(limit, 1) * 4500)
+
+    with path.open("r", encoding="utf-8") as f:
+        header = f.readline()
+        if file_size <= bytes_to_read + len(header.encode("utf-8")):
+            tail = f.read()
+            full_scan = True
+        else:
+            f.seek(file_size - bytes_to_read)
+            f.readline()  # discard partial line
+            tail = f.read()
+            full_scan = False
+
+    reader = csv.DictReader(io.StringIO(header + tail))
+    columns = reader.fieldnames or []
+    rows_buf: deque = deque(maxlen=limit)
+    count = 0
+    for row in reader:
+        if timeframe and row.get("timeframe") != timeframe:
+            continue
+        count += 1
+        rows_buf.append(row)
+    rows = list(rows_buf)
+
+    if full_scan:
+        total = count
+    else:
+        avg_row_bytes = bytes_to_read / max(count, 1) if count > 0 else 700
+        total = max(count, int(file_size / avg_row_bytes))
+
+    return {
+        "path": str(path.relative_to(ROOT)) if ROOT else str(path),
+        "columns": columns,
+        "rows": rows,
+        "total": total,
+        "truncated": total > len(rows),
+    }
+
+
 @_with_cp
 def _read_csv_rows(path, limit=MAX_ROWS, timeframe=None):
     if path is None or not path.exists():
         return {"path": "", "columns": [], "rows": [], "total": 0, "truncated": False}
+    # Large-file fast path: tail-seek instead of full scan
+    file_size = path.stat().st_size
+    if file_size > _LARGE_CSV_THRESHOLD and limit is not None:
+        return _read_csv_rows_tail(path, limit=limit, timeframe=timeframe)
     total = 0
     if limit is None:
         rows = []
@@ -341,11 +396,18 @@ def _get_results_payload(timeframe=None):
     report_path = _latest_report_path()
     timeframes = []
     try:
-        timeframes = _get_timeframes_db() if _db_has_table("combo_summary") else _get_timeframes(combo_path)
+        timeframes = _get_timeframes_db() if _db_has_table("combo_summary") else []
+        if not timeframes:
+            # Extract from already-loaded combo rows to avoid re-reading large CSV
+            tf_set = {r.get("timeframe") for r in combo.get("rows", []) if r.get("timeframe")}
+            timeframes = sorted(tf_set)
         if not timeframes and combo_path.exists():
             timeframes = _get_timeframes(combo_path)
     except Exception:
-        timeframes = _get_timeframes(combo_path)
+        try:
+            timeframes = _get_timeframes(combo_path)
+        except Exception:
+            timeframes = []
     return {
         "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "source_status": _shared_views_source_status(),

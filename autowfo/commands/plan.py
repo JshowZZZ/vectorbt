@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -354,6 +355,161 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     )
     pilot_clue_parser.add_argument("--cwd", default=".", help="Working directory")
     pilot_clue_parser.set_defaults(handler=cli_impl._cmd_pilot_build_clue_map)
+
+    bridge_export_parser = subparsers.add_parser(
+        "bridge-export-signal-store",
+        help="Export a frozen AUTOWFO pilot lane into a Freqtrade-ready signal bundle",
+    )
+    bridge_export_parser.add_argument(
+        "--analysis-json",
+        required=True,
+        help="Path to pilot-analysis JSON report",
+    )
+    bridge_export_parser.add_argument(
+        "--main-run",
+        default="",
+        help="Optional main run id/path override (defaults to report main_run.run_id)",
+    )
+    bridge_export_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory used when main run id is provided",
+    )
+    bridge_export_parser.add_argument(
+        "--selection",
+        choices=["canonical", "gate", "stable", "all"],
+        default="canonical",
+        help="Which analysis bucket to export from",
+    )
+    bridge_export_parser.add_argument(
+        "--rank",
+        type=int,
+        default=1,
+        help="1-based rank within the selected analysis bucket",
+    )
+    bridge_export_parser.add_argument(
+        "--out-dir",
+        default="artifacts/freqtrade_bridge",
+        help="Output directory for the exported signal bundle",
+    )
+    bridge_export_parser.add_argument("--cwd", default=".", help="Working directory")
+    bridge_export_parser.set_defaults(handler=cli_impl._cmd_bridge_export_signal_store)
+
+    bridge_check_parser = subparsers.add_parser(
+        "bridge-cross-check",
+        help="Prepare or execute a Freqtrade backtest cross-check for an exported signal bundle",
+    )
+    bridge_check_parser.add_argument(
+        "--manifest-json",
+        required=True,
+        help="Path to exported signal bundle manifest JSON",
+    )
+    bridge_check_parser.add_argument(
+        "--out-dir",
+        default="",
+        help="Output directory for cross-check artifacts (defaults to <manifest-dir>/cross_check)",
+    )
+    bridge_check_parser.add_argument(
+        "--datadir",
+        default="",
+        help="Freqtrade data directory (required unless --prepare-only is used)",
+    )
+    bridge_check_parser.add_argument(
+        "--freqtrade-exe",
+        default="",
+        help="Path to the freqtrade executable (defaults to 'freqtrade')",
+    )
+    bridge_check_parser.add_argument(
+        "--strategy-name",
+        default="",
+        help="Optional Freqtrade strategy class override",
+    )
+    bridge_check_parser.add_argument(
+        "--trading-mode",
+        choices=["spot", "futures"],
+        default="",
+        help="Optional Freqtrade trading mode override",
+    )
+    bridge_check_parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Only prepare config and command artifacts; do not execute Freqtrade",
+    )
+    bridge_check_parser.add_argument("--cwd", default=".", help="Working directory")
+    bridge_check_parser.set_defaults(handler=cli_impl._cmd_bridge_cross_check)
+
+    bridge_live_parser = subparsers.add_parser(
+        "bridge-live-signal",
+        help="Refresh the rolling live signal store from an exported AUTOWFO signal bundle",
+    )
+    bridge_live_parser.add_argument(
+        "--manifest-json",
+        required=True,
+        help="Path to exported frozen signal bundle manifest JSON",
+    )
+    bridge_live_parser.add_argument(
+        "--out-dir",
+        default="artifacts/live_signal_store",
+        help="Output directory for the rolling live signal store",
+    )
+    bridge_live_parser.add_argument(
+        "--tail-bars",
+        type=int,
+        default=0,
+        help="Optional per-pair tail length to retain (0 = derive from max_hold)",
+    )
+    bridge_live_parser.add_argument(
+        "--staleness-ttl-bars",
+        type=float,
+        default=1.5,
+        help="Maximum live signal age in bars before the Freqtrade strategy returns empty signals",
+    )
+    bridge_live_parser.add_argument(
+        "--interval",
+        type=int,
+        default=0,
+        help="Refresh interval in seconds (0 = run once and exit)",
+    )
+    bridge_live_parser.add_argument(
+        "--max-ticks",
+        type=int,
+        default=0,
+        help="Optional maximum refresh iterations when --interval > 0 (0 = unlimited)",
+    )
+    bridge_live_parser.add_argument("--cwd", default=".", help="Working directory")
+    bridge_live_parser.set_defaults(handler=cli_impl._cmd_bridge_live_signal)
+
+    bridge_reconcile_parser = subparsers.add_parser(
+        "bridge-dryrun-reconcile",
+        help="Reconcile Freqtrade dry-run trades against the current AUTOWFO rolling signal frame",
+    )
+    bridge_reconcile_parser.add_argument(
+        "--live-manifest-json",
+        default="artifacts/live_signal_store/live_manifest.json",
+        help="Path to the rolling AUTOWFO live manifest JSON",
+    )
+    bridge_reconcile_parser.add_argument(
+        "--freqtrade-config",
+        default="",
+        help="Optional path to the Freqtrade dry-run config JSON (defaults to sibling freqtrade/user_data/config_autowfo_dryrun.json)",
+    )
+    bridge_reconcile_parser.add_argument(
+        "--db-path",
+        default="",
+        help="Optional path to the Freqtrade dry-run SQLite DB (defaults to the resolved config db_url or sibling tradesv3.dryrun.sqlite)",
+    )
+    bridge_reconcile_parser.add_argument(
+        "--out-dir",
+        default="artifacts/paper_dryrun",
+        help="Output directory for daily dry-run reconciliation artifacts",
+    )
+    bridge_reconcile_parser.add_argument(
+        "--date",
+        default="",
+        help="UTC date to reconcile (YYYY-MM-DD). Defaults to today UTC.",
+    )
+    bridge_reconcile_parser.add_argument("--cwd", default=".", help="Working directory")
+    bridge_reconcile_parser.set_defaults(handler=cli_impl._cmd_bridge_dryrun_reconcile)
 
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
@@ -853,6 +1009,153 @@ def cmd_pilot_build_clue_map(args: argparse.Namespace, cli_impl: Any) -> int:
         "[pilot-build-clue-map] indicators={indicators} selected={selected}".format(
             indicators=summary.get("indicator_count", 0),
             selected=payload.get("selected_top_indicators", []),
+        )
+    )
+    return 0
+
+
+def cmd_bridge_export_signal_store(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import freqtrade_bridge
+    from autowfo import pilot_analysis
+
+    cwd = Path(args.cwd).resolve()
+    artifacts_dir = cli_impl._resolve_path(cwd, args.artifacts_dir)
+    analysis_json = cli_impl._resolve_path(cwd, args.analysis_json)
+    analysis_payload = pilot_analysis.load_analysis_report(analysis_json)
+    main_run_id = str(args.main_run or "").strip() or str((analysis_payload.get("main_run") or {}).get("run_id") or "")
+    if not main_run_id:
+        raise ValueError("main run id is required when analysis report does not include it")
+    main_run = pilot_analysis.load_run_analysis_inputs(main_run_id, artifacts_dir=artifacts_dir)
+    out_root = cli_impl._resolve_path(cwd, args.out_dir)
+    bundle_dir = out_root / f"{main_run.get('run_id')}_{str(args.selection).strip().lower()}_r{int(args.rank)}"
+    payload = freqtrade_bridge.export_signal_bundle(
+        analysis_payload,
+        main_run,
+        selection=str(args.selection or "canonical"),
+        rank=int(args.rank),
+        out_dir=bundle_dir,
+        cwd=cwd,
+    )
+    print(f"[bridge-export-signal-store] analysis_json={analysis_json}")
+    print(f"[bridge-export-signal-store] main_run={main_run.get('run_id')}")
+    print(f"[bridge-export-signal-store] out_dir={bundle_dir}")
+    print(
+        "[bridge-export-signal-store] pairs={pairs} enter_long={enter_long} enter_short={enter_short} strategy={strategy}".format(
+            pairs=len((payload.get("source") or {}).get("pairs") or []),
+            enter_long=(payload.get("signals") or {}).get("enter_long_count", 0),
+            enter_short=(payload.get("signals") or {}).get("enter_short_count", 0),
+            strategy=(payload.get("freqtrade") or {}).get("recommended_strategy"),
+        )
+    )
+    return 0
+
+
+def cmd_bridge_cross_check(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import freqtrade_bridge
+
+    cwd = Path(args.cwd).resolve()
+    manifest_json = cli_impl._resolve_path(cwd, args.manifest_json)
+    manifest = freqtrade_bridge.load_signal_bundle_manifest(manifest_json)
+    out_dir = (
+        cli_impl._resolve_path(cwd, args.out_dir)
+        if str(args.out_dir or "").strip()
+        else manifest_json.parent / "cross_check"
+    )
+    datadir = cli_impl._resolve_path(cwd, args.datadir) if str(args.datadir or "").strip() else None
+    payload = freqtrade_bridge.run_freqtrade_cross_check(
+        manifest,
+        manifest_path=manifest_json,
+        out_dir=out_dir,
+        datadir=datadir,
+        freqtrade_exe=(args.freqtrade_exe or None),
+        strategy_name=(args.strategy_name or None),
+        trading_mode=(args.trading_mode or None),
+        execute=not bool(args.prepare_only),
+    )
+    print(f"[bridge-cross-check] manifest_json={manifest_json}")
+    print(f"[bridge-cross-check] out_dir={out_dir}")
+    print(f"[bridge-cross-check] strategy={payload.get('strategy_name')}")
+    print(f"[bridge-cross-check] executed={payload.get('executed')}")
+    if payload.get("executed"):
+        report = payload.get("parity_report") or {}
+        comparison = dict(report.get("trade_comparison") or {})
+        print(
+            "[bridge-cross-check] verdict={verdict} exact_match_ratio={ratio} trade_count_delta={delta}".format(
+                verdict=comparison.get("verdict"),
+                ratio=comparison.get("exact_match_ratio"),
+                delta=comparison.get("trade_count_delta"),
+            )
+        )
+    return 0
+
+
+def cmd_bridge_live_signal(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import freqtrade_bridge
+    from autowfo import live_signal_producer
+
+    cwd = Path(args.cwd).resolve()
+    manifest_json = cli_impl._resolve_path(cwd, args.manifest_json)
+    manifest = freqtrade_bridge.load_signal_bundle_manifest(manifest_json)
+    out_dir = cli_impl._resolve_path(cwd, args.out_dir)
+    interval = max(0, int(args.interval or 0))
+    max_ticks = max(0, int(args.max_ticks or 0))
+    ticks = 0
+
+    while True:
+        payload = live_signal_producer.export_live_signal_store(
+            manifest,
+            manifest_path=manifest_json,
+            out_dir=out_dir,
+            cwd=cwd,
+            tail_bars=(None if int(args.tail_bars or 0) <= 0 else int(args.tail_bars)),
+            staleness_ttl_bars=float(args.staleness_ttl_bars or 1.5),
+        )
+        print(f"[bridge-live-signal] manifest_json={manifest_json}")
+        print(f"[bridge-live-signal] out_dir={out_dir}")
+        print(
+            "[bridge-live-signal] rows={rows} pairs={pairs} last_bar_utc={last_bar}".format(
+                rows=(payload.get("signals") or {}).get("rows", 0),
+                pairs=len((payload.get("signals") or {}).get("pairs") or []),
+                last_bar=(payload.get("signals") or {}).get("last_bar_utc"),
+            )
+        )
+        ticks += 1
+        if interval <= 0:
+            return 0
+        if max_ticks > 0 and ticks >= max_ticks:
+            return 0
+        time.sleep(interval)
+
+
+def cmd_bridge_dryrun_reconcile(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import paper_dryrun_reconcile
+
+    cwd = Path(args.cwd).resolve()
+    live_manifest_json = cli_impl._resolve_path(cwd, args.live_manifest_json)
+    out_dir = cli_impl._resolve_path(cwd, args.out_dir)
+    freqtrade_config = (
+        cli_impl._resolve_path(cwd, args.freqtrade_config)
+        if str(args.freqtrade_config or "").strip()
+        else None
+    )
+    db_path = cli_impl._resolve_path(cwd, args.db_path) if str(args.db_path or "").strip() else None
+    payload = paper_dryrun_reconcile.reconcile_dryrun_day(
+        live_manifest_path=live_manifest_json,
+        out_dir=out_dir,
+        freqtrade_config_path=freqtrade_config,
+        db_path=db_path,
+        day_utc=(args.date or None),
+        cwd=cwd,
+    )
+    totals = dict(payload.get("totals") or {})
+    print(f"[bridge-dryrun-reconcile] live_manifest_json={live_manifest_json}")
+    print(f"[bridge-dryrun-reconcile] out_json={payload.get('out_path')}")
+    print(
+        "[bridge-dryrun-reconcile] opened={opened} closed={closed} entry_match_rate={entry_rate} exit_match_rate={exit_rate}".format(
+            opened=totals.get("opened_trades_day", 0),
+            closed=totals.get("closed_trades_day", 0),
+            entry_rate=totals.get("entry_signal_match_rate"),
+            exit_rate=totals.get("exit_signal_match_rate"),
         )
     )
     return 0

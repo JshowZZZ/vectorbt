@@ -605,7 +605,7 @@ AWF-113 (control_panel.py decomposition), AWF-114 (cli.py decomposition), AWF-11
 4. **Analytics idempotency**: Running analytics update twice must produce identical results
 5. **Control panel as sole interface**: No new CLI commands for users
 6. **vectorbt as compute engine**: No replacement with other backtest frameworks
-7. **Freqtrade deferred**: No bridge code until explicitly requested
+7. **Freqtrade bridge code deferred**: No bridge code until explicitly requested; revised planning may exist in `plans/AUTOWFO_FREQTRADE_BRIDGE_PROPOSAL.md`, but it does not become active work until explicitly authorized
 
 ---
 
@@ -613,7 +613,7 @@ AWF-113 (control_panel.py decomposition), AWF-114 (cli.py decomposition), AWF-11
 
 | Question | Status | Notes |
 |----------|--------|-------|
-| Freqtrade bridge design | Deferred | Out of scope until Phase E complete |
+| Freqtrade bridge design | Revised draft, deferred for code | Planning captured in `plans/AUTOWFO_FREQTRADE_BRIDGE_PROPOSAL.md`; implementation stays out of scope until explicit authorization |
 | Real-time signal generation | Deferred | Research-only focus for now |
 | Multi-exchange support | Deferred | Binance only initially |
 | Experiment versioning (config changes) | TBD | Increment `version` field in config JSON |

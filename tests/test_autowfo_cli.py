@@ -2026,6 +2026,10 @@ def test_cli_help_lists_all_subcommands():
         "plan",
         "discover",
         "export-signal",
+        "bridge-export-signal-store",
+        "bridge-cross-check",
+        "bridge-live-signal",
+        "bridge-dryrun-reconcile",
         "export-report",
         "schedule-signals",
         "report",
@@ -2034,6 +2038,69 @@ def test_cli_help_lists_all_subcommands():
         "cron",
     ):
         assert command_name in help_text
+
+
+def test_cli_bridge_export_signal_store_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "bridge-export-signal-store",
+        "--analysis-json",
+        "artifacts/report.json",
+    ])
+
+    assert args.command == "bridge-export-signal-store"
+    assert args.selection == "canonical"
+    assert args.rank == 1
+    assert args.artifacts_dir == "artifacts"
+    assert args.out_dir == "artifacts/freqtrade_bridge"
+
+
+def test_cli_bridge_cross_check_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "bridge-cross-check",
+        "--manifest-json",
+        "artifacts/freqtrade_bridge/signal_manifest.json",
+    ])
+
+    assert args.command == "bridge-cross-check"
+    assert args.out_dir == ""
+    assert args.datadir == ""
+    assert args.freqtrade_exe == ""
+    assert args.strategy_name == ""
+    assert args.trading_mode == ""
+    assert args.prepare_only is False
+
+
+def test_cli_bridge_live_signal_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "bridge-live-signal",
+        "--manifest-json",
+        "artifacts/freqtrade_bridge/signal_manifest.json",
+    ])
+
+    assert args.command == "bridge-live-signal"
+    assert args.out_dir == "artifacts/live_signal_store"
+    assert args.tail_bars == 0
+    assert args.staleness_ttl_bars == 1.5
+    assert args.interval == 0
+    assert args.max_ticks == 0
+
+
+def test_cli_bridge_dryrun_reconcile_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "bridge-dryrun-reconcile",
+        "--live-manifest-json",
+        "artifacts/live_signal_store/live_manifest.json",
+    ])
+
+    assert args.command == "bridge-dryrun-reconcile"
+    assert args.freqtrade_config == ""
+    assert args.db_path == ""
+    assert args.out_dir == "artifacts/paper_dryrun"
+    assert args.date == ""
 
 
 def test_cli_export_signal_writes_live_signal_config(tmp_path):

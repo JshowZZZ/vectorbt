@@ -156,7 +156,7 @@ def test_resolve_requested_window_uses_explicit_end():
 
     assert str(window["end_ts"]) == "2026-04-10 10:00:00"
     assert str(window["start_ts"]) == "2026-03-31 10:00:00"
-    assert window["end"] == "2026-04-10T10:00:00"
+    assert window["end"] == "2026-04-10T10:00:00+00:00"
 
 
 def test_coerce_utc_timestamp_accepts_relative_days():
@@ -189,7 +189,7 @@ def test_load_or_update_symbol_backfills_older_history(tmp_path):
         download_symbol_ohlcv_fn=downloader,
     )
 
-    assert calls == [("2024-01-01T00:00:00", "2024-01-04T23:00:00", False)]
+    assert calls == [("2024-01-01T00:00:00+00:00", "2024-01-04T23:00:00+00:00", False)]
     assert loaded.index.min() == pd.Timestamp("2024-01-01 00:00:00")
     assert loaded.index.max() == pd.Timestamp("2024-01-05 03:00:00")
 

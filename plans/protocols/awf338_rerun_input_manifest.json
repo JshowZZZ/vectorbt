@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0.0",
+  "awf_id": "AWF-338",
+  "name": "awf331_rerun_input_manifest",
+  "frozen_on": "2026-04-18",
+  "purpose": "Freeze the rerun inputs for AWF-339 so parity conclusions cannot drift with bundle, version, config, or mapping changes.",
+  "reference_artifacts": {
+    "pilot_analysis_report": "E:/Project/vectorbt-master/artifacts/reports/pilot_analysis_awf300_microcohort_dropsol.json",
+    "awf331_summary": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/awf331_stable_top10_summary.json",
+    "canonical_signal_manifest": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_canonical_r1/signal_manifest.json",
+    "stable_rank1_signal_manifest": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r1/signal_manifest.json"
+  },
+  "source_contract": {
+    "main_run_id": "20260411_microcohort_dropsol_main",
+    "run_root": "E:/Project/vectorbt-master/artifacts/runs/20260411_microcohort_dropsol_main",
+    "config_path": "E:/Project/vectorbt-master/artifacts/planned_configs/sol_drop_micro/micro8_main.json",
+    "timeframe": "2h",
+    "data_days": 180,
+    "data_end_requested": "2026-04-09T14:00:00Z",
+    "data_fingerprint": "6698b6e62a365796c88bc7f7209b5528101eddfaf83f6a5fd2e3a6ba7aa2033a",
+    "pairs": [
+      "ADA/BTC",
+      "AVAX/BTC",
+      "DOGE/BTC",
+      "DOT/BTC",
+      "ETH/BTC",
+      "LINK/BTC",
+      "LTC/BTC",
+      "XRP/BTC"
+    ]
+  },
+  "freqtrade_contract": {
+    "repo_root": "E:/Project/freqtrade",
+    "version": "2026.3",
+    "config_path": "E:/Project/freqtrade/user_data/config_autowfo_dryrun.json",
+    "strategy_path": "E:/Project/vectorbt-master/scripts/freqtrade_generic_signal_strategy.py",
+    "strategy_class": "AutowfoGenericSignalStrategyLongShort",
+    "trading_mode": "futures",
+    "pair_mapping": {
+      "ADA/BTC": "ADA/USDT:USDT",
+      "AVAX/BTC": "AVAX/USDT:USDT",
+      "DOGE/BTC": "DOGE/USDT:USDT",
+      "DOT/BTC": "DOT/USDT:USDT",
+      "ETH/BTC": "ETH/USDT:USDT",
+      "LINK/BTC": "LINK/USDT:USDT",
+      "LTC/BTC": "LTC/USDT:USDT",
+      "XRP/BTC": "XRP/USDT:USDT"
+    }
+  },
+  "row_scope": {
+    "policy": "AWF-339 must rerun the union of the current canonical lane and the AWF-331 stable top 10 reference set. A narrower rerun is invalid.",
+    "identity_fields": [
+      "timeframe",
+      "data_days",
+      "indicator_list",
+      "regime_name",
+      "vol_mode",
+      "filter_name",
+      "vol_lookback",
+      "mom_lookback",
+      "trade_mom_lookback",
+      "tp_stop",
+      "sl_stop",
+      "max_hold"
+    ],
+    "expected_stable_top10_count": 10,
+    "canonical_overlap_with_stable_rank": 2,
+    "expected_unique_row_count_after_dedup": 10,
+    "canonical_lane": {
+      "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_canonical_r1",
+      "indicator_list": "obv_roc,keltner_pos",
+      "regime_name": "trend_high",
+      "vol_mode": "high",
+      "filter_name": "OBV 趨勢+Keltner 位置"
+    },
+    "stable_top10": [
+      {
+        "rank": 1,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r1",
+        "indicator_list": "obv_roc,keltner_pos,ad",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+Keltner 位置+A/D 趨勢"
+      },
+      {
+        "rank": 2,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r2",
+        "indicator_list": "obv_roc,keltner_pos",
+        "regime_name": "trend_high",
+        "vol_mode": "high",
+        "filter_name": "OBV 趨勢+Keltner 位置"
+      },
+      {
+        "rank": 3,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r3",
+        "indicator_list": "obv_roc,keltner_pos,ad",
+        "regime_name": "trend_high",
+        "vol_mode": "high",
+        "filter_name": "OBV 趨勢+Keltner 位置+A/D 趨勢"
+      },
+      {
+        "rank": 4,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r4",
+        "indicator_list": "obv_roc,cmf,chop",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+資金流向(CMF)+波動指數"
+      },
+      {
+        "rank": 5,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r5",
+        "indicator_list": "obv_roc,keltner_pos",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+Keltner 位置"
+      },
+      {
+        "rank": 6,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r6",
+        "indicator_list": "obv_roc,cmf",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+資金流向(CMF)"
+      },
+      {
+        "rank": 7,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r7",
+        "indicator_list": "obv_roc,ad,chop",
+        "regime_name": "trend_high",
+        "vol_mode": "high",
+        "filter_name": "OBV 趨勢+A/D 趨勢+波動指數"
+      },
+      {
+        "rank": 8,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r8",
+        "indicator_list": "obv_roc,keltner_pos,cmf",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+Keltner 位置+資金流向(CMF)"
+      },
+      {
+        "rank": 9,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r9",
+        "indicator_list": "obv_roc,cmf",
+        "regime_name": "trend_high",
+        "vol_mode": "high",
+        "filter_name": "OBV 趨勢+資金流向(CMF)"
+      },
+      {
+        "rank": 10,
+        "bundle_dir": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_stable_r10",
+        "indicator_list": "obv_roc,keltner_pos,ad,cmf",
+        "regime_name": "trend_any",
+        "vol_mode": "any",
+        "filter_name": "OBV 趨勢+Keltner 位置+A/D 趨勢+資金流向(CMF)"
+      }
+    ]
+  },
+  "rerun_output_contract": {
+    "summary_path": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/awf331_rerun_summary.json",
+    "output_root": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge",
+    "notes": [
+      "AWF-339 must write its summary to the fixed summary_path above.",
+      "Per-row rerun artifacts must stay under output_root.",
+      "Do not read live current_signals parquet for this rerun."
+    ]
+  },
+  "corrected_adapter_contract": {
+    "entry_signal_source": "raw signal_long / signal_short",
+    "exit_signal_source": "one-bar-earlier raw exit signal reconstructed from executable exit columns",
+    "implementation_path": "E:/Project/vectorbt-master/scripts/freqtrade_generic_signal_strategy.py"
+  },
+  "invalidation_rule": "If any value in this manifest changes, AWF-338 must be reopened and the manifest re-frozen before AWF-339 proceeds."
+}

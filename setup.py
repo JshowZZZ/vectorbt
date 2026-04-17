@@ -43,7 +43,11 @@ setup(
         'mypy_extensions'
     ],
     extras_require={
+        'bridge': [
+            'pyarrow'
+        ],
         'full': [
+            'pyarrow',
             'yfinance>=0.2.22',
             'python-binance',
             'ccxt>=4.0.14',
@@ -56,6 +60,7 @@ setup(
             'quantstats>=0.0.37'
         ],
         'full-no-talib': [
+            'pyarrow',
             'yfinance>=0.2.22',
             'python-binance',
             'ccxt>=4.0.14',

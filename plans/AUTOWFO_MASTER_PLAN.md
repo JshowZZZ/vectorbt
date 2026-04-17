@@ -51,7 +51,29 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
-### Phase 60: Hierarchical State-Trigger Mode Opening (AWF-302/303/304) [Active]
+### Phase 61–62: Parity Reset, Policy Freeze, and Drift-Artifact Foundation (AWF-338~347) [Active]
+- Purpose:
+  - freeze execution policy in-repo before more evidence is generated
+  - rerun parity on the corrected adapter contract before threshold design
+  - slim planning context before adding DuckDB/MCP-assisted drift tooling
+- Authoritative policy source:
+  - `plans/AUTOWFO_DEVELOPMENT_PRINCIPLES.md`
+  - if this file and a phase plan diverge on policy, the development-principles file wins
+- Execution order and gate logic:
+  - `plans/AUTOWFO_PHASE61_62_PLAN_V2.md` holds the implementation order, gate sequencing, and branch conditions
+  - Gate A requires `AWF-341`, `AWF-343`, `AWF-338`, `AWF-339`, and `AWF-340`
+  - Gate B requires `AWF-345`, `AWF-346`, and `AWF-347`
+- Current status:
+  - `AWF-341` completed: `plans/AUTOWFO_DEVELOPMENT_PRINCIPLES.md` is now frozen as the repo policy surface
+  - human review checkpoint after `AWF-341` has passed; downstream reference wiring may proceed
+  - `AWF-343` completed: `plans/AUTOWFO_TODO.md` is now a slim active-phase surface and historical done items moved into `plans/AUTOWFO_TODO_ARCHIVE.md`
+  - `AWF-338` completed: `plans/protocols/awf338_rerun_input_manifest.json` now freezes the AWF-339 rerun inputs, including the local Freqtrade `2026.3` contract, pair mapping, source fingerprint, output path, and the deduplicated `10`-row scope (`canonical` + `stable top 10`, with canonical overlapping stable rank `2`)
+  - `AWF-339` completed: `scripts/run_awf339_rerun.py` rebuilt the frozen rerun scope into `artifacts/freqtrade_bridge/awf339/` and wrote `artifacts/freqtrade_bridge/awf331_rerun_summary.json`; row-scope validation passed at `10/10`, `open_match_ratio min=0.9633`, `exact_match_ratio p10=0.5827`, and branch condition `AWF-339a` did not trigger
+  - `AWF-340` completed: `plans/AUTOWFO_PARITY_GATE_V1.md` now freezes the first aggregate parity gate from the rerun distribution, with `p10(open_match_ratio)=0.9891`, `p10(exact_match_ratio)=0.5827`, and `p90(abs(trade_count_delta_pct))=0.00952`
+  - Gate A is now passed; the next execution surface is `AWF-342a` / `AWF-342b` query tooling, then Phase 62 drift work
+  - `AWF-342b` remains optional and should not block Phase 62 if local Freqtrade MCP runtime is unstable
+
+### Phase 60: Hierarchical State-Trigger Mode Opening (AWF-302/303/304) [Frozen]
 - Open the deferred hierarchical state/trigger mode as the next active strategy model.
 - Fixed scope:
   - additive new mode; existing combo-entry mode stays intact
@@ -69,6 +91,7 @@ indicators, symbols, and time windows to discover robust combinations.
   - the additive mode is implemented without breaking the existing combo-entry path
   - a first anchored pilot has been compared against the frozen current-mode micro-cohort baseline
 - Current status:
+  - Phase 60 search expansion is frozen while Phase 61–62 Gate A / Gate B are open
   - `AWF-302` is now frozen in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md`
   - explicit config contract seeded for implementation:
     - `strategy_mode`

@@ -256,6 +256,22 @@ def _cmd_pilot_build_clue_map(args: argparse.Namespace) -> int:
     return cmd_plan.cmd_pilot_build_clue_map(args, _self())
 
 
+def _cmd_bridge_export_signal_store(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_bridge_export_signal_store(args, _self())
+
+
+def _cmd_bridge_cross_check(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_bridge_cross_check(args, _self())
+
+
+def _cmd_bridge_live_signal(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_bridge_live_signal(args, _self())
+
+
+def _cmd_bridge_dryrun_reconcile(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_bridge_dryrun_reconcile(args, _self())
+
+
 def _cmd_gate_c(args: argparse.Namespace) -> int:
     return cmd_gate.cmd_gate_c(args, _self())
 

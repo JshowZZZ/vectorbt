@@ -212,3 +212,44 @@
 | AWF-236 | 47 | done | Targeted regression closure + planning sync | — |
 | AWF-237 | 48 | done | Control-panel Config save preserves hidden runtime fields | `plans/AUTOWFO_PHASE48_SPEC.md` |
 | AWF-238 | 48 | done | Rerun campaign presets + apply flow in Config tab | `plans/AUTOWFO_PHASE48_SPEC.md` |
+
+## Archived Completion Batch (AWF-302~AWF-337)
+
+> Moved from `AUTOWFO_TODO.md` during `AWF-343` slimming on 2026-04-18.
+
+- `AWF-302` done: froze the minimal hierarchical state-trigger protocol in `plans/AUTOWFO_STATE_TRIGGER_MODE_PROTOCOL.md` for the `drop SOL/BTC` anchored `2h / 180d` lane.
+- `AWF-303` done: implemented additive hierarchical state-trigger execution semantics with preserved combo-entry compatibility and validated runtime wiring.
+- `AWF-304` done: first paired hierarchical pilot (`20260411_154620` / `20260411_154758`) wrote `artifacts/reports/pilot_analysis_awf304_state_trigger.json`; result was bounded fail against the frozen micro-cohort baseline.
+- `AWF-305` done: bounded TP/SL breadth sensitivity wrote `plans/AUTOWFO_TPSL_SENSITIVITY_DECISION_20260411.md`; `BNB/BTC` remained the robust dragger.
+- `AWF-306` done: pilot-history UI contract landed via `/pilot-history.json` and `plans/AUTOWFO_PILOT_HISTORY_UI_PROTOCOL.md`.
+- `AWF-307` done: funding-gate sidecar wrote `artifacts/reports/pilot_analysis_awf307_funding_gate.json`; bounded pass as optional overlay, not a dragger repair.
+- `AWF-308` done: Bybit-backed `oi_roc` sidecar wrote `artifacts/reports/pilot_analysis_awf308_oi_roc.json`; bounded pass as co-member evidence, with low-density gate artifact risk.
+- `AWF-309` done: daily HTF confirmation sidecar wrote `artifacts/reports/pilot_analysis_awf309_htf_trend.json`; bounded pass for daily-only overlay, `8h` rejected.
+- `AWF-310` done: historical anchored replay wrote `plans/AUTOWFO_HISTORICAL_ANCHORED_REPLAY_DECISION_20260411.md`; canonical family failed the older anchor and was classified as directional-only.
+- `AWF-311` done: HTF-enhanced state-trigger repair wrote `artifacts/reports/pilot_analysis_awf311_state_trigger_htf_repair.json`; first gate-passed hierarchical row achieved.
+- `AWF-312` done: expanded HTF repair wrote `artifacts/reports/pilot_analysis_awf312_expanded_htf_repair.json`; only the `ad` trigger remained practically viable.
+- `AWF-313` done: older-anchor replay of the validated hierarchical lane wrote `artifacts/reports/pilot_analysis_awf313_temporal_replay_htf_state_trigger.json`; classified as time-local.
+- `AWF-314` done: pilot-analysis trade-density floor added through `--min-avg-symbol-trades`; near-zero-trade gate artifacts now fail explicitly.
+- `AWF-315` done: dense OI + daily HTF repair protocol froze in `plans/protocols/awf315_dense_oi_htf_repair_{main,sensitivity}.json`.
+- `AWF-316` done: dense OI + daily HTF repair wrote `artifacts/reports/pilot_analysis_awf316_dense_oi_htf_repair.json`; bounded repair pass on the current window only.
+- `AWF-317` done: temporal replay contract for the repaired OI + HTF row froze in `plans/protocols/awf317_temporal_replay_dense_oi_htf_{main,sensitivity}.json`.
+- `AWF-318` done: temporal replay of the repaired OI + HTF row wrote `artifacts/reports/pilot_analysis_awf318_temporal_replay_dense_oi_htf.json`; repaired row confirmed time-local.
+- `AWF-319` done: hierarchical funding-overlay follow-up protocol froze in `plans/protocols/awf319_state_trigger_funding_overlay_{main,sensitivity}.json`.
+- `AWF-320` done: hierarchical funding-overlay replay wrote `artifacts/reports/pilot_analysis_awf320_state_trigger_funding_overlay.json`; bounded pass in the modern window.
+- `AWF-321` done: temporal replay contract for hierarchical funding winners froze in `plans/protocols/awf321_temporal_replay_state_trigger_funding_overlay_{main,sensitivity}.json`.
+- `AWF-322` done: temporal replay of hierarchical funding winners wrote `artifacts/reports/pilot_analysis_awf322_temporal_replay_state_trigger_funding_overlay.json`; funding-enhanced lane remained time-local.
+- `AWF-323` done: OI-enhanced hierarchical state-repair protocol froze in `plans/protocols/awf323_state_trigger_oi_state_repair_{main,sensitivity}.json`.
+- `AWF-324` done: OI-enhanced hierarchical repair wrote `artifacts/reports/pilot_analysis_awf324_state_trigger_oi_state_repair.json`; bounded pass on the current window.
+- `AWF-325` done: temporal replay contract for OI-enhanced hierarchical winners froze in `plans/protocols/awf325_temporal_replay_state_trigger_oi_state_repair_{main,sensitivity}.json`.
+- `AWF-326` done: temporal replay of OI-enhanced hierarchical winners wrote `artifacts/reports/pilot_analysis_awf326_temporal_replay_state_trigger_oi_state_repair.json`; exact winners failed older-anchor replay and stayed time-local.
+- `AWF-327` done: froze the signal-store schema contract in `plans/protocols/awf327_signal_store_schema.json`; this remains gate-relevant protocol context.
+- `AWF-328` done: implemented `bridge-export-signal-store` in `autowfo/freqtrade_bridge.py`; exporter writes dense signal store, replay trades, and manifest from frozen leaderboard rows.
+- `AWF-329` done: added `scripts/freqtrade_generic_signal_strategy.py` replay adapter that consumes AUTOWFO signal bundles without adding new strategy logic.
+- `AWF-330` done: added `bridge-cross-check` parity runner and `parity_report.json` generation in `autowfo/freqtrade_bridge.py`; execution route validated, parity quality not yet passed.
+- `AWF-331` done: first parity-gate freeze wrote `artifacts/freqtrade_bridge/awf331_stable_top10_summary.json`; residual risk remains `review` because `exact_match_ratio` and `open_match_ratio` were `0.0` before the 2026-04-17 adapter contract fix.
+- `AWF-332` done: route-B pair mapping decision froze BTC-cross source signals to Binance USDM `*/USDT:USDT` execution pairs in local dry-run config; this remains gate-relevant execution-contract context.
+- `AWF-333` done: `autowfo/live_signal_producer.py` and `bridge-live-signal` now write rolling live signal artifacts under `artifacts/live_signal_store/`.
+- `AWF-334` done: live-mode Freqtrade strategy variants now share the corrected raw-signal consumer contract with replay mode; 2026-04-17 contract fix removed the double-shift issue.
+- `AWF-335` done: local Freqtrade dry-run deployment validated via `config_autowfo_dryrun.json`, `strategy_path`, and futures/isolation runtime checks.
+- `AWF-336` done: PowerShell start/stop/watch scripts now manage runtime metadata and logs under `artifacts/paper_dryrun/`.
+- `AWF-337` done: `autowfo/paper_dryrun_reconcile.py` writes `artifacts/paper_dryrun/daily_summary_YYYYMMDD.json`; 2026-04-17 reconcile correction aligned dry-run signal matching with the corrected raw-signal contract.

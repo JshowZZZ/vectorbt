@@ -271,7 +271,7 @@ def _format_request_timestamp(ts):
     stamp = _coerce_utc_timestamp(ts)
     if stamp is None:
         return None
-    return stamp.strftime("%Y-%m-%dT%H:%M:%S")
+    return stamp.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
 def _normalize_htf_resample_rule(value):
