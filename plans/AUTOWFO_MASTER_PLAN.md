@@ -51,7 +51,7 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ## Milestones
 
-### Phase 61–62: Parity Reset, Policy Freeze, and Drift-Artifact Foundation (AWF-338~347) [Active]
+### Phase 61–62: Parity Reset, Policy Freeze, and Drift-Artifact Foundation (AWF-338~347) [Complete]
 - Purpose:
   - freeze execution policy in-repo before more evidence is generated
   - rerun parity on the corrected adapter contract before threshold design
@@ -70,8 +70,25 @@ indicators, symbols, and time windows to discover robust combinations.
   - `AWF-338` completed: `plans/protocols/awf338_rerun_input_manifest.json` now freezes the AWF-339 rerun inputs, including the local Freqtrade `2026.3` contract, pair mapping, source fingerprint, output path, and the deduplicated `10`-row scope (`canonical` + `stable top 10`, with canonical overlapping stable rank `2`)
   - `AWF-339` completed: `scripts/run_awf339_rerun.py` rebuilt the frozen rerun scope into `artifacts/freqtrade_bridge/awf339/` and wrote `artifacts/freqtrade_bridge/awf331_rerun_summary.json`; row-scope validation passed at `10/10`, `open_match_ratio min=0.9633`, `exact_match_ratio p10=0.5827`, and branch condition `AWF-339a` did not trigger
   - `AWF-340` completed: `plans/AUTOWFO_PARITY_GATE_V1.md` now freezes the first aggregate parity gate from the rerun distribution, with `p10(open_match_ratio)=0.9891`, `p10(exact_match_ratio)=0.5827`, and `p90(abs(trade_count_delta_pct))=0.00952`
-  - Gate A is now passed; the next execution surface is `AWF-342a` / `AWF-342b` query tooling, then Phase 62 drift work
-  - `AWF-342b` remains optional and should not block Phase 62 if local Freqtrade MCP runtime is unstable
+  - `AWF-342a` completed: root `.mcp.json` now launches DuckDB MCP through `python -m uv tool run mcp-server-motherduck --db-path :memory: --read-write`, `scripts/write_awf342a_duckdb_smoke.py` regenerates the three frozen-bundle smoke queries under `artifacts/scratch/duckdb_smoke/`, and local DuckDB validation confirms the summary-count, canonical-signal `head(10)`, and trade/signal join-count queries execute on the frozen AWF-339 inputs
+  - `AWF-344` completed: `autowfo/drift_prototypes.py` plus `scripts/write_awf344_drift_prototypes.py` now regenerate three saved DuckDB prototype queries and sample outputs under `artifacts/scratch/duckdb_drift_prototypes/`; the validated query surface covers row-level drift severity, pair-direction concentration, and source-consistency joins from `awf331_rerun_summary.json` into frozen `signal_manifest.json` and `awf339/*/parity_report.json` via stable bundle ids
+  - `AWF-345` completed: `plans/protocols/execution_drift_report_v1.json` now freezes the first drift artifact schema from the AWF-344 query shape, covering row-level drift, pair-direction concentration, source-consistency joins, and top-level artifact invariants; protocol validation is anchored by `tests/test_awf345_execution_drift_protocol.py`
+  - `AWF-346` completed: `autowfo storage drift-report` is now implemented through `autowfo/storage_ops.py::build_execution_drift_report` plus `autowfo/commands/storage.py` / `autowfo/cli.py` wiring; the CLI writes the versioned drift artifact from frozen AWF-345 protocol inputs and is covered by targeted storage-op and CLI regressions
+  - `AWF-347` completed: the first real drift artifact has been rebuilt at `artifacts/reports/execution_drift_report.json` from the frozen Phase 61 inputs, with `schema_version=1.0.0`, `row_scope_count=10`, `row_level_drift=10`, `pair_direction_drift=39`, and `source_consistency=10`; source-consistency joins validate 10/10 against the frozen manifests and awf339 parity reports
+  - `AWF-342b` completed as an optional operator tool: root `.mcp.json` now adds `freqtrade_awf342b`, which launches `python -m autowfo.freqtrade_mcp --config E:/Project/freqtrade/user_data/config_autowfo_dryrun.json`; the wrapper exposes read-only `runtime_summary` and `recent_trades` tools over stdio MCP, targeted coverage lives in `tests/test_autowfo_freqtrade_mcp.py`, and `scripts/run_awf342b_freqtrade_mcp_smoke.py` has already produced local smoke outputs against the real dry-run SQLite/runtime config
+  - Phase 61–62 is now fully closed: Gate A, Gate B, and the optional Freqtrade MCP checkpoint have all passed
+  - Phase 63 entry approved 2026-04-18: Route C (parallel exploitation + exploration)
+  - Active plan: `plans/AUTOWFO_PHASE63_PLAN.md`
+
+### Phase 63: Parallel Exploitation + Exploration (AWF-348~359) [Active]
+- Route C decision: paper trading runs in parallel with strategy search expansion.
+- Workstream A (AWF-348~351): validate the frozen canonical candidate via FT dry-run; accumulate ≥14 days of reconciliation evidence.
+- Workstream B (AWF-352~359): explore three untested dimensions:
+  - B1: non-trend regimes (rsi_revert, bb_revert, bb_breakout) — never searched
+  - B2: 4h timeframe — never searched
+  - B3: 360d extended window — cross-cycle robustness validation
+  - B4: housekeeping (hardcoded paths, bridge audit items)
+- Exit: both workstreams report verdicts → Phase 64 entry decision
 
 ### Phase 60: Hierarchical State-Trigger Mode Opening (AWF-302/303/304) [Frozen]
 - Open the deferred hierarchical state/trigger mode as the next active strategy model.

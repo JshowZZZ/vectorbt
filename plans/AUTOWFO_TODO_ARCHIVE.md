@@ -243,6 +243,20 @@
 - `AWF-325` done: temporal replay contract for OI-enhanced hierarchical winners froze in `plans/protocols/awf325_temporal_replay_state_trigger_oi_state_repair_{main,sensitivity}.json`.
 - `AWF-326` done: temporal replay of OI-enhanced hierarchical winners wrote `artifacts/reports/pilot_analysis_awf326_temporal_replay_state_trigger_oi_state_repair.json`; exact winners failed older-anchor replay and stayed time-local.
 - `AWF-327` done: froze the signal-store schema contract in `plans/protocols/awf327_signal_store_schema.json`; this remains gate-relevant protocol context.
+
+## Archived Phase 61–62 (Parity Reset + Drift Foundation)
+
+- `AWF-338` done: froze rerun inputs in `plans/protocols/awf338_rerun_input_manifest.json`.
+- `AWF-339` done: reran AWF-331 on corrected adapter contract; `open_match_ratio min=0.9633`, `exact_match_ratio p10=0.5827`.
+- `AWF-340` done: derived parity gate v1 in `plans/AUTOWFO_PARITY_GATE_V1.md`.
+- `AWF-341` done: froze development principles in `plans/AUTOWFO_DEVELOPMENT_PRINCIPLES.md`.
+- `AWF-342a` done: DuckDB MCP wired in `.mcp.json` with three smoke queries.
+- `AWF-342b` done: Freqtrade MCP wrapper wired as read-only operator tool.
+- `AWF-343` done: slimmed TODO to active-phase surface; archive coverage confirmed.
+- `AWF-344` done: prototyped drift queries in DuckDB; three query shapes validated.
+- `AWF-345` done: froze `execution_drift_report_v1` schema in `plans/protocols/execution_drift_report_v1.json`.
+- `AWF-346` done: implemented `autowfo storage drift-report` CLI.
+- `AWF-347` done: rebuilt first real drift artifact at `artifacts/reports/execution_drift_report.json`.
 - `AWF-328` done: implemented `bridge-export-signal-store` in `autowfo/freqtrade_bridge.py`; exporter writes dense signal store, replay trades, and manifest from frozen leaderboard rows.
 - `AWF-329` done: added `scripts/freqtrade_generic_signal_strategy.py` replay adapter that consumes AUTOWFO signal bundles without adding new strategy logic.
 - `AWF-330` done: added `bridge-cross-check` parity runner and `parity_report.json` generation in `autowfo/freqtrade_bridge.py`; execution route validated, parity quality not yet passed.
