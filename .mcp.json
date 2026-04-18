@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "freqtrade_awf342b": {
+      "command": "python",
+      "args": [
+        "-m",
+        "autowfo.freqtrade_mcp",
+        "--config",
+        "E:/Project/freqtrade/user_data/config_autowfo_dryrun.json"
+      ]
+    }
+  }
+}
