@@ -39,6 +39,7 @@ DEFAULT_PPO_FAST = 12
 DEFAULT_PPO_SLOW = 26
 DEFAULT_PPO_SIGNAL = 9
 DEFAULT_FEES = 0.001
+FREQTRADE_CROSS_CHECK_TIMEOUT_SECONDS = 900
 DEFAULT_SIGNAL_COLUMNS = (
     "signal_long",
     "signal_short",
@@ -1358,7 +1359,13 @@ def run_freqtrade_cross_check(
     }
     if not execute:
         return payload
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=FREQTRADE_CROSS_CHECK_TIMEOUT_SECONDS,
+    )
     payload["executed"] = True
     payload["returncode"] = int(completed.returncode)
     payload["stdout_tail"] = completed.stdout[-4000:]

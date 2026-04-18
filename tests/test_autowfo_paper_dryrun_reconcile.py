@@ -206,3 +206,57 @@ def test_reconcile_dryrun_day_writes_summary_artifact(tmp_path, monkeypatch):
     assert out_path.exists()
     assert payload["totals"]["entry_signal_match_count"] == 1
     assert payload["totals"]["exit_signal_match_count"] == 1
+
+
+def test_load_freqtrade_trades_opens_db_in_readonly_uri_mode(tmp_path, monkeypatch):
+    import sqlite3 as _sqlite3
+
+    db_path = tmp_path / "tradesv3.dryrun.sqlite"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE trades (
+                id INTEGER,
+                pair TEXT,
+                is_open BOOLEAN,
+                open_rate FLOAT,
+                close_rate FLOAT,
+                open_date TEXT,
+                close_date TEXT,
+                close_profit FLOAT,
+                close_profit_abs FLOAT,
+                stake_amount FLOAT,
+                amount FLOAT,
+                exit_reason TEXT,
+                strategy TEXT,
+                enter_tag TEXT,
+                timeframe INTEGER,
+                trading_mode TEXT,
+                leverage FLOAT,
+                is_short BOOLEAN,
+                fee_open_cost FLOAT,
+                fee_close_cost FLOAT
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    captured = []
+    real_connect = _sqlite3.connect
+
+    def spy_connect(*args, **kwargs):
+        captured.append((args, kwargs))
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(paper_dryrun_reconcile.sqlite3, "connect", spy_connect)
+    paper_dryrun_reconcile.load_freqtrade_trades(db_path)
+
+    assert captured, "sqlite3.connect was not called"
+    first_args, first_kwargs = captured[0]
+    assert first_kwargs.get("uri") is True
+    assert isinstance(first_args[0], str)
+    assert first_args[0].startswith("file:")
+    assert "mode=ro" in first_args[0]

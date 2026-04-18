@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
 import pandas as pd
@@ -322,3 +324,59 @@ def test_build_parity_report_includes_trade_comparison(tmp_path):
     assert report["freqtrade"]["autowfo_pair_mapping"]["ETH/BTC"] == "ETH/USDT:USDT"
     assert report["trade_comparison"]["exact_match_count"] == 1
     assert report["trade_comparison"]["verdict"] == "passed"
+
+
+def test_run_freqtrade_cross_check_passes_timeout_to_subprocess(tmp_path, monkeypatch):
+    manifest = _sample_manifest(tmp_path, has_short_signals=False)
+    manifest_path = tmp_path / "signal_manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    captured = {}
+
+    monkeypatch.setattr(
+        freqtrade_bridge,
+        "build_freqtrade_backtest_config",
+        lambda *args, **kwargs: {
+            "strategy": "AutowfoGenericSignalStrategyLongOnly",
+            "exchange": {"pair_whitelist": ["ETH/BTC"]},
+        },
+    )
+    monkeypatch.setattr(
+        freqtrade_bridge,
+        "build_freqtrade_backtest_command",
+        lambda **kwargs: ["freqtrade", "backtesting"],
+    )
+
+    def fake_run(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(freqtrade_bridge.subprocess, "run", fake_run)
+    monkeypatch.setattr(freqtrade_bridge, "_resolve_backtest_result_path", lambda out_dir: Path(out_dir) / "backtest-result.json")
+    monkeypatch.setattr(
+        freqtrade_bridge,
+        "load_freqtrade_backtest_result",
+        lambda result_path, strategy_name=None: {
+            "strategy_name": strategy_name or "AutowfoGenericSignalStrategyLongOnly",
+            "summary": {"total_trades": 0},
+            "trades_df": pd.DataFrame(),
+        },
+    )
+    monkeypatch.setattr(
+        freqtrade_bridge,
+        "build_parity_report",
+        lambda manifest, *, freqtrade_result: {"trade_comparison": {"verdict": "passed"}},
+    )
+
+    payload = freqtrade_bridge.run_freqtrade_cross_check(
+        manifest,
+        manifest_path=manifest_path,
+        out_dir=tmp_path / "cross_check",
+        datadir=tmp_path / "user_data" / "data" / "binance",
+        execute=True,
+    )
+
+    assert payload["executed"] is True
+    assert captured["args"][0] == ["freqtrade", "backtesting"]
+    assert captured["kwargs"]["timeout"] == 900

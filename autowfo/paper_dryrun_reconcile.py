@@ -104,7 +104,7 @@ def load_freqtrade_trades(db_path: str | Path) -> pd.DataFrame:
     resolved_path = Path(db_path).resolve()
     if not resolved_path.exists():
         raise FileNotFoundError(f"Freqtrade dry-run DB not found: {resolved_path}")
-    conn = sqlite3.connect(resolved_path)
+    conn = sqlite3.connect(f"file:{resolved_path.as_posix()}?mode=ro", uri=True)
     try:
         frame = pd.read_sql_query(
             """
