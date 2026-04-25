@@ -6,9 +6,16 @@ exploring the strategy-indicator space using time stacking (walk-forward style),
 not one-off best-parameter picks. Users will repeatedly run it with different
 indicators, symbols, and time windows to discover robust combinations.
 
+The next direction is to turn that platform into a personal-account crypto
+strategy survival system: candidates must be compared against old Champions,
+cross-checked through Freqtrade, measured against paper/live reality gaps, and
+promoted only through versioned Survival Gate policies.
+
 ## North Star
 - Primary outcome: improve out-of-sample robustness, not in-sample peak performance.
 - Definition of success: strategy selection process that is reproducible, explainable, and resistant to time-regime drift.
+- Survivalism outcome: strategy promotion process that limits the cost of being
+  wrong before capital is scaled.
 
 ## Scope
 - In scope:
@@ -21,6 +28,10 @@ indicators, symbols, and time windows to discover robust combinations.
   - Freqtrade backtest cross-checks for frozen AUTOWFO signal lanes.
   - Freqtrade dry-run paper trading and daily reconciliation for promoted candidates.
   - Drift artifacts that compare AUTOWFO replay, Freqtrade replay, and dry-run behavior.
+  - Evidence Warehouse V1 for candidate identity, reality-gap attribution, cost
+    observations, and immutable gate verdicts.
+  - Survival Gate policy versions for backtest, replay, paper, and future
+    micro-live promotion decisions.
 - Out of scope:
   - Exchange order routing inside AUTOWFO.
   - Full AutoML/Bayesian orchestration across external clusters.
@@ -55,6 +66,49 @@ indicators, symbols, and time windows to discover robust combinations.
 | Web control panel | Packaged local UI + static tabs + dashboard/history | Complete for routine operations | CLI remains required for reproducible bridge/drift automation |
 
 ## Milestones
+
+### Survivalism Planning Packet: Framework, Evidence, Gate, Lifecycle [Accepted]
+- Purpose:
+  - preserve the 2026-04-25 strategy-survival direction in repo files
+  - avoid depending on chat context for future agent handoff
+  - define the next implementation order before runtime changes
+- Authoritative references:
+  - `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`
+  - `plans/AUTOWFO_DECISION_LOG.md`
+  - `plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`
+  - `plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`
+  - `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`
+  - `plans/protocols/evidence_warehouse_v1.json`
+  - `plans/protocols/survival_gate_policy_v1.json`
+- Implementation order:
+  - Evidence Warehouse V1 first
+  - Survival Gate parser/verdict writer second
+  - Strategy lifecycle and Champion/Challenger views third
+  - Reality Gap report fourth
+  - control-panel cockpit after evidence contracts exist
+  - risk engine and micro-live readiness last
+- First implementation candidate:
+  - `AWF-360`: add evidence warehouse protocol validator and candidate identity helper.
+
+### Phase 64: Survivalism Foundation (Next Candidate Phase)
+- Entry condition: user explicitly starts implementation after reviewing the planning packet.
+- Workstream A: Evidence Warehouse V1.
+  - implement protocol validation
+  - implement deterministic candidate identity
+  - import read-only Phase 61-62 replay/drift evidence
+  - import Phase 63 dry-run reconcile evidence when available
+- Workstream B: Survival Gate V1.
+  - load policy definitions
+  - write immutable gate verdict records
+  - block verdict writes without candidate, policy, metric, and artifact identity
+- Workstream C: Strategy lifecycle.
+  - label Champion and Challenger candidates
+  - record promotion/rejection/halt decisions
+  - keep old candidates comparable to fresh strategy tests
+- Non-goals:
+  - no risk engine enforcement before evidence records exist
+  - no control-panel rewrite before cockpit requirements are backed by evidence views
+  - no live activation in Phase 64
 
 ### Phase 61–62: Parity Reset, Policy Freeze, and Drift-Artifact Foundation (AWF-338~347) [Complete]
 - Purpose:

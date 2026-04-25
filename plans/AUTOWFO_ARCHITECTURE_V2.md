@@ -1,5 +1,5 @@
 ﻿# AUTOWFO Architecture V2
-**Status**: Approved by user 2026-02-27; refreshed to current Phase 63 reality on 2026-04-25
+**Status**: Approved by user 2026-02-27; refreshed to current Phase 63 reality and survivalism prework on 2026-04-25
 **Role**: This document is the authoritative architecture spec for implementation AI.
 **Architect**: Claude (planning only; implementation delegated to other AI)
 
@@ -11,6 +11,14 @@
 A **strategy discovery and execution-validation platform** that systematically searches cross-asset, cross-timeframe signal strategies using vectorbt, then validates promotable candidates through a Freqtrade bridge. AUTOWFO owns the strategy truth source: indicators, signal rules, ranking, artifacts, and promotion evidence. Freqtrade owns second-engine replay, dry-run paper execution, exchange-runtime semantics, and eventual live execution.
 
 The current operating goal is to find viable strategy-indicator combinations quickly without reopening the architecture: run bounded AUTOWFO searches, export frozen signal bundles, cross-check them through Freqtrade, collect paper/dry-run reconciliation evidence, and feed verdicts back into AUTOWFO planning.
+
+The next architecture direction is the survivalism framework: AUTOWFO should not
+only discover strategies, but also measure whether candidates survive costs,
+execution gaps, paper/live drift, and operator risk limits. The core references
+are `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`,
+`plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`,
+`plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`, and
+`plans/AUTOWFO_STRATEGY_LIFECYCLE.md`.
 
 Operators can use both:
 - the packaged control panel for routine run/config/result workflows
@@ -29,6 +37,7 @@ Operators can use both:
 4. **Extensible**: Adding a new indicator = adding one `.py` file
 5. **Fresh-start safe**: Existing artifacts can be discarded and rerun from scratch
 6. **Execution-aware**: candidate promotion is gated by Freqtrade parity, paper reconciliation, and drift artifacts
+7. **Survival-first**: strategy promotion is gated by versioned Survival Gate policies, reality-gap evidence, cost observations, and operator sign-off before micro-live
 
 ---
 
@@ -71,6 +80,34 @@ AUTOWFO search / frozen lane
 ```
 
 The bridge is a validation and execution adapter, not a second strategy source. Freqtrade strategies must consume AUTOWFO signal columns and preserve the corrected raw-signal / next-open execution contract.
+
+### 2.4.2 Survivalism Evidence Loop
+
+The next foundation layer turns the execution-validation loop into a survival
+evidence loop:
+
+```text
+Champion/Challenger candidate
+  -> AUTOWFO backtest evidence
+  -> Freqtrade replay evidence
+  -> dry-run paper actuals
+  -> execution-gap attribution
+  -> versioned Survival Gate verdict
+  -> promote / observe / reject / halt
+  -> future micro-live calibration
+```
+
+Key contracts:
+
+- Candidate identity and evidence tables are defined by
+  `plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`.
+- Gate policy and immutable verdict history are defined by
+  `plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`.
+- Lifecycle state transitions are defined by
+  `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`.
+
+Risk-engine enforcement is deferred until the evidence warehouse can provide
+stable candidate, cost, gap, and verdict records.
 
 ### 2.5 Cross-Asset Strategy Model
 ```

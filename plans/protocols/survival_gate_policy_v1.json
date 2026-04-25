@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0.0",
+  "name": "autowfo_survival_gate_policy_v1",
+  "frozen_on": "2026-04-25",
+  "purpose": "Freeze the structural Survival Gate policy contract before implementing gate parsing, verdict writing, or risk-engine behavior.",
+  "source_documents": [
+    "plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md",
+    "plans/AUTOWFO_SURVIVAL_GATE_POLICY.md",
+    "plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md"
+  ],
+  "policy_identity": {
+    "required_fields": [
+      "policy_id",
+      "policy_name",
+      "policy_version",
+      "created_utc",
+      "capital_stage",
+      "scope",
+      "rationale"
+    ],
+    "versioning_rule": "Changing thresholds, required metrics, scope, or verdict semantics requires a new policy_version."
+  },
+  "allowed_capital_stages": [
+    "backtest",
+    "ft_replay",
+    "paper",
+    "micro_live",
+    "scaled_live"
+  ],
+  "scope_fields": [
+    "exchange",
+    "market_type",
+    "quote_currency",
+    "timeframe",
+    "strategy_family",
+    "direction_scope",
+    "capital_stage",
+    "cost_profile_id",
+    "data_profile_id"
+  ],
+  "verdict_contract": {
+    "allowed_verdicts": [
+      "pass",
+      "observe",
+      "reject",
+      "halt"
+    ],
+    "required_fields": [
+      "verdict_id",
+      "candidate_id",
+      "policy_id",
+      "verdict",
+      "metric_snapshot",
+      "failed_rules",
+      "warning_rules",
+      "generated_utc",
+      "artifact_path"
+    ],
+    "immutability_rule": "Do not overwrite historical verdicts. Re-scoring writes a new verdict_id."
+  },
+  "metric_dimensions": {
+    "backtest_survival": [
+      "trade_count",
+      "win_rate",
+      "payoff_ratio",
+      "expectancy_after_cost",
+      "profit_factor",
+      "max_drawdown_pct",
+      "symbol_support_count",
+      "temporal_stability"
+    ],
+    "freqtrade_replay_survival": [
+      "open_match_ratio",
+      "exact_match_ratio",
+      "trade_count_delta_pct",
+      "pair_direction_concentration",
+      "source_consistency"
+    ],
+    "paper_survival": [
+      "signal_freshness",
+      "entry_match_rate",
+      "exit_match_rate",
+      "zero_fill_days",
+      "paper_expected_pnl_delta",
+      "observed_cost_drag",
+      "unclassified_gap_count"
+    ],
+    "micro_live_readiness": [
+      "kill_switch_active",
+      "position_cap",
+      "exposure_cap",
+      "daily_loss_cap",
+      "weekly_loss_cap",
+      "operator_signoff"
+    ]
+  },
+  "rule_types": [
+    "required_metric",
+    "minimum_threshold",
+    "maximum_threshold",
+    "distribution_threshold",
+    "warning_only",
+    "hard_reject",
+    "halt"
+  ],
+  "policy_invariants": [
+    "Win rate alone cannot produce a pass verdict.",
+    "A policy cannot evaluate micro_live or scaled_live without kill-switch fields.",
+    "A verdict cannot be written without policy_id and candidate_id.",
+    "Threshold values must come from frozen evidence, observed distributions, or explicit operator risk tolerance.",
+    "Changing threshold values requires a new policy_version."
+  ],
+  "initial_non_goals": [
+    "No permanent numeric win-rate, drawdown, profit-factor, or paper-day thresholds are frozen by this protocol.",
+    "No live trading activation is implied by this protocol.",
+    "No risk engine implementation is implied until evidence warehouse outputs exist."
+  ],
+  "invalidation_rule": "If allowed verdict values, capital stages, or required verdict fields change, this protocol must be reopened and re-frozen before gate implementation proceeds."
+}

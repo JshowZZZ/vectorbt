@@ -1,0 +1,283 @@
+{
+  "schema_version": "1.0.0",
+  "name": "autowfo_evidence_warehouse_v1",
+  "frozen_on": "2026-04-25",
+  "purpose": "Freeze the logical evidence warehouse contract before implementing storage, import, gate, or cockpit code for the survivalism workstream.",
+  "source_documents": [
+    "plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md",
+    "plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md",
+    "plans/AUTOWFO_SURVIVAL_GATE_POLICY.md",
+    "plans/AUTOWFO_STRATEGY_LIFECYCLE.md"
+  ],
+  "identity_keys": {
+    "candidate_id": {
+      "purpose": "Stable identity for one strategy candidate definition.",
+      "required_for": [
+        "strategy_candidates",
+        "backtest_runs",
+        "backtest_metrics",
+        "ft_replay_results",
+        "paper_trades",
+        "live_trades",
+        "execution_gap_events",
+        "gate_verdicts",
+        "promotion_decisions",
+        "benchmark_results"
+      ]
+    },
+    "run_id": {
+      "purpose": "Stable identity for one produced AUTOWFO, replay, paper, or live evidence artifact.",
+      "required_for": [
+        "backtest_runs",
+        "backtest_metrics",
+        "ft_replay_results"
+      ]
+    },
+    "policy_id": {
+      "purpose": "Stable identity for one Survival Gate policy version.",
+      "required_for": [
+        "gate_policies",
+        "gate_verdicts"
+      ]
+    },
+    "verdict_id": {
+      "purpose": "Stable identity for one immutable gate evaluation event.",
+      "required_for": [
+        "gate_verdicts"
+      ]
+    },
+    "cost_profile_id": {
+      "purpose": "Stable identity for fee, slippage, spread, funding, and delay assumptions or observations.",
+      "required_for": [
+        "strategy_candidates",
+        "cost_observations"
+      ]
+    },
+    "data_profile_id": {
+      "purpose": "Stable identity for source data, exchange, pair universe, timeframe, and date scope.",
+      "required_for": [
+        "strategy_candidates",
+        "backtest_runs"
+      ]
+    }
+  },
+  "table_contracts": {
+    "strategy_candidates": {
+      "required_fields": [
+        "candidate_id",
+        "candidate_version",
+        "strategy_family",
+        "indicator_set",
+        "parameter_set",
+        "timeframe",
+        "market_universe",
+        "direction_scope",
+        "entry_rule",
+        "exit_rule",
+        "risk_rule",
+        "cost_profile_id",
+        "data_profile_id",
+        "source_system",
+        "created_utc"
+      ]
+    },
+    "backtest_runs": {
+      "required_fields": [
+        "run_id",
+        "candidate_id",
+        "artifact_root",
+        "engine",
+        "run_mode",
+        "timeframe",
+        "data_start_utc",
+        "data_end_utc",
+        "created_utc",
+        "config_hash",
+        "data_fingerprint"
+      ]
+    },
+    "backtest_metrics": {
+      "required_fields": [
+        "run_id",
+        "candidate_id",
+        "scope",
+        "trade_count",
+        "win_rate",
+        "expectancy_after_cost",
+        "profit_factor",
+        "max_drawdown_pct",
+        "oos_return_pct",
+        "stability_score",
+        "symbol_support_count",
+        "avg_symbol_trades"
+      ]
+    },
+    "ft_replay_results": {
+      "required_fields": [
+        "run_id",
+        "candidate_id",
+        "signal_bundle_id",
+        "parity_bundle_id",
+        "open_match_ratio",
+        "exact_match_ratio",
+        "trade_count_delta_pct",
+        "verdict",
+        "artifact_path"
+      ]
+    },
+    "paper_trades": {
+      "required_fields": [
+        "paper_trade_id",
+        "candidate_id",
+        "freqtrade_trade_id",
+        "pair",
+        "direction",
+        "opened_utc",
+        "closed_utc",
+        "open_rate",
+        "close_rate",
+        "profit_abs",
+        "profit_ratio",
+        "fee_abs",
+        "funding_abs",
+        "source_db_path"
+      ]
+    },
+    "live_trades": {
+      "required_fields": [
+        "live_trade_id",
+        "candidate_id",
+        "exchange_order_ids",
+        "pair",
+        "direction",
+        "opened_utc",
+        "closed_utc",
+        "open_rate",
+        "close_rate",
+        "profit_abs",
+        "profit_ratio",
+        "fee_abs",
+        "funding_abs",
+        "fill_status",
+        "slippage_bps",
+        "operator_session_id"
+      ]
+    },
+    "execution_gap_events": {
+      "required_fields": [
+        "gap_id",
+        "candidate_id",
+        "expected_source",
+        "actual_source",
+        "pair",
+        "direction",
+        "event_time_utc",
+        "gap_type",
+        "severity",
+        "expected_value",
+        "actual_value",
+        "attribution",
+        "artifact_path"
+      ],
+      "allowed_gap_types": [
+        "data_gap",
+        "signal_gap",
+        "adapter_gap",
+        "execution_gap",
+        "cost_gap",
+        "regime_gap"
+      ]
+    },
+    "cost_observations": {
+      "required_fields": [
+        "cost_profile_id",
+        "source",
+        "pair",
+        "timeframe",
+        "fee_bps",
+        "slippage_bps",
+        "spread_bps",
+        "funding_rate",
+        "delay_bars",
+        "observed_utc"
+      ]
+    },
+    "gate_policies": {
+      "required_fields": [
+        "policy_id",
+        "policy_name",
+        "policy_version",
+        "capital_stage",
+        "scope",
+        "created_utc",
+        "policy_path",
+        "rationale"
+      ]
+    },
+    "gate_verdicts": {
+      "required_fields": [
+        "verdict_id",
+        "candidate_id",
+        "policy_id",
+        "verdict",
+        "metric_snapshot",
+        "failed_rules",
+        "warning_rules",
+        "generated_utc",
+        "artifact_path"
+      ],
+      "allowed_verdicts": [
+        "pass",
+        "observe",
+        "reject",
+        "halt"
+      ]
+    },
+    "promotion_decisions": {
+      "required_fields": [
+        "decision_id",
+        "candidate_id",
+        "from_state",
+        "to_state",
+        "decision",
+        "rationale",
+        "evidence_paths",
+        "operator",
+        "decided_utc"
+      ]
+    },
+    "benchmark_results": {
+      "required_fields": [
+        "benchmark_id",
+        "candidate_id",
+        "benchmark_type",
+        "benchmark_candidate_id",
+        "metric_snapshot",
+        "comparison_result",
+        "artifact_path"
+      ]
+    }
+  },
+  "source_layers": [
+    "autowfo_backtest",
+    "freqtrade_replay",
+    "freqtrade_dryrun_paper",
+    "micro_live",
+    "manual_operator_decision"
+  ],
+  "implementation_invariants": [
+    "Source artifacts must remain readable and unmodified by warehouse rebuilds.",
+    "Repeated imports over the same inputs must produce stable candidate_id values.",
+    "A gate verdict cannot be written without candidate_id, policy_id, verdict, metric_snapshot, and artifact_path.",
+    "Legacy artifacts with insufficient identity must be tagged legacy_unresolved instead of silently coerced.",
+    "Execution gap events must use one of the allowed gap types."
+  ],
+  "initial_implementation_sequence": [
+    "protocol_validator",
+    "candidate_identity_helper",
+    "read_only_import_for_phase61_62_replay_artifacts",
+    "dryrun_reconcile_import",
+    "gate_policy_and_verdict_writer"
+  ],
+  "invalidation_rule": "If candidate identity fields, verdict identity, or allowed execution gap types change, this protocol must be reopened and re-frozen before warehouse implementation proceeds."
+}

@@ -5,6 +5,7 @@
 - Completed historical items are archived in `plans/AUTOWFO_TODO_ARCHIVE.md`.
 - Allowed statuses: `todo`, `doing`, `blocked`, `done`.
 - Policy is authoritative in `plans/AUTOWFO_DEVELOPMENT_PRINCIPLES.md`; plans and TODO entries must not override it.
+- Survivalism work must cite the framework, evidence warehouse, gate policy, lifecycle, or frozen protocols before implementation.
 
 ## Active Phase
 - Phase 63: Parallel Exploitation + Exploration (Route C).
@@ -22,6 +23,23 @@
 - Fast path: keep using AUTOWFO for strategy/indicator discovery and the existing Freqtrade bridge for backtest, dry-run paper trading, reconcile, and drift checks.
 - Do not add new broad search dimensions unless they map to the active Phase 63 workstreams below.
 - Do not let Freqtrade own strategy logic; it consumes AUTOWFO signal artifacts and reports execution evidence back.
+- Next implementation direction, once explicitly started by the user: Evidence Warehouse V1 before Risk Engine V1.
+
+## Required Context For New Survivalism Work
+- North star: `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`
+- Decision record: `plans/AUTOWFO_DECISION_LOG.md`
+- First implementation spec: `plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`
+- Gate policy: `plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`
+- Strategy lifecycle: `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`
+- Frozen protocols:
+  - `plans/protocols/evidence_warehouse_v1.json`
+  - `plans/protocols/survival_gate_policy_v1.json`
+
+Suggested first new implementation item after user start:
+
+| ID | Status | Task | Hypothesis | Metric | Accept threshold | Rollback |
+|---|---|---|---|---|---|---|
+| AWF-360 | todo | Evidence warehouse protocol validator and candidate identity helper | stable identity enables old/new candidate comparison | JSON protocol validation + repeated ID equality | protocol validates and same candidate definition yields same candidate_id | keep planning-only; do not import legacy data |
 
 ## Active Items
 

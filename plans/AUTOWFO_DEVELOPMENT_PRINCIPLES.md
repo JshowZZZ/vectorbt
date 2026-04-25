@@ -1,7 +1,8 @@
 # AUTOWFO Development Principles
 
 This file freezes the execution-policy baseline introduced by
-`plans/AUTOWFO_PHASE61_62_PLAN_V2.md`.
+`plans/AUTOWFO_PHASE61_62_PLAN_V2.md` and extends it with the
+2026-04-25 survivalism planning baseline.
 Downstream files should reference this document instead of re-stating the rules.
 If this file and any AUTOWFO plan diverge, this file is authoritative for policy.
 Plans may hold implementation detail but cannot override rules here.
@@ -15,6 +16,10 @@ Plans may hold implementation detail but cannot override rules here.
 5. Time-local is not an adapter problem: if a candidate remains time-local after parity is fixed, route it to rolling-anchor replay rather than patching execution logic.
    - Caveat: this rule assumes parity repair does not materially change replay outcomes. If AWF-339 shows parity repair substantially shifts per-row PnL or trade counts versus the pre-fix AWF-331 baseline, revisit this rule before applying it to any time-local candidate. The quantitative threshold for "substantially" is deferred to AWF-339 result review.
 6. Kill-switch principle must be written, not activated: the live kill-switch rule (reconcile mismatch threshold, zero-fill day threshold, halt action) must be frozen in the repo policy surface before activation. Activation belongs to a later phase. Writing the rule early prevents downstream work from designing around its absence.
+7. Survivalism before expansion: new strategy, data, risk, UI, and execution work must support `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`.
+8. Evidence warehouse before risk engine: do not implement sizing, micro-live, or risk-engine enforcement until evidence identity and verdict contracts exist.
+9. Versioned gates only: Survival Gate policies may evolve, but every verdict must record `policy_id` and immutable metric evidence.
+10. Repo records before handoff: any material direction change must be written to `plans/AUTOWFO_DECISION_LOG.md` or a referenced plan/protocol before implementation.
 
 ## 2. Hypothesis Template
 
@@ -85,3 +90,54 @@ Use it when deriving `plans/AUTOWFO_PARITY_GATE_V1.md`.
 - `n <= 3`: do not derive a gate; mark the item blocked and expand rerun scope first.
 
 Do not replace this policy with ad-hoc medians, minima, or narrative judgments.
+
+## 7. Survivalism Governance
+
+This section is authoritative for the survivalism workstream.
+
+Required references for survivalism implementation tasks:
+
+- `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`
+- `plans/AUTOWFO_DECISION_LOG.md`
+- `plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`
+- `plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`
+- `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`
+
+Implementation order:
+
+```text
+Framework
+-> Evidence Warehouse
+-> Survival Gate Policy
+-> Strategy Lifecycle
+-> Reality Gap Reports
+-> Control-panel cockpit
+-> Risk Engine / Micro-live readiness
+```
+
+Rules:
+
+- Do not implement `Risk Engine v1` before Evidence Warehouse V1 can provide
+  stable candidate, cost, gap, and verdict records.
+- Do not accept a strategy promotion rule based only on win rate.
+- Do not overwrite historical gate verdicts after policy changes; write a new
+  verdict with the new `policy_id`.
+- Do not bulk-migrate old artifacts before candidate identity and provenance are
+  available; mark unresolved legacy rows as `legacy_unresolved`.
+- Do not add a new strategy runner that bypasses the lifecycle states in
+  `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`.
+
+## 8. Agent Task Reference Policy
+
+Every new AWF or Codex task in the survivalism workstream must cite at least one
+of:
+
+- `plans/AUTOWFO_SURVIVALISM_FRAMEWORK.md`
+- `plans/AUTOWFO_EVIDENCE_WAREHOUSE_V1.md`
+- `plans/AUTOWFO_SURVIVAL_GATE_POLICY.md`
+- `plans/AUTOWFO_STRATEGY_LIFECYCLE.md`
+- `plans/protocols/evidence_warehouse_v1.json`
+- `plans/protocols/survival_gate_policy_v1.json`
+
+If an implementation task cannot name the evidence artifact it will produce, it
+should remain a planning task.
