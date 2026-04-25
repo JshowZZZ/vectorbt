@@ -614,6 +614,82 @@ def rebuild_analytics(artifacts_dir: str | Path = "artifacts") -> dict:
     }
 
 
+def _load_required_json(path: Path, *, label: str) -> Any:
+    payload, error = _read_json(path)
+    if error:
+        raise ValueError(f"unreadable {label}: {error}")
+    return payload
+
+
+def build_execution_drift_report(
+    artifacts_dir: str | Path = "artifacts",
+    *,
+    protocol_path: str | Path = "plans/protocols/execution_drift_report_v1.json",
+    output_path: str | Path | None = None,
+) -> dict:
+    artifacts = Path(artifacts_dir)
+    resolved_protocol_path = Path(protocol_path).resolve()
+    protocol = _load_required_json(resolved_protocol_path, label="execution drift protocol")
+    if not isinstance(protocol, dict):
+        raise ValueError("execution drift protocol must decode to object")
+
+    source_contract = dict(protocol.get("source_contract") or {})
+    summary_path = Path(str(source_contract.get("summary_path") or "")).resolve()
+    summary_payload = _load_required_json(summary_path, label="awf331 rerun summary")
+    if not isinstance(summary_payload, dict):
+        raise ValueError("awf331 rerun summary must decode to object")
+
+    sample_files = dict(source_contract.get("sample_output_files") or {})
+    if not sample_files:
+        prototype_dir = Path(str(source_contract.get("prototype_output_dir") or "")).resolve()
+        sample_files = {
+            "row_level_drift": str(prototype_dir / "01_row_level_drift.sample.json"),
+            "pair_direction_drift": str(prototype_dir / "02_pair_direction_drift.sample.json"),
+            "source_consistency": str(prototype_dir / "03_source_consistency.sample.json"),
+        }
+
+    report_section_names = list((protocol.get("artifact_contract") or {}).get("report_section_names") or [])
+    if not report_section_names:
+        report_section_names = list((protocol.get("report_sections") or {}).keys())
+
+    report_sections: dict[str, Any] = {}
+    section_counts: dict[str, int] = {}
+    for section_name in report_section_names:
+        sample_path = Path(str(sample_files.get(section_name) or "")).resolve()
+        section_payload = _load_required_json(sample_path, label=f"{section_name} sample output")
+        if not isinstance(section_payload, list):
+            raise ValueError(f"{section_name} sample output must decode to list")
+        report_sections[section_name] = section_payload
+        section_counts[section_name] = len(section_payload)
+
+    row_scope_count = len(list(summary_payload.get("rows") or []))
+    if not row_scope_count:
+        row_scope_count = _safe_int(((summary_payload.get("aggregate") or {}).get("row_count")), default=0)
+
+    payload = {
+        "schema_version": str(protocol.get("schema_version") or ""),
+        "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "source_summary_path": str(summary_path),
+        "protocol_path": str(resolved_protocol_path),
+        "query_snapshot_dir": str(Path(str(source_contract.get("prototype_output_dir") or "")).resolve()),
+        "row_scope_count": row_scope_count,
+        "report_sections": report_sections,
+    }
+    reports_dir = artifacts / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    resolved_output_path = Path(output_path).resolve() if output_path else (reports_dir / "execution_drift_report.json").resolve()
+    resolved_output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "ok": True,
+        "artifacts_dir": str(artifacts),
+        "protocol_path": str(resolved_protocol_path),
+        "report_path": str(resolved_output_path),
+        "schema_version": payload["schema_version"],
+        "row_scope_count": row_scope_count,
+        "section_counts": section_counts,
+    }
+
+
 def _iter_trusted_run_roots(artifacts_dir: Path) -> list[Path]:
     runs_root = artifacts_dir / "runs"
     if not runs_root.exists():

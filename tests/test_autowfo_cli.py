@@ -3030,6 +3030,62 @@ def test_cli_storage_rebuild_analytics_builds_duckdb(tmp_path):
     assert (artifacts / "analytics.duckdb").exists()
 
 
+def test_cli_storage_drift_report_writes_json_artifact(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    scratch_dir = artifacts / "scratch" / "duckdb_drift_prototypes"
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = artifacts / "freqtrade_bridge" / "awf331_rerun_summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps({"rows": [{"row_id": "row_a"}], "aggregate": {"row_count": 1}}), encoding="utf-8")
+
+    protocol_path = tmp_path / "plans" / "protocols" / "execution_drift_report_v1.json"
+    protocol_path.parent.mkdir(parents=True, exist_ok=True)
+    protocol_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "name": "execution_drift_report_v1",
+                "source_contract": {
+                    "summary_path": str(summary_path),
+                    "prototype_output_dir": str(scratch_dir),
+                },
+                "artifact_contract": {
+                    "report_section_names": [
+                        "row_level_drift",
+                        "pair_direction_drift",
+                        "source_consistency",
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    for name in ("01_row_level_drift.sample.json", "02_pair_direction_drift.sample.json", "03_source_consistency.sample.json"):
+        (scratch_dir / name).write_text(json.dumps([{"row_id": "row_a"}]), encoding="utf-8")
+
+    output_path = artifacts / "reports" / "execution_drift_report.json"
+
+    code = cli.main(
+        [
+            "storage",
+            "drift-report",
+            "--artifacts-dir",
+            str(artifacts),
+            "--cwd",
+            str(tmp_path),
+            "--protocol-path",
+            str(protocol_path),
+            "--output-json",
+            str(output_path),
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "1.0.0"
+    assert payload["row_scope_count"] == 1
+
+
 def test_cli_storage_rebuild_shared_views_builds_root_compatibility_outputs(tmp_path):
     artifacts = tmp_path / "artifacts"
     workspace = cli.importlib.import_module("autowfo.run_workspace").build_run_workspace(tmp_path, "20260314_050000")
@@ -3125,4 +3181,3 @@ def test_cli_storage_compare_ranking_parses_config_and_resolves_outputs(tmp_path
     assert captured["top_n"] == 7
     assert captured["output_json"] == tmp_path / "reports" / "cmp.json"
     assert captured["output_html"] == tmp_path / "reports" / "cmp.html"
-

@@ -15,6 +15,7 @@ from autowfo.storage_contract import (
 )
 from autowfo.storage_ops import (
     compare_ranking_configs,
+    build_execution_drift_report,
     migrate_storage,
     purge_legacy_outputs,
     rebuild_analytics,
@@ -190,6 +191,70 @@ def test_rebuild_analytics_recreates_duckdb_from_run_artifacts(tmp_path):
     growth = analytics.query_analytics_growth()
     assert growth["total_runs"] == 1
     assert growth["total_combos"] == 1
+
+
+def test_build_execution_drift_report_writes_versioned_artifact(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    bridge_dir = artifacts / "freqtrade_bridge"
+    bridge_dir.mkdir(parents=True)
+    scratch_dir = artifacts / "scratch" / "duckdb_drift_prototypes"
+    scratch_dir.mkdir(parents=True)
+
+    summary_path = bridge_dir / "awf331_rerun_summary.json"
+    protocol_path = tmp_path / "plans" / "protocols" / "execution_drift_report_v1.json"
+    protocol_path.parent.mkdir(parents=True)
+
+    summary_path.write_text(
+        json.dumps(
+            {
+                "rows": [{"row_id": "row_a"}],
+                "aggregate": {"row_count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    protocol_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "name": "execution_drift_report_v1",
+                "source_contract": {
+                    "summary_path": str(summary_path),
+                    "prototype_output_dir": str(scratch_dir),
+                },
+                "artifact_contract": {
+                    "report_section_names": [
+                        "row_level_drift",
+                        "pair_direction_drift",
+                        "source_consistency",
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    for name in ("01_row_level_drift.sample.json", "02_pair_direction_drift.sample.json", "03_source_consistency.sample.json"):
+        (scratch_dir / name).write_text(json.dumps([{"row_id": "row_a"}]), encoding="utf-8")
+
+    payload = build_execution_drift_report(
+        artifacts,
+        protocol_path=protocol_path,
+        output_path=artifacts / "reports" / "execution_drift_report.json",
+    )
+
+    assert payload["ok"] is True
+    assert payload["schema_version"] == "1.0.0"
+    assert payload["row_scope_count"] == 1
+    assert payload["report_path"] == str((artifacts / "reports" / "execution_drift_report.json").resolve())
+    written = json.loads((artifacts / "reports" / "execution_drift_report.json").read_text(encoding="utf-8"))
+    assert written["schema_version"] == "1.0.0"
+    assert written["row_scope_count"] == 1
+    assert set(written["report_sections"].keys()) == {
+        "row_level_drift",
+        "pair_direction_drift",
+        "source_consistency",
+    }
 
 
 def test_rebuild_shared_views_recreates_root_compatibility_outputs(tmp_path):

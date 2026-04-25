@@ -1,5 +1,18 @@
 {
   "mcpServers": {
+    "duckdb_awf342a": {
+      "command": "python",
+      "args": [
+        "-m",
+        "uv",
+        "tool",
+        "run",
+        "mcp-server-motherduck",
+        "--db-path",
+        ":memory:",
+        "--read-write"
+      ]
+    },
     "freqtrade_awf342b": {
       "command": "python",
       "args": [

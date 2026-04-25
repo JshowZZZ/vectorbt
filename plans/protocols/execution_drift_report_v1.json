@@ -1,0 +1,161 @@
+{
+  "schema_version": "1.0.0",
+  "awf_id": "AWF-345",
+  "name": "execution_drift_report_v1",
+  "frozen_on": "2026-04-18",
+  "purpose": "Freeze the first reproducible execution drift report schema from the proven AWF-344 DuckDB query shape before any CLI artifact writer is implemented.",
+  "source_contract": {
+    "summary_path": "E:/Project/vectorbt-master/artifacts/freqtrade_bridge/awf331_rerun_summary.json",
+    "signal_manifest_glob": "artifacts/freqtrade_bridge/*/signal_manifest.json",
+    "parity_report_glob": "artifacts/freqtrade_bridge/awf339/*/parity_report.json",
+    "prototype_output_dir": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes",
+    "prototype_query_files": {
+      "row_level_drift": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/01_row_level_drift.sql",
+      "pair_direction_drift": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/02_pair_direction_drift.sql",
+      "source_consistency": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/03_source_consistency.sql"
+    },
+    "sample_output_files": {
+      "row_level_drift": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/01_row_level_drift.sample.json",
+      "pair_direction_drift": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/02_pair_direction_drift.sample.json",
+      "source_consistency": "E:/Project/vectorbt-master/artifacts/scratch/duckdb_drift_prototypes/03_source_consistency.sample.json"
+    }
+  },
+  "identity_contract": {
+    "row_key": [
+      "row_id"
+    ],
+    "pair_direction_key": [
+      "row_id",
+      "pair",
+      "direction"
+    ],
+    "source_join_keys": [
+      "signal_bundle_id",
+      "parity_bundle_id"
+    ],
+    "row_scope_expectation": {
+      "expected_unique_row_count": 10,
+      "expected_source": "awf331_rerun_summary.json rows array"
+    }
+  },
+  "report_sections": {
+    "row_level_drift": {
+      "description": "One row per AWF-339 rerun scope member with row-level parity quality, delta-vs-legacy fields, and a derived severity bucket.",
+      "query_file": "01_row_level_drift.sql",
+      "required_fields": [
+        "row_id",
+        "filter_name",
+        "indicator_list",
+        "regime_name",
+        "vol_mode",
+        "timeframe",
+        "data_days",
+        "verdict",
+        "open_match_ratio",
+        "exact_match_ratio",
+        "trade_count_delta",
+        "abs_trade_count_delta",
+        "profit_ratio_abs_delta_mean",
+        "delta_vs_legacy_open_match_ratio",
+        "delta_vs_legacy_exact_match_ratio",
+        "delta_vs_legacy_trade_count_delta",
+        "drift_severity"
+      ],
+      "sort_order": [
+        "drift_severity(high->medium->low)",
+        "exact_match_ratio ASC",
+        "open_match_ratio ASC",
+        "row_id ASC"
+      ],
+      "severity_policy": {
+        "high": "open_match_ratio < 0.99 or abs_trade_count_delta > 0",
+        "medium": "exact_match_ratio < 0.60 when the high condition is false",
+        "low": "all other rows"
+      }
+    },
+    "pair_direction_drift": {
+      "description": "Pair-direction concentration for any row with non-zero pair delta or exact parity below the prototype review floor.",
+      "query_file": "02_pair_direction_drift.sql",
+      "required_fields": [
+        "row_id",
+        "pair",
+        "direction",
+        "autowfo_count",
+        "freqtrade_count",
+        "delta",
+        "open_match_ratio",
+        "exact_match_ratio"
+      ],
+      "filter_policy": "Include rows where pair delta is non-zero or the parent row exact_match_ratio is below 0.60.",
+      "sort_order": [
+        "exact_match_ratio ASC",
+        "pair ASC",
+        "direction ASC"
+      ]
+    },
+    "source_consistency": {
+      "description": "Bundle-id join audit between row summaries and the frozen signal manifest / awf339 parity report artifacts.",
+      "query_file": "03_source_consistency.sql",
+      "required_fields": [
+        "row_id",
+        "normalized_signal_manifest_path",
+        "normalized_parity_report_path",
+        "signal_bundle_id",
+        "parity_bundle_id",
+        "manifest_filename",
+        "parity_filename",
+        "source_timeframe",
+        "manifest_pair_count",
+        "signal_rows",
+        "open_match_ratio",
+        "report_open_match_ratio",
+        "exact_match_ratio",
+        "report_exact_match_ratio",
+        "freqtrade_trade_count",
+        "report_freqtrade_trade_count",
+        "signal_manifest_joined",
+        "parity_report_joined"
+      ],
+      "required_conditions": [
+        "signal_manifest_joined must be true for every row",
+        "parity_report_joined must be true for every row",
+        "report_open_match_ratio must equal open_match_ratio",
+        "report_exact_match_ratio must equal exact_match_ratio",
+        "report_freqtrade_trade_count must equal freqtrade_trade_count"
+      ]
+    }
+  },
+  "artifact_contract": {
+    "top_level_fields": [
+      "schema_version",
+      "generated_utc",
+      "source_summary_path",
+      "query_snapshot_dir",
+      "row_scope_count",
+      "report_sections"
+    ],
+    "report_section_names": [
+      "row_level_drift",
+      "pair_direction_drift",
+      "source_consistency"
+    ],
+    "invariants": [
+      "row_scope_count must equal 10 for the frozen AWF-339 scope",
+      "row_level_drift row count must equal row_scope_count",
+      "source_consistency row count must equal row_scope_count",
+      "signal_manifest_joined must be true for every source_consistency row",
+      "parity_report_joined must be true for every source_consistency row"
+    ]
+  },
+  "human_review_checkpoint": {
+    "required_before": "AWF-346",
+    "reason": "CLI output and downstream artifacts should not be implemented until the drift report schema is explicitly approved.",
+    "review_inputs": [
+      "plans/protocols/execution_drift_report_v1.json",
+      "artifacts/scratch/duckdb_drift_prototypes/01_row_level_drift.sample.json",
+      "artifacts/scratch/duckdb_drift_prototypes/02_pair_direction_drift.sample.json",
+      "artifacts/scratch/duckdb_drift_prototypes/03_source_consistency.sample.json"
+    ]
+  },
+  "invalidation_rule": "If AWF-344 query files, frozen summary path, or source join keys change, this schema must be reopened and re-frozen before AWF-346 proceeds."
+}

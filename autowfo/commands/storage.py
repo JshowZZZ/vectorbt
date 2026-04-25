@@ -85,6 +85,25 @@ def add_storage_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: A
     compare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
     compare_parser.set_defaults(handler=cli_impl._cmd_storage_compare_ranking)
 
+    drift_report_parser = storage_subparsers.add_parser(
+        "drift-report",
+        help="Build execution drift report artifact from frozen AWF-345 protocol inputs",
+    )
+    drift_report_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    drift_report_parser.add_argument("--cwd", default=".", help="Working directory")
+    drift_report_parser.add_argument(
+        "--protocol-path",
+        default="plans/protocols/execution_drift_report_v1.json",
+        help="Path to the frozen execution drift report protocol JSON",
+    )
+    drift_report_parser.add_argument(
+        "--output-json",
+        default="",
+        help="Optional output artifact path (defaults to artifacts/reports/execution_drift_report.json)",
+    )
+    drift_report_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    drift_report_parser.set_defaults(handler=cli_impl._cmd_storage_drift_report)
+
 
 def _resolve_artifacts_dir(args: argparse.Namespace, cli_impl: Any) -> Path:
     cwd = Path(args.cwd).resolve()
@@ -192,6 +211,21 @@ def cmd_storage_compare_ranking(args: argparse.Namespace, cli_impl: Any) -> int:
         top_n=int(getattr(args, "top_n", 10) or 10),
         output_json=(cli_impl._resolve_path(cwd, output_json) if output_json else None),
         output_html=(cli_impl._resolve_path(cwd, output_html) if output_html else None),
+    )
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_drift_report(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo.storage_ops import build_execution_drift_report
+
+    cwd = Path(args.cwd).resolve()
+    protocol_path = cli_impl._resolve_path(cwd, str(getattr(args, "protocol_path", "") or ""))
+    output_json = str(getattr(args, "output_json", "") or "").strip()
+    payload = build_execution_drift_report(
+        _resolve_artifacts_dir(args, cli_impl),
+        protocol_path=protocol_path,
+        output_path=(cli_impl._resolve_path(cwd, output_json) if output_json else None),
     )
     _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
     return 0 if payload.get("ok") else 1

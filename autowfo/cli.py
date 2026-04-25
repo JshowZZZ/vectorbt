@@ -312,6 +312,10 @@ def _cmd_storage_compare_ranking(args: argparse.Namespace) -> int:
     return cmd_storage.cmd_storage_compare_ranking(args, _self())
 
 
+def _cmd_storage_drift_report(args: argparse.Namespace) -> int:
+    return cmd_storage.cmd_storage_drift_report(args, _self())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autowfo", description="AUTOWFO one-command workflows")
     parser.add_argument("--version", action="version", version=f"autowfo {AUTOWFO_VERSION}")
