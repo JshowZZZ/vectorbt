@@ -17,9 +17,12 @@ indicators, symbols, and time windows to discover robust combinations.
   - In-sample selection and out-of-sample validation.
   - Stability-first ranking across splits and symbols.
   - Reproducible experiment outputs (artifacts and metadata).
-- Out of scope (initially):
-  - Live trading execution infrastructure.
-  - Exchange-specific order routing.
+- Current execution-validation scope:
+  - Freqtrade backtest cross-checks for frozen AUTOWFO signal lanes.
+  - Freqtrade dry-run paper trading and daily reconciliation for promoted candidates.
+  - Drift artifacts that compare AUTOWFO replay, Freqtrade replay, and dry-run behavior.
+- Out of scope:
+  - Exchange order routing inside AUTOWFO.
   - Full AutoML/Bayesian orchestration across external clusters.
 
 ## Architectural Direction
@@ -30,7 +33,7 @@ indicators, symbols, and time windows to discover robust combinations.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-03-14. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; mutable experiment, scheduler, paper, and analytics stores carry explicit schema-version contracts plus operator-facing validation/migration/rebuild tooling. New operational risk discovered on 2026-03-14: root-level `artifacts/` run outputs can lose single-run provenance when reused as a shared workspace, so evidence-integrity reset is now the active focus. Gates A+D remain passed.
+> Updated 2026-04-25. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; CLI automation is first-class for repeatable run, bridge, storage, and drift workflows. Phase 61-62 is closed: the corrected Freqtrade raw-signal contract has been rerun, parity gates are frozen, DuckDB/drift tooling exists, and the first execution drift artifact path is reproducible. Phase 63 is active: run paper trading exploitation and bounded strategy-search expansion in parallel.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -39,15 +42,17 @@ indicators, symbols, and time windows to discover robust combinations.
 | Indicator framework (25) | Schema-backed (`strategy_schema.py`) | Expanded | 13->25 indicators; C(25,2..4) = 15,250 combos |
 | Regime logic (8 types) | Schema-backed | Frozen | Adding regimes is config-only |
 | Combo search (15,250+) | Modular (`search.py` + `pruning.py`) | Intelligent pruning | PruningTracker: per-indicator score tracking, adaptive threshold, warm-start, budget cap, batch dispatch |
-| Two-stage search | combo/refine modes | Working | AWF-008 done |
+| Two-stage and pilot search | combo/refine + bounded paired pilots | Working | Phase 63 limits expansion to non-trend regimes, 4h, and 360d validation |
 | Ranking | Modular (`ranking.py`) | Upgraded | Composite score default + legacy mode preserved + config-driven weights; paired comparison report pipeline ready (AWF-006/007 complete) |
 | Artifacts (CSV/DB/HTML) | Reproducible (`artifacts.py` + contract) | Frozen | Config hash + data fingerprint included |
 | Parallel evaluation | 3-worker (`parallel.py`) | x2.66 speedup | Bit-identical verified |
 | Run registry | (`registry.py`) | Working | Coverage map across timeframe/symbol |
-| CLI entrypoint | `python -m autowfo` | Working | `run` + `baseline` + `batch` + `plan` + `report` subcommands |
-| Regression tests | 87 tests / 18 files | Green | Split + ranking invariants covered |
-| Operational runbook | `AUTOWFO_RUNBOOK.md` | Complete | Preflight/run/post-run checklist |
-| Web control panel | Static tabs + batch + coverage + dashboard/history | Complete (Phase 8) | Next gap is ranking-quality upgrades (AWF-002b/006) now immediate |
+| CLI entrypoint | `python -m autowfo` | Working | run/baseline/batch/plan/report/bridge/storage/drift commands |
+| Freqtrade bridge | signal bundle + replay + live signal producer + dry-run reconcile | Active | Need Phase 63 paper verdict from 7/14-day evidence |
+| Drift tooling | DuckDB prototypes + `storage drift-report` | Reproducible | First real artifact exists; aggregate paper drift still pending |
+| Regression tests | Focused AUTOWFO suites | Green when run through `python -m pytest` | `pytest.exe` launcher may be blocked by Windows policy |
+| Operational runbook | `AUTOWFO_RUNBOOK.md` | Active | Needs FT bridge/dry-run/drift command surface kept current |
+| Web control panel | Packaged local UI + static tabs + dashboard/history | Complete for routine operations | CLI remains required for reproducible bridge/drift automation |
 
 ## Milestones
 
@@ -82,12 +87,17 @@ indicators, symbols, and time windows to discover robust combinations.
 
 ### Phase 63: Parallel Exploitation + Exploration (AWF-348~359) [Active]
 - Route C decision: paper trading runs in parallel with strategy search expansion.
+- Operator intent: get to viable strategy-indicator combinations quickly by reusing the current Freqtrade bridge path, not by reopening the core architecture.
 - Workstream A (AWF-348~351): validate the frozen canonical candidate via FT dry-run; accumulate ≥14 days of reconciliation evidence.
 - Workstream B (AWF-352~359): explore three untested dimensions:
   - B1: non-trend regimes (rsi_revert, bb_revert, bb_breakout) — never searched
   - B2: 4h timeframe — never searched
   - B3: 360d extended window — cross-cycle robustness validation
   - B4: housekeeping (hardcoded paths, bridge audit items)
+- Engineering view:
+  - Keep AUTOWFO as the strategy-search source of truth.
+  - Use Freqtrade as a second engine and paper/live execution adapter only.
+  - Do not expand indicators or execution semantics without a replay/paper artifact that justifies the extra search cost.
 - Exit: both workstreams report verdicts → Phase 64 entry decision
 
 ### Phase 60: Hierarchical State-Trigger Mode Opening (AWF-302/303/304) [Frozen]
@@ -1367,7 +1377,7 @@ Each experiment should record:
 
 - 2026-02-24: Project status synchronization + upload batch completed. Consolidated large pending changes across AUTOWFO engine split (`engine_search.py` / `engine_finalize.py` / `engine_report.py`), control-panel modular frontend (`api.js`, `i18n.js`, `components.js`, tab modules), and protocol/docs updates (`split_protocol.yaml`, `strategy_schema.json`, `AUTOWFO_TODO.md`, `AGENTSMD_INTEGRATION.md`). Validation run for this upload batch: `pytest tests/test_autowfo_cli.py tests/test_autowfo_cross_run.py tests/test_control_panel.py tests/test_autowfo_e2e.py tests/test_autowfo_gate_e.py -q` -> `172 passed`.
 - 2026-02-25: Design audit completed. Phase 18 (Technical Debt) and Phase 19 (UX Redesign) defined with AWF-109嚚WF-124. Two confirmed correctness bugs identified via code inspection: (1) `control_panel.DEFAULT_CONFIG` missing 8 keys vs `engine_helpers.DEFAULT_CONFIG` ??UI generates incomplete configs silently (AWF-109). (2) Control panel Run button calls `run_btc_regime_sweep.py` directly, bypassing `python -m autowfo` ??all AWF-105/106/107/108 CLI guards inactive for single runs (AWF-110). UX audit revealed 6-tab layout mirrors system internals rather than user workflow (Config?un?esults?ill Gaps?epeat); AWF-118嚚WF-124 define targeted redesign. `AUTOWFO_TODO.md` updated with 16 new task entries, Phase 18/19 Execution Phase descriptions, and updated Current Focus Window.
-- 2026-02-27: **Architecture V2 direction approved.** Role shift: planning/architecture responsibilities assigned to Claude (Sonnet 4.6); implementation delegated to other AI agents. Key decisions confirmed: (1) Cross-asset trigger+action model (trigger asset may differ from action asset); (2) Cross-timeframe signals (T1 ??T2, both directions); (3) Indicator plugin system (`indicators/` auto-discovery directory); (4) Experiment as fundamental testable unit (JSON schema with trigger/action/risk/wf layers); (5) Two-layer storage ??SQLite per-run (fast writes) + DuckDB analytics (cross-run OLAP); (6) Mode C ??both hypothesis-driven (Mode A) and pool-discovery (Mode B) co-exist; (7) Fresh start on existing artifacts acceptable; (8) Freqtrade bridge deferred; (9) vectorbt retained as compute engine; (10) Control panel remains sole user interface. Full spec written to `plans/AUTOWFO_ARCHITECTURE_V2.md`. Phases 20-24 (AWF-125~145) added to MASTER_PLAN. AWF-113~116 decomposition debt deferred to parallel housekeeping.
+- 2026-02-27: **Architecture V2 direction approved.** Role shift: planning/architecture responsibilities assigned to Claude (Sonnet 4.6); implementation delegated to other AI agents. Key decisions confirmed at that time: (1) Cross-asset trigger+action model (trigger asset may differ from action asset); (2) Cross-timeframe signals (T1 ??T2, both directions); (3) Indicator plugin system (`indicators/` auto-discovery directory); (4) Experiment as fundamental testable unit (JSON schema with trigger/action/risk/wf layers); (5) Two-layer storage ??SQLite per-run (fast writes) + DuckDB analytics (cross-run OLAP); (6) Mode C ??both hypothesis-driven (Mode A) and pool-discovery (Mode B) co-exist; (7) Fresh start on existing artifacts acceptable; (8) Freqtrade bridge was not yet active; (9) vectorbt retained as compute engine; (10) Control panel was the initial user interface. Superseded by Phase 61-63: Freqtrade bridge, CLI automation, dry-run paper, and drift tooling are now active operating surfaces. Full spec written to `plans/AUTOWFO_ARCHITECTURE_V2.md`. Phases 20-24 (AWF-125~145) added to MASTER_PLAN. AWF-113~116 decomposition debt deferred to parallel housekeeping.
 - 2026-02-26: Phase 18 (AWF-109~117) and Phase 19 (AWF-118~124) implementation complete. AWF-109: `DEFAULT_CONFIG` single-source (control_panel.py imports from engine_helpers). AWF-110: Run button now calls `python -m autowfo run` via CLI. AWF-111: Cross-platform `_python_path()` helper (Windows/Linux/macOS/fallback). AWF-112: `constants.py` UTF-8 normalization (direct strings, HTML escape at render layer). AWF-118: Config instant validation hints for walk-forward parameters. AWF-119: Quick Test panel moved from Overview to Config (collapsed). AWF-120: Overview operations hub with smart next-action guidance card. AWF-121: Unified execution entry ??combo/refine mode selector on Overview Start Run; Coverage "Start Batch" removed. AWF-122: Coverage "Fill All Gaps" one-click flow + `POST /coverage/fill-all-gaps` endpoint. AWF-123: Results "蝎曆耨" button sets `store.pendingRunMode` and navigates to Overview. AWF-124: Dashboard "銝活?湔" freshness label + "撘瑕??渡?" rename. AWF-117: Archived AWF-000~063 to `plans/AUTOWFO_TODO_ARCHIVE.md`; TODO.md slimmed to AWF-064+; Phase 16 summary condensed. Remaining debt: AWF-113/114 (control_panel.py / cli.py decomposition), AWF-115/116 (engine private exports / sys.path).
 
 - 2026-02-28: Phase 25 structural debt closure completed (AWF-113~116). `scripts/control_panel.py` and `autowfo/cli.py` are now thin facades; responsibility surfaces split into `control_panel_*` and `autowfo/commands/*`; `scripts/autowfo/engine.py` now exports only `DEFAULT_CONFIG`; package-path cleanup landed (`pyproject.toml` include covers `autowfo*` + `scripts*`, plus `scripts/__init__.py` and `scripts/autowfo/__init__.py`), and runtime `sys.path.insert` hack was removed.

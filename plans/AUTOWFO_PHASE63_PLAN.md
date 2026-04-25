@@ -10,6 +10,17 @@
 
 Phase 63 runs two independent workstreams that do not block each other.
 
+## Operator Intent
+
+The shortest path to a usable strategy is not another broad architecture rewrite. It is:
+
+1. keep AUTOWFO as the strategy-search and signal-truth system
+2. validate the frozen canonical lane through the existing Freqtrade dry-run path
+3. run only bounded search expansions that answer a named hypothesis
+4. promote or close branches from replay, parity, and paper evidence
+
+Freqtrade is the second engine and execution adapter. It should backtest, dry-run, reconcile, and eventually execute AUTOWFO signals; it should not become the strategy-search source.
+
 ---
 
 ### Workstream A — Paper Trading Exploitation (AWF-348 ~ AWF-351)

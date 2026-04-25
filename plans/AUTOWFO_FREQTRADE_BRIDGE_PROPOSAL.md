@@ -1,13 +1,13 @@
 # AUTOWFO × Freqtrade Bridge Proposal: Paper/Live 交叉驗證疊代計畫
 
-> Status: **Phase A 完成，Phase B（dry-run）已實作並進入觀察期** — 2026-04-13
-> Date: 2026-04-12（最初起草），2026-04-13（Phase B 更新）
+> Status: **Bridge 已落地；Phase 61–62 parity/drift reset 已關閉；Phase 63 dry-run paper 觀察啟動** — 2026-04-25
+> Date: 2026-04-12（最初起草），2026-04-13（Phase B 更新），2026-04-25（Phase 63 現況同步）
 > Scope: 主系統 (AUTOWFO) 與第二系統 (Freqtrade) 的介接規劃與疊代模型
-> Decision state: AWF-327–330 已落地；AWF-332–337 已落地並在本機 dry-run 運行；AWF-331 parity gate 延後與 dry-run 並行觀察
+> Decision state: AWF-327–337 已落地；AWF-338–347 已完成 corrected raw-signal contract rerun、parity gate、drift schema、storage drift-report CLI；Phase 63 走 Route C（paper exploitation + bounded search expansion）
 
 ---
 
-## 0. 當前進度快照（2026-04-13 更新）
+## 0. 當前進度快照（2026-04-25 更新）
 
 ### Phase A（backtest cross-check）— 已完成
 
@@ -17,7 +17,7 @@
 | AWF-328 | `export_signal_bundle()` + `bridge-export-signal-store` CLI | ✅ done |
 | AWF-329 | `AutowfoGenericSignalStrategyLongOnly/LongShort` | ✅ done |
 | AWF-330 | `bridge-cross-check` + parity report | ✅ done |
-| AWF-331 | Parity gate 實際驗證（route-B mapped replay） | ✅ done（gate frozen as `review`） |
+| AWF-331 / 339 / 340 | corrected raw-signal contract parity rerun + gate freeze | done |
 | AWF-332 | Dry-run pair format decision（route B: BTC-cross -> USDT perpetual 映射） | ✅ done |
 | AWF-333 | `bridge-live-signal` + `live_signal_producer.py` | ✅ done |
 | AWF-334 | `AutowfoLiveSignalStrategyLongShort` live-mode strategy | ✅ done |
@@ -25,18 +25,18 @@
 | AWF-336 | 背景 start/stop/watch 腳本 + log management | ✅ done |
 | AWF-337 | Daily dry-run reconcile artifact | ✅ done |
 
-煙霧測試：`bridge-export-signal-store` → 8 pairs、82 enter_long/short、`AutowfoGenericSignalStrategyLongShort`；`bridge-cross-check --prepare-only` → exit 0，config 已備妥。
-目前本機 managed dry-run stack 已啟動；`artifacts/live_signal_store/live_manifest.json` 已持續更新，`artifacts/paper_dryrun/daily_summary_20260413.json` 已生成首份對帳摘要（目前尚無成交）。另外，AWF-331 已完成 route-B mapped static replay 驗證：canonical lane 與 stable top 10 全部可在 Freqtrade 2026.3 上完成 backtest，彙總 artifact 為 `artifacts/freqtrade_bridge/awf331_stable_top10_summary.json`。目前 parity gate 的實際狀態為 `review`，因為雖然 trade-count delta 僅 `0 .. -3`，但 `exact_match_ratio` / `open_match_ratio` 仍為 `0.0`。
-2026-04-17 補充：已定位到造成 `open_match_ratio=0.0` 的主要原因是 FT strategy shim 直接消費 AUTOWFO signal store 內已 `fshift(1)` 的 `enter_*` / `exit_*` executable columns。adapter 現已修正為 entry 讀 raw `signal_*`，exit 讀由 `exit_*` 反推的一-bar-earlier raw exit signal；AWF-331 parity artifact 需在此契約下重跑。
+原始 2026-04-13 觀察期曾暴露 `open_match_ratio=0.0`，根因是 FT strategy shim 消費了已 `fshift(1)` 的 executable columns，造成 entry/exit 時間契約雙重偏移。2026-04-17 後 adapter 已修正：entry 消費 raw `signal_long` / `signal_short`，exit 消費由 AUTOWFO `exit_*` executable 欄位反推的一-bar-earlier raw exit signal，讓 FT 自然套用 next-open 執行語意。
 
-### 現役最佳候選策略
+Phase 61–62 已完成後續補強：AWF-339 重跑 corrected contract，AWF-340 凍結 parity gate，AWF-344–347 建立 DuckDB drift prototype、`execution_drift_report_v1` schema、`autowfo storage drift-report` CLI 與第一份真實 drift artifact。Phase 63 現在以 dry-run paper evidence 驗證 frozen canonical lane，同時只做 bounded search expansion。
+
+### Phase 63 現役候選與用途
 
 | 候選 | 描述 | 現代窗口 OOS | 舊錨點複現 |
 |------|------|-------------|-----------|
-| AWF-324 canonical | `obv_roc+keltner_pos+oi_roc \| htf_trend:1d:20, trigger=ad, trend_any` | 0.2819%/0.3075% | ❌ time-local |
-| AWF-320 canonical | `funding_gate:0.0001:-0.0001` 疊加 AWF-311 hierarchical lane | 0.2736%/0.2978% | ❌ time-local |
+| Phase 63 frozen canonical | `obv_roc + keltner_pos`（trend_high/high, drop SOL/BTC, 8-symbol） | strongest current frozen candidate | paper trading exploitation |
+| Extended validation branch | `obv_roc + keltner_pos + ad`（conditional on AWF-356） | follow-up only if 360d canonical passes | bounded 360d branch |
 
-⚠️ 兩者皆為 time-local：在舊 anchor (2025-04) 皆為負。Paper 觀察期目標之一是判斷 time-local 是否為真實市場結構，或僅為 anchor 選取偏差。
+Paper 觀察期目標不是證明所有 time-local rows 都可救，而是判斷 frozen canonical lane 在現行市場與 FT dry-run 語意下是否仍有可用執行品質。
 
 ---
 

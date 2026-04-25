@@ -18,6 +18,11 @@
 - Phase 63 entry: approved 2026-04-18.
 - Next gate: Phase 63 workstream verdicts (paper trading + search expansion).
 
+## Active Operator Focus
+- Fast path: keep using AUTOWFO for strategy/indicator discovery and the existing Freqtrade bridge for backtest, dry-run paper trading, reconcile, and drift checks.
+- Do not add new broad search dimensions unless they map to the active Phase 63 workstreams below.
+- Do not let Freqtrade own strategy logic; it consumes AUTOWFO signal artifacts and reports execution evidence back.
+
 ## Active Items
 
 ### Workstream A — Paper Trading Exploitation

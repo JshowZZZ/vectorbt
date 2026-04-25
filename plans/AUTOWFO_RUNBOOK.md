@@ -60,6 +60,14 @@
    - `python -m autowfo storage compare-ranking --candidate-config artifacts/ranking_candidate.json --cwd .`
 13. Rescore trusted runs after approving a ranking-only change:
    - `python -m autowfo storage rescore --ranking-config artifacts/ranking_candidate.json --cwd .`
+14. Export and cross-check a frozen AUTOWFO lane through Freqtrade:
+   - `python -m autowfo bridge-export-signal-store --analysis-json artifacts/reports/pilot_analysis.json --out-dir artifacts/freqtrade_bridge/<label> --cwd .`
+   - `python -m autowfo bridge-cross-check --manifest-json artifacts/freqtrade_bridge/<label>/signal_manifest.json --out-dir artifacts/freqtrade_bridge/<label>/cross_check --prepare-only --cwd .`
+15. Refresh live signal store and reconcile FT dry-run:
+   - `python -m autowfo bridge-live-signal --manifest-json artifacts/freqtrade_bridge/<label>/signal_manifest.json --out-dir artifacts/live_signal_store --cwd .`
+   - `python -m autowfo bridge-dryrun-reconcile --live-manifest-json artifacts/live_signal_store/live_manifest.json --freqtrade-config E:/Project/freqtrade/user_data/config_autowfo_dryrun.json --out-dir artifacts/paper_dryrun --date <YYYY-MM-DD> --cwd .`
+16. Rebuild execution drift report from frozen parity inputs:
+   - `python -m autowfo storage drift-report --output-json artifacts/reports/execution_drift_report.json --cwd .`
 
 ## Evidence Integrity Transition Policy
 - Effective 2026-03-14, treat root-level run outputs under `artifacts/` as a legacy surface, not a primary evidence source.
@@ -215,3 +223,5 @@
 - Timeframe configs may optionally pin a fixed window end via `timeframes[].end` (ISO UTC timestamp). Keep `timeframes[].days` as the adjustable size control when widening or narrowing the same study window over time.
 - Current true-WFO behavior (`wf_mode=rolling`): each window selects train-time execution policy (`filtered` vs `unfiltered`) and applies it to that window's OOS segment.
 - Treat each baseline run as evidence; use same-window paired comparison artifacts to evaluate ranking-rule changes.
+- Keep AUTOWFO as the strategy truth source. Freqtrade consumes exported signals for replay, dry-run paper trading, and future execution.
+- Use `python -m pytest` if the direct `pytest.exe` launcher is blocked by local Windows application control policy.
