@@ -39,7 +39,12 @@ Suggested first new implementation item after user start:
 
 | ID | Status | Task | Hypothesis | Metric | Accept threshold | Rollback |
 |---|---|---|---|---|---|---|
-| AWF-360 | todo | Evidence warehouse protocol validator and candidate identity helper | stable identity enables old/new candidate comparison | JSON protocol validation + repeated ID equality | protocol validates and same candidate definition yields same candidate_id | keep planning-only; do not import legacy data |
+| AWF-360 | done | Evidence warehouse protocol validator and candidate identity helper | stable identity enables old/new candidate comparison | JSON protocol validation + repeated ID equality | protocol validates and same candidate definition yields same candidate_id | keep planning-only; do not import legacy data |
+| AWF-361 | done | Evidence warehouse DuckDB skeleton and CLI build/validate entry | empty warehouse schema enables safe later imports | DuckDB table skeleton + CLI validate/build | protocol tables and required columns exist; validate fails cleanly when DB is missing | remove CLI entry and generated warehouse DB only |
+
+AWF-360 completion note: implemented `autowfo.evidence_warehouse` as the minimal Evidence Warehouse V1 protocol loader/validator plus deterministic candidate identity helper. Validation: `python -m pytest tests/test_autowfo_evidence_warehouse.py -q` (`7 passed`). Scope stayed planning-only: no legacy import, no Risk Engine, no control-panel changes.
+
+AWF-361 completion note: implemented the empty Evidence Warehouse V1 DuckDB skeleton and `autowfo storage evidence-warehouse --mode build|validate` CLI. Validation: `python -m pytest tests/test_autowfo_evidence_warehouse.py tests/test_autowfo_cli.py -q -k "evidence_warehouse"` (`12 passed, 69 deselected`). Scope stayed bounded: no legacy import, no Survival Gate writer, no Risk Engine, no control-panel changes.
 
 ## Active Items
 

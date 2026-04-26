@@ -117,6 +117,7 @@ Required fields:
 - `engine`
 - `run_mode`
 - `timeframe`
+- `data_profile_id`
 - `data_start_utc`
 - `data_end_utc`
 - `created_utc`

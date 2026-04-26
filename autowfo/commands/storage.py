@@ -104,6 +104,27 @@ def add_storage_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: A
     drift_report_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
     drift_report_parser.set_defaults(handler=cli_impl._cmd_storage_drift_report)
 
+    evidence_warehouse_parser = storage_subparsers.add_parser(
+        "evidence-warehouse",
+        help="Build or validate the empty Evidence Warehouse V1 DuckDB skeleton",
+    )
+    evidence_warehouse_parser.add_argument("--artifacts-dir", default="artifacts", help="Artifacts root directory")
+    evidence_warehouse_parser.add_argument("--cwd", default=".", help="Working directory")
+    evidence_warehouse_parser.add_argument(
+        "--protocol-path",
+        default="plans/protocols/evidence_warehouse_v1.json",
+        help="Path to the frozen Evidence Warehouse V1 protocol JSON",
+    )
+    evidence_warehouse_parser.add_argument("--db-path", default="", help="Optional warehouse DuckDB path")
+    evidence_warehouse_parser.add_argument(
+        "--mode",
+        choices=("build", "validate"),
+        default="build",
+        help="Build the skeleton or validate an existing skeleton",
+    )
+    evidence_warehouse_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    evidence_warehouse_parser.set_defaults(handler=cli_impl._cmd_storage_evidence_warehouse)
+
 
 def _resolve_artifacts_dir(args: argparse.Namespace, cli_impl: Any) -> Path:
     cwd = Path(args.cwd).resolve()
@@ -226,6 +247,24 @@ def cmd_storage_drift_report(args: argparse.Namespace, cli_impl: Any) -> int:
         _resolve_artifacts_dir(args, cli_impl),
         protocol_path=protocol_path,
         output_path=(cli_impl._resolve_path(cwd, output_json) if output_json else None),
+    )
+    _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_storage_evidence_warehouse(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo.evidence_warehouse import build_evidence_warehouse, validate_evidence_warehouse
+
+    cwd = Path(args.cwd).resolve()
+    protocol_path = cli_impl._resolve_path(cwd, str(getattr(args, "protocol_path", "") or ""))
+    db_path_raw = str(getattr(args, "db_path", "") or "").strip()
+    db_path = cli_impl._resolve_path(cwd, db_path_raw) if db_path_raw else None
+    mode = str(getattr(args, "mode", "build") or "build")
+    operation = build_evidence_warehouse if mode == "build" else validate_evidence_warehouse
+    payload = operation(
+        _resolve_artifacts_dir(args, cli_impl),
+        protocol_path=protocol_path,
+        db_path=db_path,
     )
     _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
     return 0 if payload.get("ok") else 1

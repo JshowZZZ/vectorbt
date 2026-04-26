@@ -3086,6 +3086,54 @@ def test_cli_storage_drift_report_writes_json_artifact(tmp_path):
     assert payload["row_scope_count"] == 1
 
 
+def test_cli_storage_evidence_warehouse_builds_duckdb_skeleton(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    output_path = artifacts / "evidence_warehouse" / "evidence_warehouse.duckdb"
+    protocol_path = Path("plans/protocols/evidence_warehouse_v1.json").resolve()
+
+    code = cli.main(
+        [
+            "storage",
+            "evidence-warehouse",
+            "--artifacts-dir",
+            str(artifacts),
+            "--cwd",
+            str(tmp_path),
+            "--db-path",
+            str(output_path),
+            "--protocol-path",
+            str(protocol_path),
+            "--mode",
+            "build",
+        ]
+    )
+
+    assert code == 0
+    assert output_path.exists()
+
+
+def test_cli_storage_evidence_warehouse_validate_fails_for_missing_db(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    protocol_path = Path("plans/protocols/evidence_warehouse_v1.json").resolve()
+
+    code = cli.main(
+        [
+            "storage",
+            "evidence-warehouse",
+            "--artifacts-dir",
+            str(artifacts),
+            "--cwd",
+            str(tmp_path),
+            "--protocol-path",
+            str(protocol_path),
+            "--mode",
+            "validate",
+        ]
+    )
+
+    assert code == 1
+
+
 def test_cli_storage_rebuild_shared_views_builds_root_compatibility_outputs(tmp_path):
     artifacts = tmp_path / "artifacts"
     workspace = cli.importlib.import_module("autowfo.run_workspace").build_run_workspace(tmp_path, "20260314_050000")
