@@ -66,7 +66,10 @@
 15. Refresh live signal store and reconcile FT dry-run:
    - `python -m autowfo bridge-live-signal --manifest-json artifacts/freqtrade_bridge/<label>/signal_manifest.json --out-dir artifacts/live_signal_store --cwd .`
    - `python -m autowfo bridge-dryrun-reconcile --live-manifest-json artifacts/live_signal_store/live_manifest.json --freqtrade-config E:/Project/freqtrade/user_data/config_autowfo_dryrun.json --out-dir artifacts/paper_dryrun --date <YYYY-MM-DD> --cwd .`
-16. Rebuild execution drift report from frozen parity inputs:
+16. Collect one Phase 63 canonical paper evidence day:
+   - `python -m autowfo bridge-paper-evidence-day --manifest-json artifacts/freqtrade_bridge/20260411_microcohort_dropsol_main_canonical_r1/signal_manifest.json --freqtrade-config E:/Project/freqtrade/user_data/config_autowfo_dryrun.json --date <YYYY-MM-DD> --min-date 2026-04-28 --cwd . --json`
+   - This command refreshes stale/wrong-lane live manifest evidence, reconciles the dry-run day, imports paper evidence into the Evidence Warehouse, updates the aggregate paper survival report, and writes `artifacts/paper_dryrun/health/phase63_paper_health_YYYYMMDD.json`.
+17. Rebuild execution drift report from frozen parity inputs:
    - `python -m autowfo storage drift-report --output-json artifacts/reports/execution_drift_report.json --cwd .`
 
 ## Evidence Integrity Transition Policy

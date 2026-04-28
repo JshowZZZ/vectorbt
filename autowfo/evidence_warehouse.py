@@ -1393,12 +1393,51 @@ def _phase63_summary_manifest_freshness_status(summary: Mapping[str, object]) ->
     return "fresh"
 
 
+def _phase63_daily_quality(
+    *,
+    opened_count: int,
+    closed_count: int,
+    missing_match_rate: bool,
+    manifest_freshness_status: str,
+) -> str:
+    if manifest_freshness_status in {"missing", "stale"}:
+        return "invalid_manifest"
+    if missing_match_rate:
+        return "missing_match_rate_evidence"
+    if opened_count == 0 and closed_count == 0:
+        return "zero_trade_day"
+    return "valid_trade_evidence"
+
+
+def _phase63_summary_matches_filter(
+    summary: Mapping[str, object],
+    *,
+    expected_selection: str | None,
+    expected_rank: int | None,
+    min_date_utc: str | None,
+) -> bool:
+    if min_date_utc:
+        date_utc = str(summary.get("date_utc") or "")
+        if date_utc and date_utc < str(min_date_utc):
+            return False
+    analysis = summary.get("analysis")
+    analysis_obj = analysis if isinstance(analysis, Mapping) else {}
+    if expected_selection is not None and str(analysis_obj.get("selection") or "") != str(expected_selection):
+        return False
+    if expected_rank is not None and str(analysis_obj.get("rank") or "") != str(expected_rank):
+        return False
+    return True
+
+
 def build_phase63_paper_survival_report(
     artifacts_dir: str | Path = "artifacts",
     *,
     paper_dir: str | Path | None = None,
     output_path: str | Path | None = None,
     minimum_verdict_days: int = 7,
+    expected_selection: str | None = None,
+    expected_rank: int | None = None,
+    min_date_utc: str | None = None,
 ) -> dict:
     """Build a bounded Phase 63 paper evidence report without producing a verdict."""
 
@@ -1406,6 +1445,29 @@ def build_phase63_paper_survival_report(
     resolved_paper_dir = Path(paper_dir).resolve() if paper_dir else (artifacts / "paper_dryrun").resolve()
     summary_paths = _phase63_daily_summary_paths(resolved_paper_dir)
     daily_summaries = [_read_json_object(path, "Phase 63 paper daily summary") for path in summary_paths]
+    source_summary_count = len(summary_paths)
+    filtered_pairs = [
+        (path, summary)
+        for path, summary in zip(summary_paths, daily_summaries)
+        if _phase63_summary_matches_filter(
+            summary,
+            expected_selection=expected_selection,
+            expected_rank=expected_rank,
+            min_date_utc=min_date_utc,
+        )
+    ]
+    excluded_summary_paths = [
+        path
+        for path, summary in zip(summary_paths, daily_summaries)
+        if not _phase63_summary_matches_filter(
+            summary,
+            expected_selection=expected_selection,
+            expected_rank=expected_rank,
+            min_date_utc=min_date_utc,
+        )
+    ]
+    summary_paths = [path for path, _summary in filtered_pairs]
+    daily_summaries = [summary for _path, summary in filtered_pairs]
     evidence_days = sorted({str(summary.get("date_utc") or "") for summary in daily_summaries if summary.get("date_utc")})
     opened_total = 0
     closed_total = 0
@@ -1416,11 +1478,14 @@ def build_phase63_paper_survival_report(
     missing_match_rate_days: List[str] = []
     stale_manifest_days: List[str] = []
     missing_manifest_freshness_days: List[str] = []
+    quality_by_day: Dict[str, str] = {}
+    valid_evidence_days: List[str] = []
     for summary in daily_summaries:
         date_utc = str(summary.get("date_utc") or "")
         totals = summary.get("totals")
         opened_count = len(summary.get("opened_trades") or [])
         closed_count = len(summary.get("closed_trades") or [])
+        day_missing_match_rate = False
         if isinstance(totals, Mapping):
             opened_count = int(_safe_float(totals.get("opened_trades_day"), default=float(opened_count)))
             closed_count = int(_safe_float(totals.get("closed_trades_day"), default=float(closed_count)))
@@ -1432,13 +1497,16 @@ def build_phase63_paper_survival_report(
                 exit_rates.append(_safe_float(totals.get("exit_signal_match_rate")))
             if opened_count > 0 and totals.get("entry_signal_match_rate") is None:
                 missing_match_rate_days.append(date_utc)
+                day_missing_match_rate = True
             if closed_count > 0 and totals.get("exit_signal_match_rate") is None:
                 missing_match_rate_days.append(date_utc)
+                day_missing_match_rate = True
         else:
             opened_total += opened_count
             closed_total += closed_count
             if opened_count > 0 or closed_count > 0:
                 missing_match_rate_days.append(date_utc)
+                day_missing_match_rate = True
         if opened_count == 0 and closed_count == 0:
             zero_trade_days.append(date_utc)
         manifest_freshness_status = _phase63_summary_manifest_freshness_status(summary)
@@ -1446,9 +1514,21 @@ def build_phase63_paper_survival_report(
             stale_manifest_days.append(date_utc)
         elif manifest_freshness_status == "missing":
             missing_manifest_freshness_days.append(date_utc)
+        if date_utc:
+            day_quality = _phase63_daily_quality(
+                opened_count=opened_count,
+                closed_count=closed_count,
+                missing_match_rate=day_missing_match_rate,
+                manifest_freshness_status=manifest_freshness_status,
+            )
+            quality_by_day[date_utc] = day_quality
+            if day_quality == "valid_trade_evidence":
+                valid_evidence_days.append(date_utc)
         roles.add(_phase63_candidate_role(summary))
     evidence_day_count = len(evidence_days)
     minimum_day_count_met = evidence_day_count >= int(minimum_verdict_days)
+    valid_evidence_days = sorted(set(valid_evidence_days))
+    minimum_valid_day_count_met = len(valid_evidence_days) >= int(minimum_verdict_days)
     if roles == {"Champion"}:
         candidate_role = "Champion"
     elif roles == {"Challenger"}:
@@ -1470,17 +1550,28 @@ def build_phase63_paper_survival_report(
         blocking_reasons.append("missing_match_rate_evidence")
     if candidate_role == "Mixed":
         blocking_reasons.append("mixed_candidate_roles")
-    verdict_allowed = minimum_day_count_met and not blocking_reasons
+    verdict_allowed = minimum_valid_day_count_met and not blocking_reasons
     report = {
         "ok": True,
         "schema_version": "phase63_paper_survival_report/v1",
         "artifacts_dir": str(artifacts),
         "paper_dir": str(resolved_paper_dir),
+        "source_summary_count": source_summary_count,
         "daily_summary_count": len(summary_paths),
+        "excluded_summary_count": len(excluded_summary_paths),
+        "summary_filter": {
+            "expected_selection": expected_selection,
+            "expected_rank": expected_rank,
+            "min_date_utc": min_date_utc,
+        },
         "evidence_days": evidence_days,
         "evidence_day_count": evidence_day_count,
         "minimum_verdict_days": int(minimum_verdict_days),
         "minimum_day_count_met": minimum_day_count_met,
+        "valid_evidence_days": valid_evidence_days,
+        "valid_evidence_day_count": len(valid_evidence_days),
+        "minimum_valid_day_count_met": minimum_valid_day_count_met,
+        "quality_by_day": quality_by_day,
         "verdict_allowed": verdict_allowed,
         "classification": "paper_evidence_ready" if verdict_allowed else "incomplete_evidence",
         "blocking_reasons": blocking_reasons,
@@ -1500,6 +1591,7 @@ def build_phase63_paper_survival_report(
             sum(exit_rates) / len(exit_rates) if exit_rates else None
         ),
         "source_artifacts": [str(path) for path in summary_paths],
+        "excluded_source_artifacts": [str(path) for path in excluded_summary_paths],
     }
     if output_path:
         resolved_output_path = Path(output_path).resolve()

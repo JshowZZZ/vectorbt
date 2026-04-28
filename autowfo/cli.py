@@ -272,6 +272,10 @@ def _cmd_bridge_dryrun_reconcile(args: argparse.Namespace) -> int:
     return cmd_plan.cmd_bridge_dryrun_reconcile(args, _self())
 
 
+def _cmd_bridge_paper_evidence_day(args: argparse.Namespace) -> int:
+    return cmd_plan.cmd_bridge_paper_evidence_day(args, _self())
+
+
 def _cmd_gate_c(args: argparse.Namespace) -> int:
     return cmd_gate.cmd_gate_c(args, _self())
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -510,6 +511,91 @@ def add_plan_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: Any)
     )
     bridge_reconcile_parser.add_argument("--cwd", default=".", help="Working directory")
     bridge_reconcile_parser.set_defaults(handler=cli_impl._cmd_bridge_dryrun_reconcile)
+
+    bridge_paper_parser = subparsers.add_parser(
+        "bridge-paper-evidence-day",
+        help="Collect one Phase 63 paper evidence day through manifest refresh, reconcile, warehouse import, and health reporting",
+    )
+    bridge_paper_parser.add_argument(
+        "--manifest-json",
+        required=True,
+        help="Path to the canonical exported signal bundle manifest JSON",
+    )
+    bridge_paper_parser.add_argument(
+        "--live-manifest-path",
+        default="artifacts/live_signal_store/live_manifest.json",
+        help="Path to the rolling AUTOWFO live manifest JSON",
+    )
+    bridge_paper_parser.add_argument(
+        "--live-signal-out-dir",
+        default="artifacts/live_signal_store",
+        help="Output directory for one-shot live signal refreshes",
+    )
+    bridge_paper_parser.add_argument(
+        "--paper-dir",
+        default="artifacts/paper_dryrun",
+        help="Output directory for paper reconcile and health artifacts",
+    )
+    bridge_paper_parser.add_argument(
+        "--freqtrade-config",
+        default="",
+        help="Optional path to the Freqtrade dry-run config JSON",
+    )
+    bridge_paper_parser.add_argument(
+        "--freqtrade-db-path",
+        default="",
+        help="Optional path to the Freqtrade dry-run SQLite DB",
+    )
+    bridge_paper_parser.add_argument(
+        "--warehouse-db-path",
+        default="",
+        help="Optional Evidence Warehouse DuckDB path",
+    )
+    bridge_paper_parser.add_argument(
+        "--protocol-path",
+        default="plans/protocols/evidence_warehouse_v1.json",
+        help="Evidence Warehouse protocol path",
+    )
+    bridge_paper_parser.add_argument(
+        "--artifacts-dir",
+        default="artifacts",
+        help="Artifacts root directory",
+    )
+    bridge_paper_parser.add_argument(
+        "--date",
+        default="",
+        help="UTC date to collect (YYYY-MM-DD). Defaults to today UTC.",
+    )
+    bridge_paper_parser.add_argument(
+        "--min-date",
+        default="",
+        help="Optional earliest UTC daily summary date to include in the aggregate paper report",
+    )
+    bridge_paper_parser.add_argument(
+        "--freshness-minutes",
+        type=int,
+        default=30,
+        help="Maximum live manifest age before a one-shot refresh is required",
+    )
+    bridge_paper_parser.add_argument(
+        "--expected-selection",
+        default="canonical_gate_passed",
+        help="Expected live manifest analysis.selection",
+    )
+    bridge_paper_parser.add_argument(
+        "--expected-rank",
+        type=int,
+        default=1,
+        help="Expected live manifest analysis.rank",
+    )
+    bridge_paper_parser.add_argument(
+        "--no-refresh",
+        action="store_true",
+        help="Do not refresh the live signal store when manifest evidence is stale or wrong-lane",
+    )
+    bridge_paper_parser.add_argument("--cwd", default=".", help="Working directory")
+    bridge_paper_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
+    bridge_paper_parser.set_defaults(handler=cli_impl._cmd_bridge_paper_evidence_day)
 
 
 def cmd_plan(args: argparse.Namespace, cli_impl: Any) -> int:
@@ -1160,3 +1246,71 @@ def cmd_bridge_dryrun_reconcile(args: argparse.Namespace, cli_impl: Any) -> int:
     )
     return 0
 
+
+def cmd_bridge_paper_evidence_day(args: argparse.Namespace, cli_impl: Any) -> int:
+    from autowfo import paper_evidence_day
+
+    cwd = Path(args.cwd).resolve()
+    payload = paper_evidence_day.collect_phase63_paper_evidence_day(
+        manifest_json=cli_impl._resolve_path(cwd, args.manifest_json),
+        artifacts_dir=cli_impl._resolve_path(cwd, args.artifacts_dir),
+        live_manifest_path=cli_impl._resolve_path(cwd, args.live_manifest_path),
+        live_signal_out_dir=cli_impl._resolve_path(cwd, args.live_signal_out_dir),
+        paper_dir=cli_impl._resolve_path(cwd, args.paper_dir),
+        freqtrade_config_path=(
+            cli_impl._resolve_path(cwd, args.freqtrade_config)
+            if str(args.freqtrade_config or "").strip()
+            else None
+        ),
+        freqtrade_db_path=(
+            cli_impl._resolve_path(cwd, args.freqtrade_db_path)
+            if str(args.freqtrade_db_path or "").strip()
+            else None
+        ),
+        warehouse_db_path=(
+            cli_impl._resolve_path(cwd, args.warehouse_db_path)
+            if str(args.warehouse_db_path or "").strip()
+            else None
+        ),
+        protocol_path=(
+            cli_impl._resolve_path(cwd, args.protocol_path)
+            if str(args.protocol_path or "").strip()
+            else None
+        ),
+        date_utc=(args.date or None),
+        min_date_utc=(args.min_date or None),
+        cwd=cwd,
+        freshness_minutes=int(args.freshness_minutes or 30),
+        expected_selection=str(args.expected_selection or "canonical_gate_passed"),
+        expected_rank=int(args.expected_rank or 1),
+        refresh_if_needed=not bool(args.no_refresh),
+    )
+    if bool(args.json):
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        quality = dict(payload.get("day_quality") or {})
+        manifest = dict(payload.get("manifest") or {})
+        survival = dict(payload.get("survival_report") or {})
+        print(
+            "[bridge-paper-evidence-day] ok={ok} date={date} quality={quality} zero_trade_reason={reason}".format(
+                ok=payload.get("ok"),
+                date=payload.get("date_utc"),
+                quality=quality.get("classification"),
+                reason=payload.get("zero_trade_reason"),
+            )
+        )
+        print(
+            "[bridge-paper-evidence-day] manifest_status={status} refreshed={refreshed} selection={selection} rank={rank}".format(
+                status=manifest.get("status"),
+                refreshed=manifest.get("refreshed"),
+                selection=manifest.get("selection"),
+                rank=manifest.get("rank"),
+            )
+        )
+        print(
+            "[bridge-paper-evidence-day] verdict_allowed={allowed} health_report={path}".format(
+                allowed=survival.get("verdict_allowed"),
+                path=payload.get("health_output_path"),
+            )
+        )
+    return 0 if payload.get("ok") else 1

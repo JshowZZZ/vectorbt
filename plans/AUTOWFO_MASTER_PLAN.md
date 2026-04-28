@@ -44,7 +44,7 @@ promoted only through versioned Survival Gate policies.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-04-28. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; CLI automation is first-class for repeatable run, bridge, storage, and drift workflows. Phase 61-62 is closed: the corrected Freqtrade raw-signal contract has been rerun, parity gates are frozen, DuckDB/drift tooling exists, and the first execution drift artifact path is reproducible. Phase 63 is still active: AWF-348 restored the paper runtime to the frozen canonical rank 1 lane and wrote `daily_summary_20260428.json`, bringing artifact truth to `5` paper summaries. This is still incomplete evidence and all available days are zero-trade, so no paper verdict is allowed yet. Phase 64 survivalism foundation has started: Evidence Warehouse V1 now has candidate identity, DuckDB skeleton, Phase 61-62 replay/drift import, Phase 63 paper import, paper survival aggregate reporting, and Survival Gate policy/verdict writers.
+> Updated 2026-04-29. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; CLI automation is first-class for repeatable run, bridge, storage, and drift workflows. Phase 61-62 is closed: the corrected Freqtrade raw-signal contract has been rerun, parity gates are frozen, DuckDB/drift tooling exists, and the first execution drift artifact path is reproducible. Phase 63 is still active: AWF-348 restored the paper runtime to the frozen canonical rank 1 lane and AWF-349a added a one-click daily paper evidence collector. Post-recovery canonical evidence starts at `2026-04-28`; the filtered canonical aggregate currently has one day, still zero-trade, so no paper verdict is allowed yet. Phase 64 survivalism foundation has started: Evidence Warehouse V1 now has candidate identity, DuckDB skeleton, Phase 61-62 replay/drift import, Phase 63 paper import, paper survival aggregate reporting, and Survival Gate policy/verdict writers.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -59,8 +59,8 @@ promoted only through versioned Survival Gate policies.
 | Parallel evaluation | 3-worker (`parallel.py`) | x2.66 speedup | Bit-identical verified |
 | Run registry | (`registry.py`) | Working | Coverage map across timeframe/symbol |
 | CLI entrypoint | `python -m autowfo` | Working | run/baseline/batch/plan/report/bridge/storage/drift/evidence-warehouse commands |
-| Freqtrade bridge | signal bundle + replay + live signal producer + dry-run reconcile | Active | Need Phase 63 paper verdict from 7/14-day evidence |
-| Drift and evidence tooling | DuckDB prototypes + `storage drift-report` + `storage evidence-warehouse` | Reproducible | First real drift artifact and warehouse import paths exist; Phase 63 paper verdict still pending |
+| Freqtrade bridge | signal bundle + replay + live signal producer + dry-run reconcile + daily paper evidence collector | Active | Need Phase 63 paper verdict from 7/14-day valid canonical evidence |
+| Drift and evidence tooling | DuckDB prototypes + `storage drift-report` + `storage evidence-warehouse` | Reproducible | Paper health reports and valid-day counts exist; Phase 63 paper verdict still pending |
 | Regression tests | Focused AUTOWFO suites | Green when run through `python -m pytest` | `pytest.exe` launcher may be blocked by Windows policy |
 | Operational runbook | `AUTOWFO_RUNBOOK.md` | Active | Needs FT bridge/dry-run/drift command surface kept current |
 | Web control panel | Packaged local UI + static tabs + dashboard/history | Complete for routine operations | CLI remains required for reproducible bridge/drift automation |
@@ -93,6 +93,7 @@ promoted only through versioned Survival Gate policies.
   - `AWF-360` through `AWF-368` have delivered the first Evidence Warehouse and Survival Gate foundation slices.
   - `AWF-364` explicitly records that Phase 63 paper evidence remains incomplete and must not be treated as a pass verdict.
   - `AWF-348` restored the canonical rank 1 paper lane; zero-trade on 2026-04-28 was classified as `strategy_no_signal_today`, not a process, manifest, mapping, or database failure.
+  - `AWF-349a` added the daily paper evidence collector and aggregate valid-day quality fields; old stable-rank summaries can be excluded from canonical survival reports by lane/date filters.
 
 ### Phase 64: Survivalism Foundation (Next Candidate Phase)
 - Entry condition: user explicitly starts implementation after reviewing the planning packet.
@@ -148,7 +149,7 @@ promoted only through versioned Survival Gate policies.
 - Route C decision: paper trading runs in parallel with strategy search expansion.
 - Operator intent: get to viable strategy-indicator combinations quickly by reusing the current Freqtrade bridge path, not by reopening the core architecture.
 - Workstream A (AWF-348~351): validate the frozen canonical candidate via FT dry-run; accumulate ≥14 days of reconciliation evidence.
-- Current Workstream A status: AWF-348 recovery is complete; the canonical rank 1 paper lane is fresh and healthy, but evidence remains below AWF-349/AWF-350 thresholds.
+- Current Workstream A status: AWF-348 recovery is complete and AWF-349 evidence collection is automated; filtered canonical evidence remains below AWF-349/AWF-350 thresholds and the latest day is `zero_trade_day`.
 - Workstream B (AWF-352~359): explore three untested dimensions:
   - B1: non-trend regimes (rsi_revert, bb_revert, bb_breakout) — never searched
   - B2: 4h timeframe — never searched

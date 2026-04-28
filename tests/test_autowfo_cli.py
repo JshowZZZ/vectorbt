@@ -2030,6 +2030,7 @@ def test_cli_help_lists_all_subcommands():
         "bridge-cross-check",
         "bridge-live-signal",
         "bridge-dryrun-reconcile",
+        "bridge-paper-evidence-day",
         "export-report",
         "schedule-signals",
         "report",
@@ -2101,6 +2102,63 @@ def test_cli_bridge_dryrun_reconcile_parser_defaults():
     assert args.db_path == ""
     assert args.out_dir == "artifacts/paper_dryrun"
     assert args.date == ""
+
+
+def test_cli_bridge_paper_evidence_day_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "bridge-paper-evidence-day",
+        "--manifest-json",
+        "artifacts/freqtrade_bridge/canonical/signal_manifest.json",
+    ])
+
+    assert args.command == "bridge-paper-evidence-day"
+    assert args.live_manifest_path == "artifacts/live_signal_store/live_manifest.json"
+    assert args.live_signal_out_dir == "artifacts/live_signal_store"
+    assert args.paper_dir == "artifacts/paper_dryrun"
+    assert args.date == ""
+    assert args.min_date == ""
+    assert args.freshness_minutes == 30
+    assert args.expected_selection == "canonical_gate_passed"
+    assert args.expected_rank == 1
+    assert args.json is False
+
+
+def test_cli_bridge_paper_evidence_day_emits_json(tmp_path, monkeypatch, capsys):
+    from autowfo import paper_evidence_day
+
+    captured = {}
+
+    def fake_collect(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "date_utc": "2026-04-29",
+            "zero_trade_reason": "strategy_no_signal_today",
+            "day_quality": {"classification": "zero_trade_day"},
+            "survival_report": {"verdict_allowed": False},
+        }
+
+    monkeypatch.setattr(paper_evidence_day, "collect_phase63_paper_evidence_day", fake_collect)
+
+    code = cli.main(
+        [
+            "bridge-paper-evidence-day",
+            "--manifest-json",
+            "artifacts/freqtrade_bridge/canonical/signal_manifest.json",
+            "--date",
+            "2026-04-29",
+            "--cwd",
+            str(tmp_path),
+            "--json",
+        ]
+    )
+
+    out = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert out["ok"] is True
+    assert out["zero_trade_reason"] == "strategy_no_signal_today"
+    assert captured["date_utc"] == "2026-04-29"
 
 
 def test_cli_export_signal_writes_live_signal_config(tmp_path):

@@ -59,6 +59,8 @@ AWF-363-AWF-368 completion note: extended Evidence Warehouse V1 without adding R
 
 AWF-348 completion note: restored Phase 63 paper runtime to the frozen canonical rank 1 lane on 2026-04-28. The managed live signal producer and Freqtrade dry-run were observed running, `artifacts/live_signal_store/live_manifest.json` was refreshed to `selection=canonical_gate_passed`, `rank=1`, and `last_bar_utc=2026-04-28T14:00:00`, and `artifacts/paper_dryrun/daily_summary_20260428.json` was written. The day was zero-trade and classified as `strategy_no_signal_today` because manifest lane/freshness, signal rows, pair mapping, process health, and the dry-run SQLite `trades` table were all healthy while the current signal window had no enter/exit rows. Evidence Warehouse paper import succeeded without stale-manifest warnings. `plans/reports/AWF-348-report.md` records the recovery details.
 
+AWF-349a automation note: added `python -m autowfo bridge-paper-evidence-day` as the one-click Phase 63 daily paper evidence collector. The command checks canonical lane/freshness, performs one-shot live-signal refresh when needed, runs dry-run reconcile, imports Phase 63 paper evidence into the Evidence Warehouse, writes `artifacts/paper_dryrun/health/phase63_paper_health_YYYYMMDD.json`, emits zero-trade classification plus zero-signal explainability, and filters aggregate paper survival reports to the expected canonical lane. It also exposes valid evidence day counting through `build_phase63_paper_survival_report`. AWF-349 remains in progress because the post-recovery canonical lane has only one filtered day (`2026-04-28`) and it is still zero-trade. `plans/reports/AWF-349a-report.md` records the automation slice.
+
 ## Active Items
 
 ### Workstream A — Paper Trading Exploitation
@@ -66,7 +68,7 @@ AWF-348 completion note: restored Phase 63 paper runtime to the frozen canonical
 | ID | Status | Task | Metric | Accept threshold | Rollback |
 |---|---|---|---|---|---|
 | AWF-348 | done | Restart FT dry-run with blocker fixes; confirm signal producer + FT healthy | PID alive, live_manifest.json fresh | both processes running, manifest < 30 min old; zero-trade reason classified | debug startup if either process fails |
-| AWF-349 | todo | Accumulate ≥7 days of daily reconciliation summaries | daily JSON count | 7 daily summaries, no crash | investigate and fix if reconciler crashes |
+| AWF-349 | doing | Accumulate ≥7 days of daily reconciliation summaries | valid evidence day count + daily health JSON | ≥7 canonical rank 1 valid evidence days after 2026-04-28; no collector crash | investigate and fix collector/reconciler if health report is missing or invalid |
 | AWF-350 | todo | Accumulate ≥14 days; build aggregate drift report | aggregate open_match_ratio | ≥ 0.95 across all days | document drift explanation if below threshold |
 | AWF-351 | todo | Paper trading verdict memo | human classification | parity-confirmed / drift-bounded / parity-failed | close workstream with verdict |
 

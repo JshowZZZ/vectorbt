@@ -1241,6 +1241,7 @@ def test_build_phase63_paper_survival_report_blocks_verdict_when_evidence_is_sho
 def test_build_phase63_paper_survival_report_blocks_verdict_on_quality_reasons(tmp_path):
     artifacts = tmp_path / "artifacts"
     db_path = tmp_path / "freqtrade" / "tradesv3.dryrun.sqlite"
+    _write_phase63_live_manifest(artifacts, created_utc="2026-04-27T00:00:00+00:00")
     for offset in range(7):
         day = f"2026-04-{20 + offset:02d}"
         _phase63_daily_summary(
@@ -1264,6 +1265,9 @@ def test_build_phase63_paper_survival_report_blocks_verdict_on_quality_reasons(t
     assert report["verdict_allowed"] is False
     assert "zero_trade_day" in report["blocking_reasons"]
     assert report["classification"] == "incomplete_evidence"
+    assert report["valid_evidence_day_count"] == 6
+    assert report["minimum_valid_day_count_met"] is False
+    assert report["quality_by_day"]["2026-04-23"] == "zero_trade_day"
 
 
 def test_build_phase63_paper_survival_report_blocks_when_manifest_freshness_evidence_is_missing(tmp_path):
@@ -1289,6 +1293,38 @@ def test_build_phase63_paper_survival_report_blocks_when_manifest_freshness_evid
     assert "missing_manifest_freshness_evidence" in report["blocking_reasons"]
 
 
+def test_build_phase63_paper_survival_report_can_filter_to_canonical_lane(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    db_path = tmp_path / "freqtrade" / "tradesv3.dryrun.sqlite"
+    _write_phase63_live_manifest(artifacts, created_utc="2026-04-27T00:00:00+00:00")
+    _phase63_daily_summary(
+        artifacts=artifacts,
+        db_path=db_path,
+        day="2026-04-20",
+        trade_id=101,
+    )
+    _phase63_daily_summary(
+        artifacts=artifacts,
+        db_path=db_path,
+        day="2026-04-21",
+        trade_id=102,
+        selected_row=_phase63_selected_row(analysis_bucket="top_stable_positive", analysis_rank=10),
+    )
+
+    report = ew.build_phase63_paper_survival_report(
+        artifacts,
+        paper_dir=artifacts / "paper_dryrun",
+        expected_selection="canonical_gate_passed",
+        expected_rank=1,
+    )
+
+    assert report["daily_summary_count"] == 1
+    assert report["source_summary_count"] == 2
+    assert report["excluded_summary_count"] == 1
+    assert report["candidate_role"] == "Champion"
+    assert report["evidence_days"] == ["2026-04-20"]
+
+
 def test_build_phase63_paper_survival_report_allows_verdict_when_minimum_quality_is_met(tmp_path):
     artifacts = tmp_path / "artifacts"
     db_path = tmp_path / "freqtrade" / "tradesv3.dryrun.sqlite"
@@ -1312,3 +1348,5 @@ def test_build_phase63_paper_survival_report_allows_verdict_when_minimum_quality
     assert report["blocking_reasons"] == []
     assert report["verdict_allowed"] is True
     assert report["classification"] == "paper_evidence_ready"
+    assert report["valid_evidence_day_count"] == 7
+    assert report["minimum_valid_day_count_met"] is True
