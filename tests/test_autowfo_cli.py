@@ -3086,6 +3086,139 @@ def test_cli_storage_drift_report_writes_json_artifact(tmp_path):
     assert payload["row_scope_count"] == 1
 
 
+def _write_cli_phase61_62_replay_artifacts(artifacts):
+    summary_path = artifacts / "freqtrade_bridge" / "awf331_rerun_summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "name": "awf331_rerun_summary",
+                "created_utc": "2026-04-18T00:00:00Z",
+                "aggregate": {"row_count": 1, "pairs": ["ETH/BTC", "SOL/BTC"]},
+                "rows": [
+                    {
+                        "row_id": "stable_top10_rank_1",
+                        "signal_manifest_path": str(artifacts / "freqtrade_bridge" / "bundle_cli" / "signal_manifest.json"),
+                        "parity_report_path": str(artifacts / "freqtrade_bridge" / "awf339" / "bundle_cli" / "parity_report.json"),
+                        "rerun_output_dir": str(artifacts / "freqtrade_bridge" / "awf339" / "bundle_cli"),
+                        "strategy_name": "AutowfoGenericSignalStrategyLongShort",
+                        "verdict": "review",
+                        "autowfo_trade_count": 10,
+                        "freqtrade_trade_count": 9,
+                        "trade_count_delta": -1,
+                        "open_match_ratio": 0.9,
+                        "exact_match_ratio": 0.6,
+                        "indicator_list": "obv_roc,keltner_pos",
+                        "regime_name": "trend_high",
+                        "vol_mode": "high",
+                        "filter_name": "OBV trend + Keltner position",
+                        "timeframe": "2h",
+                        "data_days": 180,
+                        "vol_lookback": 24,
+                        "mom_lookback": 6,
+                        "trade_mom_lookback": 3,
+                        "tp_stop": 1.5,
+                        "sl_stop": 1.0,
+                        "max_hold": 4,
+                        "per_pair_counts": [
+                            {"pair": "ETH/BTC", "direction": "Long", "autowfo_count": 5, "freqtrade_count": 4, "delta": -1},
+                            {"pair": "SOL/BTC", "direction": "Short", "autowfo_count": 5, "freqtrade_count": 5, "delta": 0},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    drift_path = artifacts / "reports" / "execution_drift_report.json"
+    drift_path.parent.mkdir(parents=True, exist_ok=True)
+    drift_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "generated_utc": "2026-04-18T01:00:00Z",
+                "row_scope_count": 1,
+                "report_sections": {
+                    "row_level_drift": [
+                        {
+                            "row_id": "stable_top10_rank_1",
+                            "open_match_ratio": 0.9,
+                            "exact_match_ratio": 0.6,
+                            "trade_count_delta": -1,
+                            "drift_severity": "medium",
+                        }
+                    ],
+                    "source_consistency": [
+                        {
+                            "row_id": "stable_top10_rank_1",
+                            "signal_bundle_id": "bundle_cli",
+                            "parity_bundle_id": "bundle_cli",
+                            "signal_manifest_joined": True,
+                            "parity_report_joined": True,
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_cli_phase63_paper_artifacts(artifacts):
+    paper_dir = artifacts / "paper_dryrun"
+    paper_dir.mkdir(parents=True, exist_ok=True)
+    db_path = artifacts / "freqtrade" / "tradesv3.dryrun.sqlite"
+    payload = {
+        "schema_version": "1.0.0",
+        "created_utc": "2026-04-20T23:55:00+00:00",
+        "date_utc": "2026-04-20",
+        "window_start_utc": "2026-04-20T00:00:00+00:00",
+        "window_end_utc": "2026-04-20T23:59:59+00:00",
+        "db_path": str(db_path),
+        "source_bundle_manifest": str(artifacts / "freqtrade_bridge" / "canonical" / "signal_manifest.json"),
+        "analysis": {
+            "selection": "canonical_gate_passed",
+            "rank": 1,
+            "main_run_id": "20260411_microcohort_dropsol_main",
+            "selected_row": {
+                "timeframe": "2h",
+                "data_days": 180,
+                "indicator_list": "obv_roc,keltner_pos",
+                "regime_name": "trend_high",
+                "vol_mode": "high",
+                "vol_lookback": 24,
+                "mom_lookback": 6,
+                "trade_mom_lookback": 3,
+                "tp_stop": 1.5,
+                "sl_stop": 1.0,
+                "max_hold": 4,
+                "analysis_bucket": "canonical_gate_passed",
+                "analysis_rank": 1,
+            },
+        },
+        "source": {"timeframe": "2h", "data_days": 180, "pairs": ["LTC/BTC"]},
+        "totals": {"opened_trades_day": 1, "closed_trades_day": 0},
+        "opened_trades": [
+            {
+                "trade_id": 41,
+                "pair": "LTC/USDT:USDT",
+                "source_pair": "LTC/BTC",
+                "direction": "Long",
+                "open_date": "2026-04-20T10:00:00+00:00",
+                "open_rate": 100.0,
+                "matched": True,
+            }
+        ],
+        "closed_trades": [],
+    }
+    (paper_dir / "daily_summary_20260420.json").write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return paper_dir
+
+
 def test_cli_storage_evidence_warehouse_builds_duckdb_skeleton(tmp_path):
     artifacts = tmp_path / "artifacts"
     output_path = artifacts / "evidence_warehouse" / "evidence_warehouse.duckdb"
@@ -3132,6 +3265,78 @@ def test_cli_storage_evidence_warehouse_validate_fails_for_missing_db(tmp_path):
     )
 
     assert code == 1
+
+
+def test_cli_storage_evidence_warehouse_imports_phase61_62_replay(tmp_path):
+    duckdb = pytest.importorskip("duckdb")
+    artifacts = tmp_path / "artifacts"
+    _write_cli_phase61_62_replay_artifacts(artifacts)
+    output_path = artifacts / "evidence_warehouse" / "evidence_warehouse.duckdb"
+    protocol_path = Path("plans/protocols/evidence_warehouse_v1.json").resolve()
+
+    code = cli.main(
+        [
+            "storage",
+            "evidence-warehouse",
+            "--artifacts-dir",
+            str(artifacts),
+            "--cwd",
+            str(tmp_path),
+            "--db-path",
+            str(output_path),
+            "--protocol-path",
+            str(protocol_path),
+            "--mode",
+            "import-phase61-62",
+        ]
+    )
+
+    conn = duckdb.connect(str(output_path), read_only=True)
+    try:
+        replay_count = conn.execute("SELECT COUNT(*) FROM ft_replay_results").fetchone()[0]
+        gap_count = conn.execute("SELECT COUNT(*) FROM execution_gap_events").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert code == 0
+    assert replay_count == 1
+    assert gap_count == 1
+
+
+def test_cli_storage_evidence_warehouse_imports_phase63_paper(tmp_path):
+    duckdb = pytest.importorskip("duckdb")
+    artifacts = tmp_path / "artifacts"
+    paper_dir = _write_cli_phase63_paper_artifacts(artifacts)
+    output_path = artifacts / "evidence_warehouse" / "evidence_warehouse.duckdb"
+    protocol_path = Path("plans/protocols/evidence_warehouse_v1.json").resolve()
+
+    code = cli.main(
+        [
+            "storage",
+            "evidence-warehouse",
+            "--artifacts-dir",
+            str(artifacts),
+            "--cwd",
+            str(tmp_path),
+            "--db-path",
+            str(output_path),
+            "--protocol-path",
+            str(protocol_path),
+            "--mode",
+            "import-phase63-paper",
+            "--paper-dir",
+            str(paper_dir),
+        ]
+    )
+
+    conn = duckdb.connect(str(output_path), read_only=True)
+    try:
+        paper_count = conn.execute("SELECT COUNT(*) FROM paper_trades").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert code == 0
+    assert paper_count == 1
 
 
 def test_cli_storage_rebuild_shared_views_builds_root_compatibility_outputs(tmp_path):

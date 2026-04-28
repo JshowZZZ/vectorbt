@@ -44,7 +44,7 @@ promoted only through versioned Survival Gate policies.
 - ~~Decompose monolith first~~: **completed** (AWF-000, commit `c059646`). Runtime modules now live in `autowfo/`.
 
 ## Current Implementation Reality
-> Updated 2026-04-25. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; CLI automation is first-class for repeatable run, bridge, storage, and drift workflows. Phase 61-62 is closed: the corrected Freqtrade raw-signal contract has been rerun, parity gates are frozen, DuckDB/drift tooling exists, and the first execution drift artifact path is reproducible. Phase 63 is active: run paper trading exploitation and bounded strategy-search expansion in parallel.
+> Updated 2026-04-28. Runtime modules converge under `autowfo/`; packaged control panel lives in `autowfo/control_panel/`; CLI automation is first-class for repeatable run, bridge, storage, and drift workflows. Phase 61-62 is closed: the corrected Freqtrade raw-signal contract has been rerun, parity gates are frozen, DuckDB/drift tooling exists, and the first execution drift artifact path is reproducible. Phase 63 is still active: current artifact truth shows paper evidence is incomplete (`4` daily summaries) and the live manifest is stale/stable-rank, so no paper verdict is allowed yet. Phase 64 survivalism foundation has started: Evidence Warehouse V1 now has candidate identity, DuckDB skeleton, Phase 61-62 replay/drift import, Phase 63 paper import, paper survival aggregate reporting, and Survival Gate policy/verdict writers.
 
 | Component | Status | Quality | Key Gap |
 |---|---|---|---|
@@ -58,9 +58,9 @@ promoted only through versioned Survival Gate policies.
 | Artifacts (CSV/DB/HTML) | Reproducible (`artifacts.py` + contract) | Frozen | Config hash + data fingerprint included |
 | Parallel evaluation | 3-worker (`parallel.py`) | x2.66 speedup | Bit-identical verified |
 | Run registry | (`registry.py`) | Working | Coverage map across timeframe/symbol |
-| CLI entrypoint | `python -m autowfo` | Working | run/baseline/batch/plan/report/bridge/storage/drift commands |
+| CLI entrypoint | `python -m autowfo` | Working | run/baseline/batch/plan/report/bridge/storage/drift/evidence-warehouse commands |
 | Freqtrade bridge | signal bundle + replay + live signal producer + dry-run reconcile | Active | Need Phase 63 paper verdict from 7/14-day evidence |
-| Drift tooling | DuckDB prototypes + `storage drift-report` | Reproducible | First real artifact exists; aggregate paper drift still pending |
+| Drift and evidence tooling | DuckDB prototypes + `storage drift-report` + `storage evidence-warehouse` | Reproducible | First real drift artifact and warehouse import paths exist; Phase 63 paper verdict still pending |
 | Regression tests | Focused AUTOWFO suites | Green when run through `python -m pytest` | `pytest.exe` launcher may be blocked by Windows policy |
 | Operational runbook | `AUTOWFO_RUNBOOK.md` | Active | Needs FT bridge/dry-run/drift command surface kept current |
 | Web control panel | Packaged local UI + static tabs + dashboard/history | Complete for routine operations | CLI remains required for reproducible bridge/drift automation |
@@ -89,21 +89,25 @@ promoted only through versioned Survival Gate policies.
   - risk engine and micro-live readiness last
 - First implementation candidate:
   - `AWF-360`: add evidence warehouse protocol validator and candidate identity helper.
+- Current implementation status:
+  - `AWF-360` through `AWF-368` have delivered the first Evidence Warehouse and Survival Gate foundation slices.
+  - `AWF-364` explicitly records that Phase 63 paper evidence remains incomplete and must not be treated as a pass verdict.
 
 ### Phase 64: Survivalism Foundation (Next Candidate Phase)
 - Entry condition: user explicitly starts implementation after reviewing the planning packet.
 - Workstream A: Evidence Warehouse V1.
-  - implement protocol validation
-  - implement deterministic candidate identity
-  - import read-only Phase 61-62 replay/drift evidence
-  - import Phase 63 dry-run reconcile evidence when available
+  - protocol validation: implemented
+  - deterministic candidate identity: implemented and repaired to use canonical `autowfo` strategy source identity
+  - read-only Phase 61-62 replay/drift import: implemented
+  - read-only Phase 63 dry-run reconcile import: implemented for available daily summaries; cross-day opened/closed summaries merge into one paper trade fact
+  - paper survival aggregate report: implemented; blocks verdicts when evidence days, manifest freshness, or data-quality conditions are insufficient
 - Workstream B: Survival Gate V1.
-  - load policy definitions
-  - write immutable gate verdict records
-  - block verdict writes without candidate, policy, metric, and artifact identity
+  - load policy definitions: implemented
+  - write immutable gate verdict records: implemented
+  - block verdict writes without existing candidate, existing policy, metric, and artifact identity: implemented
 - Workstream C: Strategy lifecycle.
-  - label Champion and Challenger candidates
-  - record promotion/rejection/halt decisions
+  - label Champion and Challenger candidates: implemented in the Phase 63 paper survival report
+  - record promotion/rejection/halt decisions: deferred until evidence is sufficient for an actual decision
   - keep old candidates comparable to fresh strategy tests
 - Non-goals:
   - no risk engine enforcement before evidence records exist

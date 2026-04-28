@@ -118,9 +118,29 @@ def add_storage_parsers(subparsers: argparse._SubParsersAction[Any], cli_impl: A
     evidence_warehouse_parser.add_argument("--db-path", default="", help="Optional warehouse DuckDB path")
     evidence_warehouse_parser.add_argument(
         "--mode",
-        choices=("build", "validate"),
+        choices=("build", "validate", "import-phase61-62", "import-phase63-paper"),
         default="build",
-        help="Build the skeleton or validate an existing skeleton",
+        help="Build, validate, or import Evidence Warehouse V1 evidence",
+    )
+    evidence_warehouse_parser.add_argument(
+        "--summary-path",
+        default="",
+        help="Optional AWF-339 rerun summary path for import-phase61-62",
+    )
+    evidence_warehouse_parser.add_argument(
+        "--drift-report-path",
+        default="",
+        help="Optional AWF-347 execution drift report path for import-phase61-62",
+    )
+    evidence_warehouse_parser.add_argument(
+        "--paper-dir",
+        default="",
+        help="Optional Phase 63 paper daily summary directory for import-phase63-paper",
+    )
+    evidence_warehouse_parser.add_argument(
+        "--live-manifest-path",
+        default="",
+        help="Optional live_manifest.json path for import-phase63-paper freshness checks",
     )
     evidence_warehouse_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON payload")
     evidence_warehouse_parser.set_defaults(handler=cli_impl._cmd_storage_evidence_warehouse)
@@ -253,18 +273,47 @@ def cmd_storage_drift_report(args: argparse.Namespace, cli_impl: Any) -> int:
 
 
 def cmd_storage_evidence_warehouse(args: argparse.Namespace, cli_impl: Any) -> int:
-    from autowfo.evidence_warehouse import build_evidence_warehouse, validate_evidence_warehouse
+    from autowfo.evidence_warehouse import (
+        build_evidence_warehouse,
+        import_phase61_62_replay_evidence,
+        import_phase63_paper_reconcile_evidence,
+        validate_evidence_warehouse,
+    )
 
     cwd = Path(args.cwd).resolve()
     protocol_path = cli_impl._resolve_path(cwd, str(getattr(args, "protocol_path", "") or ""))
     db_path_raw = str(getattr(args, "db_path", "") or "").strip()
     db_path = cli_impl._resolve_path(cwd, db_path_raw) if db_path_raw else None
     mode = str(getattr(args, "mode", "build") or "build")
-    operation = build_evidence_warehouse if mode == "build" else validate_evidence_warehouse
-    payload = operation(
-        _resolve_artifacts_dir(args, cli_impl),
-        protocol_path=protocol_path,
-        db_path=db_path,
-    )
+    artifacts_dir = _resolve_artifacts_dir(args, cli_impl)
+    if mode == "import-phase61-62":
+        summary_path_raw = str(getattr(args, "summary_path", "") or "").strip()
+        drift_report_path_raw = str(getattr(args, "drift_report_path", "") or "").strip()
+        payload = import_phase61_62_replay_evidence(
+            artifacts_dir,
+            protocol_path=protocol_path,
+            db_path=db_path,
+            summary_path=(cli_impl._resolve_path(cwd, summary_path_raw) if summary_path_raw else None),
+            drift_report_path=(cli_impl._resolve_path(cwd, drift_report_path_raw) if drift_report_path_raw else None),
+        )
+    elif mode == "import-phase63-paper":
+        paper_dir_raw = str(getattr(args, "paper_dir", "") or "").strip()
+        live_manifest_path_raw = str(getattr(args, "live_manifest_path", "") or "").strip()
+        payload = import_phase63_paper_reconcile_evidence(
+            artifacts_dir,
+            protocol_path=protocol_path,
+            db_path=db_path,
+            paper_dir=(cli_impl._resolve_path(cwd, paper_dir_raw) if paper_dir_raw else None),
+            live_manifest_path=(
+                cli_impl._resolve_path(cwd, live_manifest_path_raw) if live_manifest_path_raw else None
+            ),
+        )
+    else:
+        operation = build_evidence_warehouse if mode == "build" else validate_evidence_warehouse
+        payload = operation(
+            artifacts_dir,
+            protocol_path=protocol_path,
+            db_path=db_path,
+        )
     _emit(payload, json_output=bool(args.json), cli_impl=cli_impl)
     return 0 if payload.get("ok") else 1
