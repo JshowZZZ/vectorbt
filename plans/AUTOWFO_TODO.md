@@ -57,13 +57,15 @@ AWF-362 completion note: implemented read-only Phase 61-62 replay/drift import t
 
 AWF-363-AWF-368 completion note: extended Evidence Warehouse V1 without adding Risk Engine, live activation, or control-panel changes. Candidate identity now uses canonical `source_system=autowfo` and cleans up legacy AWF-362 source ownership rows on re-import; Phase 63 paper summaries can be imported incrementally through `autowfo.evidence_warehouse.import_phase63_paper_reconcile_evidence` and `autowfo storage evidence-warehouse --mode import-phase63-paper`; paper trade facts are enriched from read-only Freqtrade SQLite rows when available and cross-day opened/closed summaries merge into a single fact row; paper survival evidence can be summarized through `build_phase63_paper_survival_report` with explicit `blocking_reasons`, including missing/stale manifest freshness evidence; Survival Gate policies/verdicts can be written through `write_gate_policy` and `write_gate_verdict` with existing policy/candidate references required. `plans/reports/AWF-364-report.md` records current artifact truth: 4 paper summaries, stale stable-rank live manifest, and no Phase 63 paper verdict. `plans/reports/AWF-363-368-report.md` records the data-integrity fix pass.
 
+AWF-348 completion note: restored Phase 63 paper runtime to the frozen canonical rank 1 lane on 2026-04-28. The managed live signal producer and Freqtrade dry-run were observed running, `artifacts/live_signal_store/live_manifest.json` was refreshed to `selection=canonical_gate_passed`, `rank=1`, and `last_bar_utc=2026-04-28T14:00:00`, and `artifacts/paper_dryrun/daily_summary_20260428.json` was written. The day was zero-trade and classified as `strategy_no_signal_today` because manifest lane/freshness, signal rows, pair mapping, process health, and the dry-run SQLite `trades` table were all healthy while the current signal window had no enter/exit rows. Evidence Warehouse paper import succeeded without stale-manifest warnings. `plans/reports/AWF-348-report.md` records the recovery details.
+
 ## Active Items
 
 ### Workstream A — Paper Trading Exploitation
 
 | ID | Status | Task | Metric | Accept threshold | Rollback |
 |---|---|---|---|---|---|
-| AWF-348 | todo | Restart FT dry-run with blocker fixes; confirm signal producer + FT healthy | PID alive, live_manifest.json fresh | both processes running, manifest < 30 min old | debug startup if either process fails |
+| AWF-348 | done | Restart FT dry-run with blocker fixes; confirm signal producer + FT healthy | PID alive, live_manifest.json fresh | both processes running, manifest < 30 min old; zero-trade reason classified | debug startup if either process fails |
 | AWF-349 | todo | Accumulate ≥7 days of daily reconciliation summaries | daily JSON count | 7 daily summaries, no crash | investigate and fix if reconciler crashes |
 | AWF-350 | todo | Accumulate ≥14 days; build aggregate drift report | aggregate open_match_ratio | ≥ 0.95 across all days | document drift explanation if below threshold |
 | AWF-351 | todo | Paper trading verdict memo | human classification | parity-confirmed / drift-bounded / parity-failed | close workstream with verdict |
